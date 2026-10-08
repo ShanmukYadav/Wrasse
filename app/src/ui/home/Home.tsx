@@ -5,7 +5,7 @@ import { categories, d1 } from "../../design/tokens";
 import { t } from "../../i18n";
 import { formatBytes } from "../../lib/format";
 import { useReducedMotion, useScheme } from "../../lib/prefs";
-import { duration, ease, mapMotion, spring, stagger } from "../../motion/tokens";
+import { duration, ease, mapMotion } from "../../motion/tokens";
 import { useApp } from "../../store/app";
 import { GhostTile } from "./GhostTile";
 import { gridLayout, type Cell } from "./gridLayout";
@@ -16,8 +16,8 @@ import { Tile, type TileMetrics } from "./Tile";
 
 const MORE_ID = -2;
 
-// Home: one level of the disk at a time. Drilling in is a shared-element zoom: the tile you open
-// expands to fill the grid and its children appear inside as tiles of the same style.
+// Home: one level of the disk at a time. Moving between levels is a short crossfade: no zoom,
+// no sweep, no staggered reveal (the user found those distracting).
 export function Home() {
   const focus = useApp((s) => s.focus);
   const disk = useApp((s) => s.disk);
@@ -110,9 +110,9 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
     else select(n.id);
   }
 
-  const tiles = cells.map((cell, i) => {
+  const tiles = cells.map((cell) => {
     if (cell.id === MORE_ID) {
-      return <MoreTile key="more" cell={cell} focus={focusNode} count={rest.length} size={restSize} onOpen={() => setViewMode("list")} delay={root ? 0 : 0.12 + i * stagger} />;
+      return <MoreTile key="more" cell={cell} focus={focusNode} count={rest.length} size={restSize} onOpen={() => setViewMode("list")} />;
     }
     const n = disk.nodes[cell.id];
     if (n.kind === "ghost") {
@@ -132,22 +132,22 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
         selected={selected === n.id}
         deleting={deleting.includes(n.id)}
         pulseKey={pulse?.id === n.id ? pulse.key : null}
-        reveal={
-          root && scan === "scanning"
-            ? { key: scanKey, delay: revealDelay(cell) }
-            : !root
-              ? { key: 0, delay: 0.12 + i * stagger } // children fade in once the frame has expanded
-              : null
-        }
+        reveal={root && scan === "scanning" ? { key: scanKey, delay: revealDelay(cell) } : null}
         drillable={isDrillable(n)}
         onOpen={open}
       />
     );
   });
 
+  // The whole level fades in and out as one piece.
+  const fade = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: duration.fast, ease: ease.out } },
+    exit: { opacity: 0, transition: { duration: duration.fast, ease: ease.inOut } },
+  };
   if (root) {
     return (
-      <motion.div className="level" exit={{ opacity: 0, transition: { duration: duration.base, ease: ease.inOut } }}>
+      <motion.div className="level" {...fade}>
         <div ref={gridRef} className="home-grid">
           {tiles}
         </div>
@@ -159,21 +159,16 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   const c = categories[scheme][focusNode.category];
   const frameStyle = { "--from": c.from, "--to": c.to, "--tint": c.border, "--glow": c.glow } as CSSProperties;
   return (
-    <motion.div className="level" exit={{ opacity: 0, transition: { duration: duration.base, ease: ease.inOut } }}>
-      <motion.div layoutId={`tile-${focus}`} className="level-frame" style={frameStyle} transition={spring.soft} />
-      <motion.div
-        ref={gridRef}
-        className="home-grid level-grid"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1, transition: { duration: duration.base, ease: ease.out, delay: 0.1 } }}
-      >
+    <motion.div className="level" {...fade}>
+      <div className="level-frame" style={frameStyle} />
+      <div ref={gridRef} className="home-grid level-grid">
         {tiles}
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
 
-function MoreTile({ cell, focus, count, size, onOpen, delay }: { cell: Cell; focus: DiskNode; count: number; size: number; onOpen: () => void; delay: number }) {
+function MoreTile({ cell, focus, count, size, onOpen }: { cell: Cell; focus: DiskNode; count: number; size: number; onOpen: () => void }) {
   const scheme = useScheme();
   const units = useApp((s) => s.info?.units ?? "decimal");
   const c = categories[scheme][focus.category];
@@ -194,8 +189,6 @@ function MoreTile({ cell, focus, count, size, onOpen, delay }: { cell: Cell; foc
       className="tile tile-more focus-ring"
       style={style}
       onClick={onOpen}
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1, transition: { ...spring.soft, delay } }}
     >
       <span className="tile-head">
         <span className="tile-badge">

@@ -94,7 +94,6 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
     <motion.button
       type="button"
       layout
-      layoutId={`tile-${node.id}`}
       data-tile-id={node.id}
       className={`tile focus-ring ${selected ? "is-selected" : ""} ${dimmed ? "is-dimmed" : ""}`}
       style={style}
