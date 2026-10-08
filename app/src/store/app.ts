@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, emptyDisk, GB, lensForFocus, throughSingles, type Disk } from "../api";
+import { api, categoryForLens, emptyDisk, GB, lensForFocus, throughSingles, type Disk } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -165,9 +165,13 @@ export const useApp = create<State & Actions>((set, get) => {
 
     setLens: (lens) =>
       // "All" also takes you back home.
-      lens === "all"
-        ? set((s) => ({ lens, plan: null, focus: s.disk.root, viewMode: "map", selected: null, detailOpen: false }))
-        : set({ lens, plan: null }),
+      set((s) => {
+        // "All" goes home; category lenses open their category's top level from anywhere;
+        // Large & Old and Grew stay highlight filters over the current view.
+        const target = lens === "all" ? s.disk.root : categoryForLens(s.disk, lens);
+        if (target === null) return { lens, plan: null };
+        return { lens, plan: null, focus: target, viewMode: "map", selected: null, detailOpen: false };
+      }),
 
     select: (id, open = true) => set({ selected: id, detailOpen: id !== null && open }),
     closeDetail: () => set({ detailOpen: false, selected: null }),
