@@ -373,9 +373,10 @@ export function boot() {
   if (page.__wrasseBooted) return;
   page.__wrasseBooted = true;
   const { setInfo, scanDisk, checkFullDiskAccess } = useApp.getState();
-  void api.appInfo().then(setInfo);
   void checkFullDiskAccess();
   void (async () => {
+    const info = await api.appInfo();
+    setInfo(info);
     const cached = await api.cachedScan().catch(() => null);
     if (cached) useApp.setState((s) => ({ disk: cached, focus: cached.root, scan: "done", diskVersion: s.diskVersion + 1 }));
     let onboarded = false;
@@ -384,7 +385,7 @@ export function boot() {
     } catch {
       onboarded = false;
     }
-    if (onboarded) void scanDisk();
+    if (onboarded || info.autoScan) void scanDisk();
     else useApp.setState({ overlay: "onboarding" });
   })();
 }

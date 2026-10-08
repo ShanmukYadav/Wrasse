@@ -74,6 +74,7 @@ pub async fn scan(app: AppHandle, state: State<'_, ScanState>) -> Result<UiDisk,
 
     let dir = cache_dir(&app);
     let worker = control.clone();
+    let started = std::time::Instant::now();
     let result =
         tauri::async_runtime::spawn_blocking(move || session::scan_volume(&worker, dir.as_deref()))
             .await;
@@ -88,6 +89,25 @@ pub async fn scan(app: AppHandle, state: State<'_, ScanState>) -> Result<UiDisk,
     let disk = result
         .map_err(|e| e.to_string())?
         .map_err(|e| e.to_string())?;
+    if cfg!(debug_assertions) {
+        let s = &disk.summary;
+        println!(
+            "[scan] {:.2}s files={} dirs={} scanned={} home={} os={} unaccounted={} unreadable={} dataless={} hardlinks={} clones={} uiNodes={} cancelled={}",
+            started.elapsed().as_secs_f64(),
+            s.files,
+            s.dirs,
+            s.scanned,
+            s.home,
+            s.os_used,
+            s.unaccounted,
+            s.unreadable_dirs,
+            s.dataless_items,
+            s.hardlinks_deduped,
+            s.clone_shared_bytes,
+            disk.nodes.len(),
+            s.cancelled
+        );
+    }
     let p = control.progress();
     let phase = if disk.summary.cancelled {
         "cancelled"

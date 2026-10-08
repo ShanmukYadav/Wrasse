@@ -466,6 +466,12 @@ pub fn build(input: &Input) -> UiDisk {
             b.nodes[system as usize].size += size;
             b.nodes[sd as usize].size += size;
             b.nodes[root as usize].children.retain(|&c| c != cat);
+            // Detached and emptied, so nothing (a lens, a search) can open it.
+            let mut stack = vec![cat];
+            while let Some(n) = stack.pop() {
+                b.nodes[n as usize].size = 0;
+                stack.extend(b.nodes[n as usize].children.iter().copied());
+            }
         }
     }
     let home_size = home_id.map_or(0, |h| tree.node(h).size);

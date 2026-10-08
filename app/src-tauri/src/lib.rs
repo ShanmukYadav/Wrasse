@@ -20,6 +20,8 @@ struct AppInfo {
     bench: bool,
     /// Phase 1 only reads: cleanup actions are not available yet.
     read_only: bool,
+    /// Dev builds: `WRASSE_AUTOSCAN=1` skips onboarding and scans at launch (for test runs).
+    auto_scan: bool,
 }
 
 #[tauri::command]
@@ -33,6 +35,8 @@ fn app_info() -> AppInfo {
         dev: cfg!(debug_assertions),
         bench: std::env::var("WRASSE_BENCH").is_ok_and(|v| v == "1"),
         read_only: true,
+        auto_scan: cfg!(debug_assertions)
+            && std::env::var("WRASSE_AUTOSCAN").is_ok_and(|v| v == "1"),
     }
 }
 

@@ -10,6 +10,8 @@ export type AppInfo = {
   bench: boolean;
   /** True while cleanup actions are not implemented (Phase 1): the UI only shows. */
   readOnly: boolean;
+  /** Dev test runs: skip onboarding and scan at launch (`WRASSE_AUTOSCAN=1`). */
+  autoScan?: boolean;
 };
 
 /** What the window can render natively behind transparent regions of the webview. */

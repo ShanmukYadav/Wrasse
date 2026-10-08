@@ -125,7 +125,7 @@ export function categoryForLens(disk: Disk, lens: LensId): number | null {
   const byLens: Partial<Record<LensId, DiskNode["category"]>> = { aiModels: "aiModels", apps: "apps", dev: "developer", junk: "junk" };
   const cat = byLens[lens];
   if (!cat) return null;
-  const n = disk.nodes.find((k) => k.depth === 1 && k.category === cat && k.size > 0);
+  const n = disk.nodes.find((k) => k.depth === 1 && k.category === cat && k.size > 0 && attached(disk, k.id));
   return n ? n.id : null;
 }
 

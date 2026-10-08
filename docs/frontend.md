@@ -1,8 +1,10 @@
 # Wrasse frontend (Stage A, frozen as `frontend-v1`)
 
-The frontend is a React 19 + TypeScript app in `app/src`, styled in the locked **D1 "Reef Blocks"** design (day reef, light theme first). In Stage A it runs in the browser on the Vite dev server against mock data. Stage B replaces only the binding in `src/api/index.ts` with Tauri commands; no component changes.
+The frontend is a React 19 + TypeScript app in `app/src`, styled in the locked **D1 "Reef Blocks"** design (day reef, light theme first). In the browser it runs on mock data; in the Tauri app it runs on the real scanner (Phase 1, read-only).
 
-Run it: `cd app && ../dev.sh npm run dev` and open http://localhost:1420.
+- Browser (mock data): `cd app && ../dev.sh npm run dev`, open http://localhost:1420.
+- App (real data): `cd app && ../dev.sh npm run tauri dev`. Command bar › "Use mock data (dev)" switches the app to mock data for UI work (stored in `localStorage["wrasse.mock"]`); "Use real data (dev)" switches back.
+- `WRASSE_AUTOSCAN=1` (dev builds) skips onboarding and scans at launch, for test runs.
 
 ## Rules
 
@@ -19,7 +21,8 @@ Run it: `cd app && ../dev.sh npm run dev` and open http://localhost:1420.
 | **Home map** | `ui/home/Home.tsx`, `Tile.tsx`, `gridLayout.ts` | One level of the disk as a squarified tile grid (12×8, emphasis 1.2, at most 12 tiles; the rest fold into "+N more"). Tiles show badge, name, meta, big size, top rows, insight chips and "Open →" / "Details". Small tiles degrade to a one-line name + size. |
 | **Drill-in** | `Home.tsx` (`Level`) | Opening a folder, category or app zooms its tile into a frame (shared `layoutId`) and shows its children as tiles. Back, Esc and the breadcrumb go up; single-child folders are skipped. When everything in a level is removed, the map goes up to the nearest level that still has items. |
 | **Apps drill-in** | `mock/disk.ts`, `DetailPanel.tsx` | An app opens into mini tiles: the `.app` bundle, Caches, Application Support, Containers, Logs, Saved State, Preferences, with a "Running" chip when the app is open. |
-| **Sonar scan** | `ui/home/Sonar.tsx` | One-shot CSS sweep: two rings, the Wrasse mark, 24 bubbles. Mounted only while a scan runs; reduced motion shows only a fade of the mark. Tiles fade in as the sweep passes. |
+| **Onboarding** | `ui/Onboarding.tsx` | First run: what Wrasse does, no telemetry, Full Disk Access with the real status (re-checked when the window regains focus) and a button to System Settings, then "Scan this Mac". Command "Permissions" reopens it. |
+| **Sonar scan** | `ui/home/Sonar.tsx` | CSS sweep: two rings, the Wrasse mark, 24 bubbles, plus live progress (items, bytes, current folder). Mounted only while a scan runs and repeats until it ends; reduced motion shows only a fade. Tiles re-reveal with one last sweep when results land. Scan becomes Stop while scanning; "Pause scan" / "Resume scan" in the command bar. |
 | **Lens bar** | `ui/LensBar.tsx`, `ui/lenses.ts` | All, Junk, Apps, AI Models, Dev, Large & Old, Grew. Category lenses open their category from anywhere; All goes home; Large & Old and Grew dim non-matching tiles. One navy pill slides to the active lens and follows the category you open. |
 | **Command bar** | `ui/CommandBar.tsx`, `command/commands.ts` | ⌘K or type anywhere. Fuzzy commands: free N GB, where is <name>, lenses, scan, list/map view, zoom out, home, empty/restore tray, overlays, design system. |
 | **Free Up Space** | `CommandBar.tsx` (`PlanMeter`), `ui/planReason.ts` | "free 30 GB" ranks candidates by size × unused time × safety and lists each one (rank, icon, name, where it lives, size, reason). Fill meter toward the target, "Add all N to tray", "Clear"; clicking a row shows it on the map. |
@@ -33,7 +36,9 @@ Run it: `cd app && ../dev.sh npm run dev` and open http://localhost:1420.
 | **Toast** | `ui/Toast.tsx` | Short confirmations ("Tray emptied", "Revealed in Finder"). |
 | **Themes** | `design/apply.ts`, `lib/prefs.ts` | Light (day reef) is the default and approved direction. Dark (night) values exist but are provisional until light is approved. |
 
-**Not built yet in D1** (listed in the Stage A brief, still pending): onboarding / Full Disk Access screen, empty / error / "good shape" states, and a dedicated AI-model duplicates view. Duplicates show today as a chip and a detail label.
+**Not built yet in D1**: empty / error / "good shape" states, and a dedicated AI-model duplicates view. Duplicates show today as a chip and a detail label.
+
+**Read-only phase:** while `appInfo().readOnly` is true (Phase 1), cleanup actions show a toast ("This version only scans…") instead of acting.
 
 ## Components
 
@@ -135,14 +140,19 @@ Each category also has `border`, `glow` (top-right circle) and badge `shadow` va
 
 ## API (`src/api/`)
 
-`src/api/index.ts` exports `api: WrasseApi` and re-exports everything in `src/api/types.ts`. Stage A binds `api = mockApi` (`src/mock/api.ts`).
+`src/api/index.ts` exports `api: WrasseApi` and re-exports everything in `src/api/types.ts`. In the Tauri app `api` is `tauriApi` (`src/api/tauri.ts`, commands in `app/src-tauri/src/scanning.rs`); in the browser, or with mock mode on, it is `mockApi` (`src/mock/api.ts`). Insight chips (`src/api/insights.ts`) are shared.
 
 ### Functions
 
 | Function | Input | Output | Notes |
 |---|---|---|---|
-| `appInfo()` | none | `Promise<AppInfo>` | `{ version, platform, fileManager, units: "decimal" \| "binary", dev, bench }` |
-| `scan()` | none | `Promise<Disk>` | Whole system volume as a tree. Emits `ScanProgress` while it runs. |
+| `appInfo()` | none | `Promise<AppInfo>` | `{ version, platform, fileManager, units: "decimal" \| "binary", dev, bench, readOnly, autoScan? }` |
+| `scan()` | none | `Promise<Disk>` | Whole system volume as a tree. Emits `ScanProgress` while it runs. A cancelled scan resolves with what was read (`summary.cancelled`). |
+| `cachedScan()` | none | `Promise<Disk \| null>` | The last finished scan, saved in `~/Library/Application Support/com.shanmukyadav.wrasse/scan-cache.json`; shown at launch. |
+| `cancelScan()` | none | `Promise<void>` | Stops the running scan. |
+| `pauseScan(paused)` | boolean | `Promise<void>` | Pauses or resumes the running scan. |
+| `fullDiskAccess()` | none | `Promise<boolean>` | macOS Full Disk Access (reads a TCC-protected folder). |
+| `openFullDiskAccessSettings()` | none | `Promise<void>` | Opens System Settings › Privacy & Security › Full Disk Access. |
 | `onScanProgress(listener)` | `(p: ScanProgress) => void` | unsubscribe `() => void` | Event stream for the scan (Stage B: at most 10 per second). |
 | `insights(disk, id)` | tree, node id | `Insight[]` | Chips for a tile, e.g. "1 duplicate · 39 GB", "31 GB rebuildable", "Running", "All safe". At most 2. |
 | `quarantine(disk, ids)` | tree, node ids | `Promise<Disk>` | Moves items to the tray (recoverable). |
@@ -152,7 +162,7 @@ Each category also has `border`, `glow` (top-right circle) and badge `shadow` va
 | `thinSnapshots(disk)` | tree | `Promise<Disk>` | Frees space held by local Time Machine snapshots. |
 | `quitApp(disk, appId)` | tree, app node id | `Promise<Disk>` | Asks a running app to quit before uninstalling. |
 
-Actions take the UI's current tree and resolve to the updated tree. The mock edits it in place; Stage B returns the core's updated tree. Phase 1 of Stage B is read-only, so the action functions stay on the mock or return an error until the phase that implements them.
+Actions take the UI's current tree and resolve to the updated tree. The mock edits it in place; the real API rejects them in Phase 1 (read-only) until Phase 2 implements them.
 
 ### Events
 
@@ -162,7 +172,7 @@ Actions take the UI's current tree and resolve to the updated tree. The mock edi
 
 ### Types (`src/api/types.ts`)
 
-- **`Disk`**: `{ nodes: DiskNode[], root, capacity, ghostId, leafCount }`. Nodes are an arena indexed by id.
-- **`DiskNode`**: `id, name, path, size` (bytes on disk), `parent` (-1 for root), `children, depth, category` (files, aiModels, developer, apps, system, junk, other), `kind` (volume, dir, file, app, model, ghost), `lastOpenedDays, safety` (safe, yourCall, keep), `why` (one-line explanation), `lenses` / `deep` (lens bitmasks), `matchBytes` (bytes per lens), `grewBy, shade`. Optional: `duplicateOf, readOnly, rebuildable, running, appBundle, leftover` (caches, support, containers, logs, preferences, savedState).
+- **`Disk`**: `{ nodes: DiskNode[], root, capacity, ghostId, leafCount, summary? }`. Nodes are an arena indexed by id. `summary` (real scans) carries `capacity, available, osUsed, scanned, unaccounted, home, files, dirs, unreadableDirs, datalessItems, hardlinksDeduped, cloneSharedBytes, cancelled`. The real tree is pruned: per folder, items under 10 MB fold into "Smaller items".
+- **`DiskNode`**: `id, name, path, size` (bytes on disk), `parent` (-1 for root), `children, depth, category` (files, aiModels, developer, apps, system, junk, other), `kind` (volume, dir, file, app, model, ghost), `lastOpenedDays, safety` (safe, yourCall, keep), `why` (one-line explanation), `lenses` / `deep` (lens bitmasks), `matchBytes` (bytes per lens), `grewBy, shade`. Optional: `duplicateOf, readOnly, rebuildable, running, appBundle, leftover` (caches, support, containers, logs, preferences, savedState), `note` ("In iCloud only", "Couldn't read", "Shares space with clones").
 - **`Insight`**: `{ tone: "amber" | "green" | "violet" | "protected", text }`.
 - **Helpers** (pure, no I/O): `lensMatches`, `ancestors`, `isAncestor`, `attached`, `lensForFocus`, `categoryForLens`, `throughSingles`, `emptyDisk`, constants `GB`, `LENS_BIT`, `LENS_IDS`.
