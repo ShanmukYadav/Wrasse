@@ -65,10 +65,10 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
       const style = getComputedStyle(el);
       const w = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
       const h = el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-      setMetrics({
-        cellW: (w - (d1.grid.cols - 1) * d1.grid.gap) / d1.grid.cols,
-        cellH: (h - (d1.grid.rows - 1) * d1.grid.gap) / d1.grid.rows,
-      });
+      const cellW = (w - (d1.grid.cols - 1) * d1.grid.gap) / d1.grid.cols;
+      const cellH = (h - (d1.grid.rows - 1) * d1.grid.gap) / d1.grid.rows;
+      // A level that is fading out may already be detached: keep its last good size.
+      if (Number.isFinite(cellW) && Number.isFinite(cellH) && cellW > 0 && cellH > 0) setMetrics({ cellW, cellH });
     };
     measure();
     const ro = new ResizeObserver(measure);
