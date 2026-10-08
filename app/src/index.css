@@ -41,6 +41,10 @@
   --radius: 8px;
   --radius-sm: 5px;
   --titlebar: 12px;
+}
+
+/* Solid until the backend confirms a native backdrop (absent on Windows 10 and in a plain browser). */
+:root:not([data-effects="on"]) {
   --sidebar-bg: var(--sidebar-solid);
 }
 
@@ -66,6 +70,7 @@ body {
 
 .sidebar {
   background: var(--sidebar-bg);
+  transition: background-color 0.26s cubic-bezier(0.22, 1, 0.36, 1); /* duration.base, ease.out */
   backdrop-filter: saturate(1.2);
 }
 

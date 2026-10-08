@@ -13,4 +13,8 @@ impl Platform for MacOs {
     fn units(&self) -> UnitSystem {
         UnitSystem::Decimal
     }
+    fn window_effects(&self) -> bool {
+        // Sidebar vibrancy is available on every supported macOS (13+).
+        true
+    }
 }

@@ -9,6 +9,7 @@ struct AppInfo {
     version: &'static str,
     platform: &'static str,
     file_manager: &'static str,
+    window_effects: bool,
     dev: bool,
 }
 
@@ -19,6 +20,7 @@ fn app_info() -> AppInfo {
         version: wrasse_core::VERSION,
         platform: platform.name(),
         file_manager: platform.file_manager(),
+        window_effects: platform.window_effects(),
         dev: cfg!(debug_assertions),
     }
 }
@@ -38,7 +40,9 @@ pub fn run() {
             let window = app
                 .get_webview_window("main")
                 .expect("main window is defined in tauri.conf.json");
-            apply_window_effects(&window);
+            if wrasse_core::platform::current().window_effects() {
+                apply_window_effects(&window);
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![app_info])
@@ -47,7 +51,7 @@ pub fn run() {
 }
 
 /// Sidebar vibrancy on macOS, Mica on Windows 11 (PLAN.md §7.5).
-/// If the effect is unavailable (e.g. Windows 10) the CSS solid background shows through.
+/// Only called when the platform supports it; otherwise the UI paints a solid sidebar.
 fn apply_window_effects(window: &tauri::WebviewWindow) {
     use tauri::window::{Effect, EffectState, EffectsBuilder};
 

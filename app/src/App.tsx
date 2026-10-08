@@ -21,7 +21,9 @@ export function App() {
   useEffect(() => {
     getAppInfo().then((info) => {
       setInfo(info);
-      document.documentElement.dataset.platform = info.platform === "Windows" ? "windows" : "macos";
+      const root = document.documentElement;
+      root.dataset.platform = info.platform === "Windows" ? "windows" : "macos";
+      root.dataset.effects = info.windowEffects ? "on" : "off";
     });
   }, [setInfo]);
 
