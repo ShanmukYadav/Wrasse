@@ -5,7 +5,9 @@ import type { LensId, Tone } from "../design/tokens";
 import { LENSES } from "../ui/lenses";
 import { t } from "../i18n";
 import { formatBytes } from "../lib/format";
+import { api, MOCK_KEY, mockMode } from "../api";
 import { GB } from "../api/types";
+import { inTauri } from "../lib/backend";
 import { useApp, type Overlay } from "../store/app";
 
 export type Suggestion = {
@@ -55,9 +57,24 @@ const ACTION_ICONS: Record<string, IconName> = {
   empty: "trash",
   restore: "restore",
   design: "settings",
+  stop: "close",
+  pause: "history",
+  resume: "scan",
+  permissions: "keep",
+  mock: "settings",
 };
 
-const OVERLAYS: [Exclude<Overlay, null | "design">, string[]][] = [
+/** Dev only: switch between the real scanner and mock data, then reload. */
+function setMock(on: boolean) {
+  try {
+    localStorage.setItem(MOCK_KEY, on ? "1" : "0");
+  } catch {
+    return;
+  }
+  location.reload();
+}
+
+const OVERLAYS: [Exclude<Overlay, null | "design" | "onboarding">, string[]][] = [
   ["startup", ["startup items", "login items"]],
   ["settings", ["settings", "preferences"]],
   ["audit", ["audit log", "log", "history of actions"]],
@@ -97,10 +114,19 @@ export function suggest(raw: string): Suggestion[] {
     ["empty", ["empty tray", "empty quarantine"], () => app.emptyTray()],
     ["restore", ["restore tray", "undo"], () => app.restoreTray()],
     ["design", ["design system", "design"], () => app.setOverlay("design")],
+    ["permissions", ["permissions", "full disk access", "welcome", "onboarding"], () => app.setOverlay("onboarding")],
   ];
+  if (app.scan === "scanning") {
+    actions.push(["stop", ["stop scan", "cancel scan", "stop"], () => app.cancelScan()]);
+    actions.push(["pause", ["pause scan", "pause"], () => void api.pauseScan(true)]);
+    actions.push(["resume", ["resume scan", "resume"], () => void api.pauseScan(false)]);
+  }
+  if (inTauri && app.info?.dev) {
+    actions.push(["mock", mockMode() ? ["use real data", "real data", "real scan"] : ["use mock data", "mock data", "mock"], () => setMock(!mockMode())]);
+  }
   for (const [key, words, run] of actions) {
     const score = text ? Math.max(...words.map((w) => fuzzy(lower, w))) : key === "scan" ? 600 : -1;
-    push({ key, icon: ACTION_ICONS[key] ?? "info", label: t(`cmd.${key}`), run }, score);
+    push({ key, icon: ACTION_ICONS[key] ?? "info", label: key === "mock" ? t(mockMode() ? "cmd.realData" : "cmd.mockData") : t(`cmd.${key}`), run }, score);
   }
   for (const [overlay, words] of OVERLAYS) {
     const score = text ? Math.max(...words.map((w) => fuzzy(lower.replace(/^open\s+/, ""), w))) : overlay === "settings" ? 300 : -1;

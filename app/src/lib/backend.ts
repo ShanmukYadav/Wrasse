@@ -8,6 +8,8 @@ export type AppInfo = {
   units: UnitSystem;
   dev: boolean;
   bench: boolean;
+  /** True while cleanup actions are not implemented (Phase 1): the UI only shows. */
+  readOnly: boolean;
 };
 
 /** What the window can render natively behind transparent regions of the webview. */
@@ -20,7 +22,7 @@ export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in
 // Outside Tauri (plain Vite, Playwright) the backend is mocked.
 export async function getAppInfo(): Promise<AppInfo> {
   if (!inTauri) {
-    return { version: "0.0.0", platform: "macOS", fileManager: "Finder", units: "decimal", dev: true, bench: false };
+    return { version: "0.0.0", platform: "macOS", fileManager: "Finder", units: "decimal", dev: true, bench: false, readOnly: false };
   }
   return invoke<AppInfo>("app_info");
 }

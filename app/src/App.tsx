@@ -12,6 +12,7 @@ import { Header } from "./ui/home/Header";
 import { Home } from "./ui/home/Home";
 import { LensBar } from "./ui/LensBar";
 import { ListView } from "./ui/ListView";
+import { Onboarding } from "./ui/Onboarding";
 import { Overlays } from "./ui/Overlays";
 import { QuarantineTray } from "./ui/QuarantineTray";
 import { Toast } from "./ui/Toast";
@@ -55,6 +56,7 @@ export function App() {
       <Flyers />
       <Toast />
       <Overlays />
+      <Onboarding />
       <UninstallSheet />
       <DesignPage />
       <DevBadge />

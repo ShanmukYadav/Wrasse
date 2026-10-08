@@ -1,12 +1,12 @@
 import { create } from "zustand";
-import { api, attached, categoryForLens, emptyDisk, GB, lensForFocus, throughSingles, type Disk } from "../api";
+import { api, attached, categoryForLens, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
 import type { AppInfo } from "../lib/backend";
 import { mapMotion } from "../motion/tokens";
 
-export type Overlay = "startup" | "settings" | "audit" | "history" | "design" | null;
+export type Overlay = "onboarding" | "startup" | "settings" | "audit" | "history" | "design" | null;
 export type ThemePref = "system" | "dark" | "light";
 export type MotionPref = "system" | "reduce" | "full";
 
@@ -38,6 +38,10 @@ type State = {
   commandOpen: boolean;
   scan: "idle" | "scanning" | "done";
   scanKey: number;
+  /** Live progress of a real scan (null in between). */
+  scanProgress: ScanProgress | null;
+  /** Full Disk Access (macOS); null until checked. */
+  fullDiskAccess: boolean | null;
   toast: { key: number; text: string } | null;
   systemScheme: Scheme;
   theme: ThemePref;
@@ -64,6 +68,9 @@ type Actions = {
   locate: (id: number) => void;
   startScan: () => void;
   scanDisk: () => Promise<void>;
+  cancelScan: () => void;
+  checkFullDiskAccess: () => Promise<void>;
+  finishOnboarding: () => void;
   setViewMode: (mode: "map" | "list") => void;
   setOverlay: (o: Overlay) => void;
   setCommandOpen: (open: boolean) => void;
@@ -76,6 +83,7 @@ type Actions = {
   confirmUninstall: (appId: number, ids: number[]) => void;
 };
 
+const ONBOARDED_KEY = "wrasse.onboarded";
 let flightKey = 0;
 let batchId = 0;
 let scanTimer = 0;
@@ -107,6 +115,13 @@ export const useApp = create<State & Actions>((set, get) => {
     }, 350);
   }
 
+  /** Phase 1 only scans: cleanup actions explain that instead of pretending. */
+  function readOnly(): boolean {
+    if (!get().info?.readOnly) return false;
+    get().notify(t("readOnly.toast"));
+    return true;
+  }
+
   function log(action: string, target: string, size: number) {
     set((s) => ({ audit: [{ at: Date.now(), action, target, size }, ...s.audit].slice(0, 200) }));
   }
@@ -136,6 +151,8 @@ export const useApp = create<State & Actions>((set, get) => {
     commandOpen: false,
     scan: "idle",
     scanKey: 0,
+    scanProgress: null,
+    fullDiskAccess: null,
     toast: null,
     systemScheme: systemScheme(),
     theme: "light", // Day reef first; night comes after the light theme is approved
@@ -176,6 +193,7 @@ export const useApp = create<State & Actions>((set, get) => {
     closeDetail: () => set({ detailOpen: false, selected: null }),
 
     addToTray: (ids) => {
+      if (readOnly()) return;
       const { disk, focus } = get();
       const items = ids.map((id) => disk.nodes[id]).filter((n) => n && n.safety !== "keep" && n.kind !== "ghost" && n.parent >= 0);
       if (!items.length) return;
@@ -209,6 +227,7 @@ export const useApp = create<State & Actions>((set, get) => {
     },
 
     deleteNow: (ids) => {
+      if (readOnly()) return;
       const { disk } = get();
       const items = ids.map((id) => disk.nodes[id]).filter((n) => n && n.safety === "safe" && n.parent >= 0);
       if (!items.length) return;
@@ -242,6 +261,7 @@ export const useApp = create<State & Actions>((set, get) => {
     },
 
     freeGhost: () => {
+      if (readOnly()) return;
       const { disk } = get();
       const ghost = disk.nodes[disk.ghostId];
       if (!ghost || ghost.size === 0) return;
@@ -279,15 +299,35 @@ export const useApp = create<State & Actions>((set, get) => {
       setTimeout(() => set({ pulse: { id, key: Date.now() } }), 450);
     },
 
-    startScan: () => {
-      clearTimeout(scanTimer);
-      set((s) => ({ scan: "scanning", scanKey: s.scanKey + 1, focus: s.disk.root, lens: "all", plan: null, selected: null, detailOpen: false }));
-      scanTimer = window.setTimeout(() => set({ scan: "done" }), mapMotion.sonar * 1000);
-    },
+    // The Scan button and command: a real scan of the volume (or a mock one).
+    startScan: () => void get().scanDisk(),
     scanDisk: async () => {
-      const disk = await api.scan();
-      set((s) => ({ disk, focus: disk.root, tray: [], plan: null, diskVersion: s.diskVersion + 1 }));
-      get().startScan();
+      if (get().scan === "scanning") return;
+      clearTimeout(scanTimer);
+      // The sonar runs while the scan does; tiles re-reveal with one last sweep when it lands.
+      set((s) => ({ scan: "scanning", scanProgress: null, focus: s.disk.root, lens: "all", plan: null, selected: null, detailOpen: false, viewMode: "map" }));
+      const off = api.onScanProgress((p) => set({ scanProgress: p }));
+      try {
+        const disk = await api.scan();
+        set((s) => ({ disk, focus: disk.root, tray: [], plan: null, diskVersion: s.diskVersion + 1, scanKey: s.scanKey + 1 }));
+        if (disk.summary?.cancelled) get().notify(t("scan.cancelledToast"));
+      } catch {
+        get().notify(t("scan.failedToast"));
+      } finally {
+        off();
+      }
+      scanTimer = window.setTimeout(() => set({ scan: "done", scanProgress: null }), mapMotion.sonar * 1000);
+    },
+    cancelScan: () => void api.cancelScan(),
+    checkFullDiskAccess: async () => set({ fullDiskAccess: await api.fullDiskAccess() }),
+    finishOnboarding: () => {
+      try {
+        localStorage.setItem(ONBOARDED_KEY, "1");
+      } catch {
+        // Private mode: onboarding shows again next launch, which is harmless.
+      }
+      set({ overlay: null });
+      void get().scanDisk();
     },
 
     setViewMode: (viewMode) => set({ viewMode }),
@@ -300,10 +340,12 @@ export const useApp = create<State & Actions>((set, get) => {
     openUninstall: (appId) => set({ uninstall: appId, detailOpen: false }),
     closeUninstall: () => set({ uninstall: null }),
     quitApp: (appId) => {
+      if (readOnly()) return;
       log(t("audit.quit"), get().disk.nodes[appId].name, 0);
       void api.quitApp(get().disk, appId).then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })));
     },
     confirmUninstall: (appId, ids) => {
+      if (readOnly()) return set({ uninstall: null });
       const { disk } = get();
       set({ uninstall: null });
       get().addToTray(ids);
@@ -324,15 +366,27 @@ if (import.meta.hot) {
   page.__wrasseStore = useApp;
 }
 
-/** Loads app info and runs the first scan, exactly once per page load: not again on StrictMode's
- *  double mount, nor when a hot update re-runs App's effects or re-evaluates this file. */
+/** Loads app info, shows the last scan, then onboards (first run) or scans: exactly once per page
+ *  load, not again on StrictMode's double mount or when a hot update re-runs App's effects. */
 export function boot() {
   const page = window as { __wrasseBooted?: boolean };
   if (page.__wrasseBooted) return;
   page.__wrasseBooted = true;
-  const { setInfo, scanDisk } = useApp.getState();
+  const { setInfo, scanDisk, checkFullDiskAccess } = useApp.getState();
   void api.appInfo().then(setInfo);
-  void scanDisk();
+  void checkFullDiskAccess();
+  void (async () => {
+    const cached = await api.cachedScan().catch(() => null);
+    if (cached) useApp.setState((s) => ({ disk: cached, focus: cached.root, scan: "done", diskVersion: s.diskVersion + 1 }));
+    let onboarded = false;
+    try {
+      onboarded = localStorage.getItem(ONBOARDED_KEY) === "1";
+    } catch {
+      onboarded = false;
+    }
+    if (onboarded) void scanDisk();
+    else useApp.setState({ overlay: "onboarding" });
+  })();
 }
 
 /** Drops tray-bound candidates from the plan; the plan ends once nothing is left. */

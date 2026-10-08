@@ -293,8 +293,8 @@ button {
 }
 .plan-rank {
   width: 18px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--t-caption);
+  font-weight: var(--w-size);
   color: var(--c-text-muted);
   text-align: center;
   flex: none;
@@ -306,8 +306,8 @@ button {
   flex: 1;
 }
 .plan-name {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--t-label);
+  font-weight: var(--w-size);
   color: var(--c-text);
   white-space: nowrap;
   overflow: hidden;
@@ -318,12 +318,12 @@ button {
   color: var(--c-text-muted);
 }
 .plan-why {
-  font-size: 12px;
+  font-size: var(--t-caption);
   color: var(--c-text-muted);
 }
 .plan-size {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--t-label);
+  font-weight: var(--w-size);
   color: var(--c-text);
   flex: none;
 }
@@ -671,14 +671,14 @@ button {
   margin: -80vmax 0 0 -80vmax;
   border-radius: 50%;
   border: 2px solid;
-  animation: sonar-sweep var(--sonar-dur) cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: sonar-sweep var(--sonar-dur) cubic-bezier(0.22, 1, 0.36, 1) infinite both;
 }
 .sonar-mark {
   position: absolute;
   left: 50%;
   top: 50%;
   margin: -28px 0 0 -28px;
-  animation: sonar-mark var(--sonar-dur) cubic-bezier(0.65, 0, 0.35, 1) both;
+  animation: sonar-mark var(--sonar-dur) cubic-bezier(0.65, 0, 0.35, 1) infinite both;
 }
 .sonar-mark.is-fade {
   animation-name: sonar-fade;
@@ -689,9 +689,35 @@ button {
   height: 6px;
   border-radius: 50%;
   border: 1px solid;
-  animation: sonar-bubble var(--bubble-dur) cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: sonar-bubble var(--bubble-dur) cubic-bezier(0.22, 1, 0.36, 1) infinite both;
 }
-/* Each plays once (no infinite loops); transform and opacity only. */
+.sonar-readout {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 44px);
+  transform: translateX(-50%);
+  width: min(420px, 80%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: var(--d1-row-radius);
+  background: var(--c-glass-strong);
+  border: 1px solid var(--c-glass-border);
+  text-align: center;
+}
+.sonar-count {
+  font-size: var(--t-label);
+  font-weight: var(--w-size);
+  color: var(--c-text);
+}
+.sonar-path {
+  max-width: 100%;
+  font-size: var(--t-caption);
+  color: var(--c-text-muted);
+}
+/* They repeat only while a scan runs (the component unmounts when it ends); transform and opacity only. */
 @keyframes sonar-sweep {
   from { transform: scale(0.05); opacity: 0.9; }
   to { transform: scale(1); opacity: 0; }
@@ -1035,6 +1061,55 @@ button {
   border-radius: var(--d1-tile-radius);
   display: flex;
   flex-direction: column;
+}
+.onboarding {
+  gap: 16px;
+}
+.onboarding-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.onboarding-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.onboarding-step {
+  display: flex;
+  gap: var(--d1-row-gap);
+  padding: 12px;
+  border-radius: var(--d1-row-radius);
+  background: var(--d1-row-surface);
+}
+.onboarding-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--d1-tile-badge);
+  height: var(--d1-tile-badge);
+  border-radius: var(--d1-tile-badge-radius);
+  background: var(--c-pill);
+}
+.onboarding-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.onboarding-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.onboarding-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
 }
 .overlay-body {
   overflow-y: auto;

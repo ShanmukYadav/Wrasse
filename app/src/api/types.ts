@@ -45,6 +45,28 @@ export type DiskNode = {
   appBundle?: boolean;
   /** For an app's leftovers: what kind of leftover it is (Caches, Logs, …). */
   leftover?: "caches" | "support" | "containers" | "logs" | "preferences" | "savedState";
+  /** Extra label from the scanner: "In iCloud only", "Couldn't read", "Shares space with clones". */
+  note?: string;
+};
+
+/** Totals from a real scan (absent in mock data). */
+export type DiskSummary = {
+  capacity: number;
+  available: number;
+  /** The sealed macOS volume. */
+  osUsed: number;
+  /** Bytes found by walking the data volume. */
+  scanned: number;
+  /** Used space no folder accounts for ("System data"). */
+  unaccounted: number;
+  home: number;
+  files: number;
+  dirs: number;
+  unreadableDirs: number;
+  datalessItems: number;
+  hardlinksDeduped: number;
+  cloneSharedBytes: number;
+  cancelled: boolean;
 };
 
 export type Disk = {
@@ -53,6 +75,7 @@ export type Disk = {
   capacity: number;
   ghostId: number;
   leafCount: number;
+  summary?: DiskSummary;
 };
 
 export const LENS_IDS = Object.keys(LENS_BIT) as Exclude<LensId, "all">[];

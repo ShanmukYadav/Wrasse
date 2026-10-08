@@ -28,9 +28,7 @@ export function Header() {
       <CommandBar />
       <div className="d1-header-right">
         <FreeSpace />
-        <motion.button type="button" className="btn-scan focus-ring" onClick={() => useApp.getState().startScan()} {...pressable}>
-          {t("home.scan")}
-        </motion.button>
+        <ScanButton />
       </div>
     </header>
   );
@@ -93,5 +91,16 @@ function FreeSpace() {
       <Bytes value={scanned ? free : 0} className="free-num" unitClassName="sr-only" />
       <span className="free-unit">{t("home.freeUnit")}</span>
     </span>
+  );
+}
+
+/** Scan, or Stop while a scan runs. */
+function ScanButton() {
+  const scanning = useApp((s) => s.scan === "scanning" && s.scanProgress?.phase === "walking");
+  const { startScan, cancelScan } = useApp.getState();
+  return (
+    <motion.button type="button" className="btn-scan focus-ring" onClick={scanning ? cancelScan : startScan} {...pressable}>
+      {scanning ? t("home.stop") : t("home.scan")}
+    </motion.button>
   );
 }

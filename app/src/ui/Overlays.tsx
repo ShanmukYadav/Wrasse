@@ -18,7 +18,7 @@ export function Overlays() {
 
   return (
     <AnimatePresence>
-      {overlay && overlay !== "design" && (
+      {overlay && overlay !== "design" && overlay !== "onboarding" && (
         <motion.div
           key="scrim"
           className="overlay-scrim"
@@ -45,7 +45,7 @@ export function Overlays() {
   );
 }
 
-function Panel({ overlay }: { overlay: Exclude<Overlay, null | "design"> }) {
+function Panel({ overlay }: { overlay: Exclude<Overlay, null | "design" | "onboarding"> }) {
   const setOverlay = useApp((s) => s.setOverlay);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => closeRef.current?.focus(), []);
