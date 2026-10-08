@@ -3,11 +3,11 @@ import { systemScheme } from "../design/apply";
 import type { LensId, Scheme } from "../design/tokens";
 import { t } from "../i18n";
 import type { AppInfo } from "../lib/backend";
-import { GB, generateDisk, type Disk, type DiskNode } from "../map/data";
+import { api, emptyDisk, GB, throughSingles, type Disk, type DiskNode } from "../api";
 import { renderer } from "../map/controller";
 import type { Rect } from "../map/layout";
 import type { RemovalMode } from "../map/renderer";
-import { detach, reattach, zeroOut } from "../map/tree";
+import { attached, detach, reattach, zeroOut } from "../map/tree";
 
 export type Overlay = "startup" | "settings" | "audit" | "history" | null;
 export type ThemePref = "system" | "dark" | "light";
@@ -71,14 +71,16 @@ type Actions = {
   notify: (text: string) => void;
   endFlight: (key: number) => void;
   setPrefs: (p: Partial<Pick<State, "theme" | "motion" | "glass" | "showFps" | "nativeGlass">>) => void;
-  setBlockCount: (n: 2000 | 20000) => void;
+  setBlockCount: (n: 2000 | 20000) => Promise<void>;
+  /** Loads the disk from the api, then runs the sonar scan over the empty map. */
+  scanDisk: () => Promise<void>;
 };
 
 let flightKey = 0;
 let batchId = 0;
 
 export const useApp = create<State & Actions>((set, get) => {
-  const disk = mockDisk(2000);
+  const disk = emptyDisk();
 
   function log(action: string, target: string, size: number) {
     set((s) => ({ audit: [{ at: Date.now(), action, target, size }, ...s.audit].slice(0, 200) }));
@@ -116,11 +118,13 @@ export const useApp = create<State & Actions>((set, get) => {
     setFocus: (id) => {
       const n = get().disk.nodes[id];
       if (!n || (n.children.length === 0 && n.kind !== "volume")) return;
-      set({ focus: id });
+      set({ focus: throughSingles(get().disk, id) });
     },
     zoomOut: () => {
       const { disk, focus } = get();
-      const parent = disk.nodes[focus].parent;
+      // Skip back over single-child folders too, so zooming out always changes the view.
+      let parent = disk.nodes[focus].parent;
+      while (parent >= 0 && disk.nodes[parent].children.length === 1 && disk.nodes[parent].parent >= 0) parent = disk.nodes[parent].parent;
       if (parent >= 0) set({ focus: parent });
     },
 
@@ -137,10 +141,18 @@ export const useApp = create<State & Actions>((set, get) => {
       if (!items.length) return;
       const r = renderer();
       const flights: Flight[] = [];
-      items.forEach((n, i) => {
-        const rect = r?.screenRect(n.id);
-        if (rect) flights.push({ key: ++flightKey, id: n.id, from: rect, color: nodeColor(n), delay: Math.min(i, 12) * 0.04 });
-      });
+      // One flight per visible tile involved (many files can share a tile).
+      const seen = new Set<number>();
+      for (const n of items) {
+        const visible = r?.visibleTileOf(n.id);
+        if (visible === undefined || visible === null || seen.has(visible) || flights.length >= 12) continue;
+        seen.add(visible);
+        const rect = r!.screenRect(visible)!;
+        const whole = visible === n.id;
+        // A file inside a tile flies out as a small chip from the tile's center.
+        const from = whole ? rect : { x: rect.x + rect.w / 2 - 18, y: rect.y + rect.h / 2 - 18, w: 36, h: 36 };
+        flights.push({ key: ++flightKey, id: n.id, from, color: nodeColor(disk.nodes[visible]), delay: flights.length * 0.05 });
+      }
       detach(disk, items.map((n) => n.id));
       const trayItems = items.map((n) => ({ id: n.id, name: n.name, size: n.size }));
       const batch: Batch = { id: ++batchId, at: Date.now(), items: trayItems, state: "inTray" };
@@ -208,12 +220,10 @@ export const useApp = create<State & Actions>((set, get) => {
     },
 
     planFree: (bytes) => {
-      const r = renderer();
       const { disk } = get();
-      const blocks = r?.view?.blocks ?? [];
-      const ranked = blocks
-        .map((b) => disk.nodes[b.id])
-        .filter((n) => n.safety !== "keep" && n.kind !== "ghost")
+      // Rank every removable file on the disk; the map lights up the tiles that contain them.
+      const ranked = disk.nodes
+        .filter((n) => n.children.length === 0 && n.size > 0 && n.safety !== "keep" && n.kind !== "ghost" && n.parent >= 0 && attached(disk, n.id))
         .map((n) => ({ n, score: n.size * unusedFactor(n.lastOpenedDays) * (n.safety === "safe" ? 1 : 0.7) }))
         .sort((a, b) => b.score - a.score);
       const ids: number[] = [];
@@ -223,7 +233,7 @@ export const useApp = create<State & Actions>((set, get) => {
         ids.push(n.id);
         total += n.size;
       }
-      set({ plan: { target: bytes, ids, total }, lens: "all", viewMode: get().viewMode });
+      set({ plan: { target: bytes, ids, total }, lens: "all" });
     },
     clearPlan: () => set({ plan: null }),
 
@@ -253,8 +263,14 @@ export const useApp = create<State & Actions>((set, get) => {
     notify: (text) => set({ toast: { key: Date.now(), text } }),
     endFlight: (key) => set((s) => ({ flights: s.flights.filter((f) => f.key !== key) })),
     setPrefs: (p) => set(p),
-    setBlockCount: (blockCount) => {
-      const disk = mockDisk(blockCount);
+    scanDisk: async () => {
+      const disk = await loadDisk(get().blockCount);
+      set({ disk, focus: disk.root, selected: null, detailOpen: false, tray: [], plan: null, diskVersion: get().diskVersion + 1 });
+      renderer()?.setDisk(disk);
+      get().startScan();
+    },
+    setBlockCount: async (blockCount) => {
+      const disk = await loadDisk(blockCount);
       set({ blockCount, disk, focus: disk.root, selected: null, detailOpen: false, tray: [], plan: null, diskVersion: get().diskVersion + 1 });
       renderer()?.setDisk(disk);
     },
@@ -269,8 +285,8 @@ function remainingPlan(plan: Plan | null, removed: number[]): Plan | null {
 }
 
 /** ~2,000 visible blocks, or the 20,000-file stress disk. */
-function mockDisk(count: 2000 | 20000): Disk {
-  return count === 2000 ? generateDisk(3500) : generateDisk(20000, true);
+function loadDisk(count: 2000 | 20000): Promise<Disk> {
+  return count === 2000 ? api.scan() : api.scan({ files: 20000, uniform: true });
 }
 
 export function unusedFactor(days: number): number {

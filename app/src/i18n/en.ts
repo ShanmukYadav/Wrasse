@@ -8,6 +8,9 @@ export const en = {
   "map.help": "Arrow keys move between blocks. Enter opens details, Space adds to the cleanup tray, Command-Down zooms in and Command-Up zooms out. Type anywhere to run a command.",
   "map.ghost": "{size} held by snapshots",
   "map.ghostAction": "Free now",
+  "map.tileMeta": "{share}% · {count} item|{share}% · {count} items",
+  "map.tileShare": "{share}% of this folder",
+  "map.lensShare": "{size} {lens}",
 
   "category.apps": "Apps",
   "category.users": "Users",

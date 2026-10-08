@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { DevBadge } from "./components/DevBadge";
 import { applyTokens, onSystemSchemeChange } from "./design/apply";
 import { syncGlass } from "./glass/regions";
-import { getAppInfo, getGlassSupport } from "./lib/backend";
+import { api } from "./api";
 import { useReducedMotion, useScheme } from "./lib/prefs";
 import { runBenchmark } from "./map/bench";
 import { MapView } from "./map/MapView";
@@ -32,8 +32,9 @@ export function App() {
 
   useEffect(() => {
     const { setInfo, setSystemScheme, setPrefs } = useApp.getState();
-    getAppInfo().then(setInfo);
-    getGlassSupport().then((g) => setPrefs({ nativeGlass: g.kind !== "none" }));
+    // Stage A: CSS glass everywhere; native Liquid Glass returns in Stage B.
+    api.appInfo().then(setInfo);
+    setPrefs({ nativeGlass: false });
     return onSystemSchemeChange(setSystemScheme);
   }, []);
 

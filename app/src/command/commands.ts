@@ -2,7 +2,7 @@
 import type { LensId } from "../design/tokens";
 import { t } from "../i18n";
 import { formatBytes } from "../lib/format";
-import { GB } from "../map/data";
+import { GB } from "../api/types";
 import { useApp, type Overlay } from "../store/app";
 
 export type Suggestion = {

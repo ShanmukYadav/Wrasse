@@ -1,17 +1,15 @@
-// Squarified treemap layout (Bruls, Huizing & van Wijk) of a focus node, laid out to full depth
-// so any descendant has a rect, plus a uniform-grid spatial index for hit-testing.
+// Map layout: the children of the focus folder as squarified tiles (one level at a time), plus a
+// uniform-grid spatial index for hit-testing.
+import type { Disk } from "../api/types";
 import { map as mapTokens } from "../design/tokens";
-import type { Disk } from "./data";
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
 export type Item = Rect & {
   id: number;
-  /** Drawn as a block: a leaf, or a directory too small to subdivide. */
+  /** Always true for tiles; kept so the renderer can share code paths. */
   block: boolean;
-  /** A direct child of the focus drawn as a labeled group frame. */
   group: boolean;
-  /** Depth relative to the focus. */
   rel: number;
 };
 
@@ -26,48 +24,35 @@ export type Layout = {
   index: SpatialIndex;
 };
 
-const MIN_SPLIT = 6; // px: smaller directories are drawn as one block
-const MIN_ITEM = 1; // px: smaller children are not drawn
-const GROUP_MIN_W = 96;
-const GROUP_MIN_H = 64;
+const MIN_TILE = 2; // px: smaller tiles are not drawn
 
 export function layoutFocus(disk: Disk, focus: number, width: number, height: number): Layout {
-  const items: Item[] = [];
+  const { inset, tileGap } = mapTokens;
+  const area: Rect = {
+    x: inset.left,
+    y: inset.top,
+    w: Math.max(0, width - inset.left - inset.right),
+    h: Math.max(0, height - inset.top - inset.bottom),
+  };
+  const kids = disk.nodes[focus].children.filter((c) => disk.nodes[c].size > 0);
+  const rects = squarify(kids.map((c) => disk.nodes[c].size), {
+    x: area.x - tileGap / 2,
+    y: area.y - tileGap / 2,
+    w: area.w + tileGap,
+    h: area.h + tileGap,
+  });
   const blocks: Item[] = [];
-  const groups: Item[] = [];
   const byId = new Map<number, Item>();
-  const { gap, headerHeight } = mapTokens;
-
-  function place(id: number, x: number, y: number, w: number, h: number, rel: number) {
-    const node = disk.nodes[id];
-    const item: Item = { id, x, y, w, h, block: false, group: false, rel };
-    items.push(item);
+  kids.forEach((id, i) => {
+    const r = rects[i];
+    const w = r.w - tileGap;
+    const h = r.h - tileGap;
+    if (w < MIN_TILE || h < MIN_TILE) return;
+    const item: Item = { id, x: r.x + tileGap / 2, y: r.y + tileGap / 2, w, h, block: true, group: false, rel: 1 };
+    blocks.push(item);
     byId.set(id, item);
-    const kids = node.children.filter((c) => disk.nodes[c].size > 0);
-    if (rel > 0 && (kids.length === 0 || w < MIN_SPLIT || h < MIN_SPLIT)) {
-      item.block = true;
-      blocks.push(item);
-      return;
-    }
-    if (kids.length === 0) return;
-    let inner: Rect = { x, y, w, h };
-    if (rel === 1 && w >= GROUP_MIN_W && h >= GROUP_MIN_H) {
-      item.group = true;
-      groups.push(item);
-      inner = { x: x + gap, y: y + headerHeight, w: w - gap * 2, h: h - headerHeight - gap };
-    }
-    const rects = squarify(kids.map((c) => disk.nodes[c].size), inner);
-    for (let i = 0; i < kids.length; i++) {
-      const r = rects[i];
-      const cw = r.w - gap;
-      const ch = r.h - gap;
-      if (cw < MIN_ITEM || ch < MIN_ITEM) continue;
-      place(kids[i], r.x + gap / 2, r.y + gap / 2, cw, ch, rel + 1);
-    }
-  }
-
-  place(focus, 0, 0, width, height, 0);
-  return { focus, width, height, items, byId, blocks, groups, index: new SpatialIndex(blocks, width, height) };
+  });
+  return { focus, width, height, items: blocks, byId, blocks, groups: [], index: new SpatialIndex(blocks, width, height) };
 }
 
 /** Lays out `values` (sorted descending) inside `rect`, returning one rect per value in order. */
@@ -96,7 +81,6 @@ export function squarify(values: number[], rect: Rect): Rect[] {
       rowSum = nextSum;
       end++;
     }
-    // Lay the row along the shorter side.
     if (w >= h) {
       const rowW = rowSum / h;
       let cy = y;
@@ -135,7 +119,7 @@ function worst(areas: number[], start: number, end: number, sum: number, side: n
   return Math.max((s2 * max) / sum2, sum2 / (s2 * min));
 }
 
-/** Uniform grid over the layout; each cell lists the blocks overlapping it. */
+/** Uniform grid over the layout; each cell lists the tiles overlapping it. */
 export class SpatialIndex {
   private cells: Item[][];
   private cols: number;

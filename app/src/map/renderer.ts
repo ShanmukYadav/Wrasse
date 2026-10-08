@@ -9,8 +9,8 @@ import { t } from "../i18n";
 import { formatBytes, type UnitSystem } from "../lib/format";
 import { clamp01, easeInOut, easeOut, smoothstep } from "../motion/easing";
 import { duration, mapMotion } from "../motion/tokens";
-import { LENS_BIT, type Disk, type DiskNode } from "./data";
-import { layoutFocus, lerpRect, type Item, type Layout, type Rect } from "./layout";
+import { throughSingles, type Disk, type DiskNode } from "../api/types";
+import { layoutFocus, lerpRect, squarify, type Item, type Layout, type Rect } from "./layout";
 
 /** A lens, or the "free N GB" plan, which dims everything and lights up candidates. */
 export type LensKey = LensId | "plan";
@@ -21,8 +21,6 @@ export type FrameStats = { fps: number; worstMs: number; drawMs: number; frames:
 type Transform = { sx: number; sy: number; tx: number; ty: number };
 
 const IDENTITY: Transform = { sx: 1, sy: 1, tx: 0, ty: 0 };
-const MAX_LABELS = 160;
-const ROUND_MIN = 12; // px: smaller blocks are filled as plain rects (rounding is invisible there)
 const SNAPSHOT_CACHE = 4;
 
 export class MapRenderer {
@@ -51,6 +49,8 @@ export class MapRenderer {
   private camera: { from: Layout; to: Layout; dir: "in" | "out"; rect: Rect; start: number; done: () => void } | null = null;
   private reflow: { from: Layout; to: Layout; start: number; modes: Map<number, RemovalMode> } | null = null;
   private holes: Hole[] = [];
+  /** Extra opacity applied by paintTile (fades during reflow and the sonar sweep). */
+  private alphaMul = 1;
   private raf = 0;
 
   private frameTimes: number[] = [];
@@ -201,6 +201,16 @@ export class MapRenderer {
     return b ? { id: b.id, group: false } : null;
   }
 
+  /** The id of the visible tile that is, or contains, a node. */
+  visibleTileOf(id: number): number | null {
+    const v = this.view;
+    if (!v) return null;
+    for (let n: DiskNode | undefined = this.disk.nodes[id]; n; n = n.parent >= 0 ? this.disk.nodes[n.parent] : undefined) {
+      if (v.byId.has(n.id)) return n.id;
+    }
+    return null;
+  }
+
   /** Screen rect of a node in the current view, or of its nearest visible ancestor. */
   screenRect(id: number): Rect | null {
     return this.view ? this.rectOf(this.view, id) : null;
@@ -272,13 +282,6 @@ export class MapRenderer {
 
   // ---- colors ------------------------------------------------------------------------------
 
-  private colorFor(n: DiskNode, lens: LensKey): [string, number] {
-    const base = categoryShades[this.scheme][n.category][n.shade];
-    if (lens === "all") return [base, 1];
-    if (lens === "plan") return [base, M.dimmedAlpha];
-    return (n.deep & LENS_BIT[lens]) !== 0 ? [lensColors[this.scheme][lens], 1] : [base, M.dimmedAlpha];
-  }
-
   private lensAt(now: number): number {
     return this.reduced ? 1 : easeInOut(clamp01((now - this.lens.start) / (duration.base * 1000)));
   }
@@ -313,77 +316,116 @@ export class MapRenderer {
     return snap;
   }
 
-  /** Full-quality draw of a layout in screen space: frames, blocks, outlines, labels, ghost. */
+  /** Full-quality draw of one level: tiles with labels, a texture of their contents, lens fills. */
   private paint(c: CanvasRenderingContext2D, layout: Layout, lens: LensKey) {
-    const pal = M[this.scheme];
     c.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-
-    const frames = new Path2D();
-    for (const g of layout.groups) frames.roundRect(g.x, g.y, g.w, g.h, M.radius + 2);
-    c.fillStyle = pal.groupFrame;
-    c.fill(frames);
-
-    // Batch blocks by fill: rounded paths for larger blocks, plain rects for tiny ones.
-    const batches = new Map<string, { color: string; alpha: number; path: Path2D; rects: Item[] }>();
-    const outlines = new Path2D();
+    const parentSize = this.disk.nodes[layout.focus].size || 1;
     for (const b of layout.blocks) {
       const n = this.disk.nodes[b.id];
       if (n.kind === "ghost") continue;
-      const [color, alpha] = this.colorFor(n, lens);
-      const key = `${color}|${alpha}`;
-      let batch = batches.get(key);
-      if (!batch) batches.set(key, (batch = { color, alpha, path: new Path2D(), rects: [] }));
-      if (b.w >= ROUND_MIN && b.h >= ROUND_MIN) {
-        const r = Math.min(M.radius, b.w / 2, b.h / 2);
-        batch.path.roundRect(b.x, b.y, b.w, b.h, r);
-        if (alpha === 1) outlines.roundRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1, r);
-      } else batch.rects.push(b);
+      this.paintTile(c, b, n, lens, parentSize);
     }
-    for (const batch of batches.values()) {
-      c.globalAlpha = batch.alpha;
-      c.fillStyle = batch.color;
-      c.fill(batch.path);
-      for (const r of batch.rects) c.fillRect(r.x, r.y, r.w, r.h);
-    }
-    c.globalAlpha = 1;
-    c.strokeStyle = pal.blockStroke;
-    c.lineWidth = 1;
-    c.stroke(outlines);
-
-    this.paintLabels(c, layout, lens);
     this.paintGhost(c, layout, 1);
   }
 
-  private paintLabels(c: CanvasRenderingContext2D, layout: Layout, lens: LensKey) {
+  private tileRadius(w: number, h: number): number {
+    return Math.max(2, Math.min(M.tileRadius, w / 5, h / 5));
+  }
+
+  /** Bytes of a tile that match a lens, as a fraction of the tile (0 for "all" and the plan). */
+  private lensFraction(n: DiskNode, lens: LensKey): number {
+    if (lens === "all" || lens === "plan" || n.size === 0) return 0;
+    return Math.min(1, (n.matchBytes[lens] ?? 0) / n.size);
+  }
+
+  private paintTile(c: CanvasRenderingContext2D, b: Item, n: DiskNode, lens: LensKey, parentSize: number) {
     const pal = M[this.scheme];
-    c.textBaseline = "alphabetic";
-    c.font = M.headerFont;
-    c.fillStyle = pal.header;
-    for (const g of layout.groups) {
-      if (g.w < 60) continue;
-      const n = this.disk.nodes[g.id];
-      c.fillText(this.fit(c, `h${g.id}`, `${n.name}  ·  ${this.bytes(n.size)}`, g.w - 12), g.x + 6, g.y + 13);
+    const base = categoryShades[this.scheme][n.category];
+    const r = this.tileRadius(b.w, b.h);
+    const fraction = this.lensFraction(n, lens);
+    const dimmed = lens === "plan" || (lens !== "all" && fraction === 0);
+    c.globalAlpha = (dimmed ? M.dimmedAlpha : 1) * this.alphaMul;
+
+    // Tile body: a soft diagonal gradient within the category hue.
+    const grad = c.createLinearGradient(b.x, b.y, b.x + b.w, b.y + b.h);
+    grad.addColorStop(0, base[(n.shade + 1) % 3]);
+    grad.addColorStop(1, base[n.shade]);
+    c.fillStyle = grad;
+    c.beginPath();
+    c.roundRect(b.x, b.y, b.w, b.h, r);
+    c.fill();
+
+    c.save();
+    c.clip();
+    // Texture: a faint map of what's inside, so a folder hints at its contents.
+    const shown = this.disk.nodes[throughSingles(this.disk, n.id)];
+    if (shown.children.length > 1 && b.w > 90 && b.h > 70) {
+      const top = b.h > 120 ? 78 : 40;
+      const inner = { x: b.x + 10, y: b.y + top, w: b.w - 20, h: b.h - top - 10 };
+      if (inner.w > 20 && inner.h > 16) {
+        const kids = shown.children.filter((k) => this.disk.nodes[k].size > 0).slice(0, 60);
+        const rects = squarify(kids.map((k) => this.disk.nodes[k].size), inner);
+        c.fillStyle = pal.label;
+        c.globalAlpha = (dimmed ? M.dimmedAlpha : 1) * M.textureAlpha * this.alphaMul;
+        for (const k of rects) if (k.w > 3 && k.h > 3) {
+          c.beginPath();
+          c.roundRect(k.x + 1, k.y + 1, k.w - 2, k.h - 2, Math.min(4, k.w / 4, k.h / 4));
+          c.fill();
+        }
+      }
     }
-    let drawn = 0;
-    for (const b of this.sortedByArea(layout)) {
-      if (b.w < 64 || b.h < 30 || ++drawn > MAX_LABELS) break;
-      const n = this.disk.nodes[b.id];
-      if (n.kind === "ghost") continue;
-      const alpha = this.colorFor(n, lens)[1];
-      // Lens-colored blocks are bright, so their labels switch to the dark on-accent color.
-      const onLens = lens !== "all" && lens !== "plan" && alpha === 1;
-      c.globalAlpha = alpha;
+    // Lens: the matching share fills the tile from the bottom.
+    if (fraction > 0 && lens !== "all" && lens !== "plan") {
+      const fh = Math.max(3, b.h * fraction);
+      c.globalAlpha = this.alphaMul;
+      c.fillStyle = lensColors[this.scheme][lens];
+      c.fillRect(b.x, b.y + b.h - fh, b.w, fh);
+    }
+    c.restore();
+
+    c.globalAlpha = (dimmed ? M.dimmedAlpha : 1) * this.alphaMul;
+    c.strokeStyle = pal.blockStroke;
+    c.lineWidth = 1;
+    c.beginPath();
+    c.roundRect(b.x + 0.5, b.y + 0.5, b.w - 1, b.h - 1, r);
+    c.stroke();
+
+    this.paintTileLabel(c, b, n, lens, fraction, parentSize, dimmed);
+    c.globalAlpha = 1;
+  }
+
+  private paintTileLabel(c: CanvasRenderingContext2D, b: Item, n: DiskNode, lens: LensKey, fraction: number, parentSize: number, dimmed: boolean) {
+    const pal = M[this.scheme];
+    const onLens = fraction > 0.72; // label sits on the lens fill
+    const text = onLens ? palette[this.scheme].onAccent : pal.label;
+    const muted = onLens ? palette[this.scheme].onAccent : pal.labelMuted;
+    c.globalAlpha = (dimmed ? M.dimmedAlpha + 0.15 : 1) * this.alphaMul;
+    c.textBaseline = "alphabetic";
+    if (b.w >= 120 && b.h >= 96) {
+      c.font = M.tileFont;
+      c.fillStyle = text;
+      c.fillText(this.fit(c, `t${n.id}`, n.name, b.w - 28), b.x + 14, b.y + 26);
+      c.font = M.tileSizeFont;
+      c.fillText(this.bytes(n.size), b.x + 14, b.y + 56);
+      c.font = M.tileMetaFont;
+      c.fillStyle = muted;
+      const share = Math.round((n.size / parentSize) * 100);
+      const meta = lens !== "all" && lens !== "plan" && fraction > 0
+        ? t("map.lensShare", { size: this.bytes(n.matchBytes[lens] ?? 0), lens: t(`lens.${lens}`).toLowerCase() })
+        : n.children.length
+          ? t("map.tileMeta", { share: share < 1 ? "<1" : share, count: this.disk.nodes[throughSingles(this.disk, n.id)].children.length })
+          : t("map.tileShare", { share: share < 1 ? "<1" : share });
+      if (b.h >= 120) c.fillText(this.fit(c, `m${n.id}${lens}`, meta, b.w - 28), b.x + 14, b.y + 74);
+    } else if (b.w >= 64 && b.h >= 36) {
       c.font = M.labelFont;
-      c.fillStyle = onLens ? palette[this.scheme].onAccent : pal.label;
-      c.fillText(this.fit(c, `n${b.id}`, n.name, b.w - 14), b.x + 7, b.y + 17);
-      if (b.h >= 44) {
+      c.fillStyle = text;
+      c.fillText(this.fit(c, `n${n.id}`, n.name, b.w - 14), b.x + 7, b.y + 17);
+      if (b.h >= 46) {
         c.font = M.sizeFont;
-        c.globalAlpha = onLens ? 0.7 : alpha;
-        c.fillStyle = onLens ? palette[this.scheme].onAccent : pal.labelMuted;
+        c.fillStyle = muted;
         c.fillText(this.bytes(n.size), b.x + 7, b.y + 32);
       }
     }
-    c.globalAlpha = 1;
   }
 
   private paintGhost(c: CanvasRenderingContext2D, layout: Layout, alpha: number) {
@@ -585,39 +627,27 @@ export class MapRenderer {
     const p = clamp01((now - rf.start) / (duration.slow * 1000));
     const e = this.reduced ? 1 : easeOut(p);
     const ctx = this.ctx;
-    const pal = M[this.scheme];
     const lens = this.lens.to;
+    const parentSize = this.disk.nodes[rf.to.focus].size || 1;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = pal.groupFrame;
-    for (const g of rf.to.groups) {
-      const from = rf.from.byId.get(g.id);
-      const r = from ? lerpRect(from, g, e) : g;
-      ctx.beginPath();
-      ctx.roundRect(r.x, r.y, r.w, r.h, M.radius + 2);
-      ctx.fill();
-    }
     for (const b of rf.to.blocks) {
       const n = this.disk.nodes[b.id];
       if (n.kind === "ghost") continue;
       const from = rf.from.byId.get(b.id);
       const r = from ? lerpRect(from, b, e) : b;
-      const [color, a] = this.colorFor(n, lens);
-      ctx.globalAlpha = a * (from ? 1 : e);
-      ctx.fillStyle = color;
-      this.block(r);
+      this.alphaMul = from ? 1 : e;
+      this.paintTile(ctx, { ...b, ...r }, n, lens, parentSize);
     }
-    // Permanently deleted blocks fade and collapse in place; quarantined ones already flew away.
+    // Permanently deleted tiles fade and collapse in place; quarantined ones already flew away.
     for (const b of rf.from.blocks) {
       if (rf.to.byId.has(b.id) || this.removalMode(rf.modes, b.id) !== "delete") continue;
       const n = this.disk.nodes[b.id];
       if (n.kind === "ghost") continue;
       const s = 1 - e * 0.85;
-      const [color, a] = this.colorFor(n, lens);
-      ctx.globalAlpha = a * (1 - e);
-      ctx.fillStyle = color;
-      this.block({ x: b.x + (b.w * (1 - s)) / 2, y: b.y + (b.h * (1 - s)) / 2, w: b.w * s, h: b.h * s });
+      this.alphaMul = 1 - e;
+      this.paintTile(ctx, { ...b, x: b.x + (b.w * (1 - s)) / 2, y: b.y + (b.h * (1 - s)) / 2, w: b.w * s, h: b.h * s }, n, lens, parentSize);
     }
+    this.alphaMul = 1;
     ctx.globalAlpha = 1;
     if (rf.to.byId.has(this.disk.ghostId)) this.paintGhost(ctx, rf.to, 1);
     else this.paintGhost(ctx, rf.from, 1 - e);
@@ -625,14 +655,11 @@ export class MapRenderer {
     return true;
   }
 
+  /** Fills a rounded rect in the current fill style (hover and selection overlays). */
   private block(r: Rect) {
-    if (r.w >= ROUND_MIN && r.h >= ROUND_MIN) {
-      this.ctx.beginPath();
-      this.ctx.roundRect(r.x, r.y, r.w, r.h, Math.min(M.radius, r.w / 2, r.h / 2));
-      this.ctx.fill();
-    } else {
-      this.ctx.fillRect(r.x, r.y, r.w, r.h);
-    }
+    this.ctx.beginPath();
+    this.ctx.roundRect(r.x, r.y, r.w, r.h, this.tileRadius(r.w, r.h));
+    this.ctx.fill();
   }
 
   private removalMode(modes: Map<number, RemovalMode>, id: number): RemovalMode | undefined {
@@ -664,24 +691,23 @@ export class MapRenderer {
       ctx.clip();
       this.composite(view, IDENTITY, 1, lensT);
       ctx.restore();
-      // Blocks in the sonar band fade and scale in as the sweep passes them.
+      // Tiles in the sonar band fade and scale in as the sweep passes them.
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
-      const r2min = Math.max(0, R - feather) ** 2;
-      const r2max = R * R;
+      const parentSize = this.disk.nodes[view.focus].size || 1;
       for (const b of view.blocks) {
-        const dx = b.x + b.w / 2 - cx;
-        const dy = b.y + b.h / 2 - cy;
-        const d2 = dx * dx + dy * dy;
-        if (d2 < r2min || d2 >= r2max) continue;
         const n = this.disk.nodes[b.id];
         if (n.kind === "ghost") continue;
-        const q = (R - Math.sqrt(d2)) / feather;
-        const s = 0.6 + 0.4 * q;
-        const [color, a] = this.colorFor(n, this.lens.to);
-        ctx.globalAlpha = a * q;
-        ctx.fillStyle = color;
-        this.block({ x: b.x + (b.w * (1 - s)) / 2, y: b.y + (b.h * (1 - s)) / 2, w: b.w * s, h: b.h * s });
+        // A tile is revealed as the sweep crosses its nearest point to the center.
+        const nx = Math.max(b.x, Math.min(cx, b.x + b.w));
+        const ny = Math.max(b.y, Math.min(cy, b.y + b.h));
+        const d = Math.hypot(nx - cx, ny - cy);
+        if (d < R - feather || d >= R) continue;
+        const q = (R - d) / feather;
+        const s = 0.85 + 0.15 * q;
+        this.alphaMul = q;
+        this.paintTile(ctx, { ...b, x: b.x + (b.w * (1 - s)) / 2, y: b.y + (b.h * (1 - s)) / 2, w: b.w * s, h: b.h * s }, n, this.lens.to, parentSize);
       }
+      this.alphaMul = 1;
       ctx.strokeStyle = pal.sonar;
       ctx.globalAlpha = (1 - p) * 0.9;
       ctx.lineWidth = 2;
@@ -704,6 +730,24 @@ export class MapRenderer {
     return true;
   }
 
+  /** Candidate bytes per visible tile, with the best rank inside each (for "free N GB"). */
+  private candidateTiles(): Map<number, { bytes: number; rank: number }> {
+    const out = new Map<number, { bytes: number; rank: number }>();
+    const v = this.view;
+    if (!v || !this.candidates) return out;
+    this.candidates.ids.forEach((id, rank) => {
+      for (let n: DiskNode | undefined = this.disk.nodes[id]; n; n = n.parent >= 0 ? this.disk.nodes[n.parent] : undefined) {
+        if (!v.byId.has(n.id)) continue;
+        const cur = out.get(n.id) ?? { bytes: 0, rank };
+        cur.bytes += this.disk.nodes[id].size;
+        cur.rank = Math.min(cur.rank, rank);
+        out.set(n.id, cur);
+        break;
+      }
+    });
+    return out;
+  }
+
   private drawCandidates(now: number): boolean {
     const cands = this.candidates;
     if (!cands || !this.view) return false;
@@ -711,22 +755,35 @@ export class MapRenderer {
     const pal = M[this.scheme];
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     let pending = false;
-    cands.ids.forEach((id, i) => {
-      const r = this.view!.byId.get(id);
-      if (!r) return;
-      const appear = this.reduced ? 1 : clamp01((now - cands.start - i * mapMotion.candidateStagger * 1000) / (duration.base * 1000));
+    for (const [id, { bytes, rank }] of this.candidateTiles()) {
+      const r = this.view.byId.get(id)!;
+      const n = this.disk.nodes[id];
+      const appear = this.reduced ? 1 : clamp01((now - cands.start - rank * mapMotion.candidateStagger * 1000) / (duration.base * 1000));
       if (appear < 1) pending = true;
-      if (appear <= 0) return;
+      if (appear <= 0) continue;
+      const fraction = Math.min(1, bytes / Math.max(1, n.size));
+      const fh = Math.max(4, r.h * fraction) * easeOut(appear);
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(r.x, r.y, r.w, r.h, this.tileRadius(r.w, r.h));
+      ctx.clip();
       ctx.globalAlpha = 0.9 * appear;
       ctx.fillStyle = pal.candidate;
-      this.block(r);
-      if (r.w > 26 && r.h > 20) {
-        ctx.globalAlpha = appear;
+      ctx.fillRect(r.x, r.y + r.h - fh, r.w, fh);
+      ctx.restore();
+      ctx.globalAlpha = appear;
+      ctx.strokeStyle = pal.candidate;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, this.tileRadius(r.w, r.h));
+      ctx.stroke();
+      if (r.w > 70 && r.h > 40) {
         ctx.font = M.labelFont;
-        ctx.fillStyle = palette[this.scheme].onAccent;
-        ctx.fillText(String(i + 1), r.x + 6, r.y + 16);
+        ctx.fillStyle = fraction > 0.6 ? palette[this.scheme].onAccent : pal.label;
+        const label = `#${rank + 1} · ${this.bytes(bytes)}`;
+        ctx.fillText(label, r.x + 10, r.y + r.h - 10);
       }
-    });
+    }
     ctx.globalAlpha = 1;
     return pending;
   }
@@ -750,7 +807,7 @@ export class MapRenderer {
         ctx.strokeStyle = pal.selection;
         ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, Math.min(M.radius, r.w / 2, r.h / 2));
+        ctx.roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, this.tileRadius(r.w, r.h));
         ctx.stroke();
       }
     }

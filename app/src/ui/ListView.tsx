@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import { formatBytes } from "../lib/format";
 import { useScheme } from "../lib/prefs";
 import { duration, ease } from "../motion/tokens";
-import { lensMatches } from "../map/data";
+import { lensMatches } from "../api/types";
 import { leavesUnder } from "../map/tree";
 import { useApp } from "../store/app";
 import { SafetyLabel } from "./Safety";

@@ -6,7 +6,7 @@ import { useReducedMotion, useScheme } from "../lib/prefs";
 import { mapMotion } from "../motion/tokens";
 import { setNodeColorResolver, useApp } from "../store/app";
 import { setRenderer } from "./controller";
-import { lensMatches } from "./data";
+import { lensMatches } from "../api/types";
 import { MapRenderer } from "./renderer";
 
 export function MapView() {
@@ -35,7 +35,7 @@ export function MapView() {
     resize();
     const ro = new ResizeObserver(resize);
     ro.observe(canvas);
-    useApp.getState().startScan();
+    void useApp.getState().scanDisk();
     return () => {
       ro.disconnect();
       r.destroy();
@@ -78,7 +78,7 @@ export function MapView() {
     const r = rendererRef.current!;
     const { x, y } = local(e);
     const hit = r.hitTest(x, y);
-    r.setHover(hit && !hit.group ? hit.id : null);
+    r.setHover(hit ? hit.id : null);
     const tip = tooltipRef.current!;
     if (hit) {
       const n = useApp.getState().disk.nodes[hit.id];
@@ -98,12 +98,20 @@ export function MapView() {
     tooltipRef.current!.style.opacity = "0";
   }
 
+  // Click a folder to zoom into it; click a file (or Option/right-click anything) for details.
   function onClick(e: React.MouseEvent) {
     const hit = rendererRef.current!.hitTest(local(e).x, local(e).y);
     const app = useApp.getState();
     if (!hit) return app.select(null);
-    if (hit.group) return app.setFocus(hit.id);
+    const n = app.disk.nodes[hit.id];
+    if (n.children.length > 0 && !e.altKey) return app.setFocus(hit.id);
     app.select(hit.id);
+  }
+
+  function onContextMenu(e: React.MouseEvent) {
+    e.preventDefault();
+    const hit = rendererRef.current!.hitTest(local(e).x, local(e).y);
+    if (hit) useApp.getState().select(hit.id);
   }
 
   function drillAt(x: number, y: number) {
@@ -178,6 +186,11 @@ export function MapView() {
       if (next !== null) app.select(next, false);
     } else if (e.key === "Enter" && app.selected !== null) {
       e.preventDefault();
+      // Enter zooms into a folder and opens details for a file; "i" always opens details.
+      if (app.disk.nodes[app.selected].children.length > 0) app.setFocus(app.selected);
+      else app.select(app.selected, true);
+    } else if (e.key === "i" && app.selected !== null) {
+      e.preventDefault();
       app.select(app.selected, true);
     } else if (e.key === " " && app.selected !== null) {
       e.preventDefault();
@@ -198,6 +211,7 @@ export function MapView() {
         onPointerLeave={onPointerLeave}
         onClick={onClick}
         onDoubleClick={onDoubleClick}
+        onContextMenu={onContextMenu}
         onWheel={onWheel}
         onKeyDown={onKeyDown}
       />

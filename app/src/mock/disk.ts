@@ -1,46 +1,8 @@
-// Mock disk for the Reef Map prototype. Deterministic, so every launch shows the same disk.
-// Nothing here touches the real file system.
-import type { Category, LensId, Safety } from "../design/tokens";
+// Mock disk: deterministic, so every launch shows the same disk. Nothing here touches the real
+// file system. Stage B replaces it with the Rust scanner behind the same api/ interface.
+import type { Category } from "../design/tokens";
+import { GB, LENS_BIT, LENS_IDS, type Disk, type DiskNode, type NodeKind } from "../api/types";
 
-export type NodeKind = "volume" | "dir" | "file" | "app" | "model" | "ghost";
-
-export const LENS_BIT: Record<Exclude<LensId, "all">, number> = {
-  junk: 1,
-  apps: 2,
-  aiModels: 4,
-  dev: 8,
-  largeOld: 16,
-  grew: 32,
-};
-
-export type DiskNode = {
-  id: number;
-  name: string;
-  path: string;
-  size: number;
-  parent: number; // -1 for the root
-  children: number[];
-  depth: number;
-  category: Category;
-  kind: NodeKind;
-  lastOpenedDays: number;
-  safety: Safety;
-  why: string;
-  lenses: number; // bitmask of LENS_BIT
-  deep: number; // lenses of this node and all descendants
-  grewBy: number;
-  shade: 0 | 1 | 2;
-};
-
-export type Disk = {
-  nodes: DiskNode[];
-  root: number;
-  capacity: number;
-  ghostId: number;
-  leafCount: number;
-};
-
-export const GB = 1e9;
 const CAPACITY = 1000 * GB;
 const FILES_TOTAL = 567 * GB;
 const GHOST_SIZE = 31 * GB;
@@ -155,6 +117,7 @@ export function generateDisk(targetLeaves = 2000, uniform = false, seed = 7): Di
       lenses: (attrs.lenses ?? 0) | (p ? p.lenses : 0),
       grewBy: 0,
       deep: 0,
+      matchBytes: {},
       shade: Math.floor(rand() * 3) as 0 | 1 | 2,
     });
     if (p) p.children.push(id);
@@ -330,27 +293,25 @@ export function generateDisk(targetLeaves = 2000, uniform = false, seed = 7): Di
     }
   }
   // A directory matches a lens when any descendant does, so lenses also apply to collapsed blocks.
-  for (const n of nodes) n.deep = n.lenses;
+  for (const n of nodes) {
+    n.deep = n.lenses;
+    if (n.children.length === 0) {
+      for (const lens of LENS_IDS) {
+        if (n.lenses & LENS_BIT[lens]) n.matchBytes[lens] = lens === "grew" ? n.grewBy : n.size;
+      }
+    }
+  }
   for (let i = nodes.length - 1; i > 0; i--) {
     const n = nodes[i];
-    nodes[n.parent].grewBy += n.grewBy;
-    nodes[n.parent].deep |= n.deep;
+    const parent = nodes[n.parent];
+    parent.grewBy += n.grewBy;
+    parent.deep |= n.deep;
+    for (const lens of LENS_IDS) {
+      const bytes = n.matchBytes[lens];
+      if (bytes) parent.matchBytes[lens] = (parent.matchBytes[lens] ?? 0) + bytes;
+    }
   }
 
   return { nodes, root, capacity: CAPACITY, ghostId, leafCount: leaves.length };
 }
 
-export function lensMatches(node: DiskNode, lens: LensId): boolean {
-  return lens === "all" || (node.deep & LENS_BIT[lens]) !== 0;
-}
-
-export function ancestors(disk: Disk, id: number): number[] {
-  const out: number[] = [];
-  for (let n = disk.nodes[id]; n.parent >= 0; n = disk.nodes[n.parent]) out.unshift(n.parent);
-  return out;
-}
-
-export function isAncestor(disk: Disk, ancestor: number, id: number): boolean {
-  for (let n = disk.nodes[id]; n.parent >= 0; n = disk.nodes[n.parent]) if (n.parent === ancestor) return true;
-  return false;
-}

@@ -122,7 +122,6 @@ function Segmented<T extends string>({ value, options, onChange, label }: { valu
 
 function Settings() {
   const s = useApp();
-  const glassAvailable = s.nativeGlass;
   return (
     <div className="flex flex-col gap-4">
       <Setting title={t("settings.theme")}>
@@ -130,9 +129,6 @@ function Settings() {
       </Setting>
       <Setting title={t("settings.motion")}>
         <Segmented label="motion" value={s.motion} onChange={(motion) => s.setPrefs({ motion })} options={[["system", "settings.system"], ["reduce", "settings.reduce"], ["full", "settings.full"]]} />
-      </Setting>
-      <Setting title={t("settings.glass")} note={glassAvailable ? t("settings.glassNote") : t("settings.glassUnavailable")}>
-        <Segmented label="glass" value={glassAvailable ? s.glass : "css"} onChange={(glass) => glassAvailable && s.setPrefs({ glass })} options={[["native", "settings.native"], ["css", "settings.css"]]} />
       </Setting>
       <Setting title={t("settings.blocks")} note={t("settings.blocksNote")}>
         <Segmented label="blocks" value={String(s.blockCount) as "2000" | "20000"} onChange={(v) => s.setBlockCount(Number(v) as 2000 | 20000)} options={[["2000", "settings.blocks2k"], ["20000", "settings.blocks20k"]]} />

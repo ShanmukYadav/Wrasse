@@ -2,7 +2,7 @@ import { CaretRight, ListBullets, SquaresFour } from "@phosphor-icons/react";
 import { AnimatePresence, motion } from "motion/react";
 import { t } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
-import { ancestors } from "../map/data";
+import { ancestors } from "../api/types";
 import { useApp } from "../store/app";
 
 export function TopLeft() {

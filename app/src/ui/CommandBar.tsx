@@ -22,6 +22,7 @@ export function CommandBar({ glassClass }: { glassClass: string }) {
   // ⌘K opens; typing anywhere opens with that character.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (e.defaultPrevented) return;
       const target = e.target as HTMLElement;
       const typing = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
