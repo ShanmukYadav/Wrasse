@@ -98,6 +98,16 @@ function tileRect(id: number): Rect | null {
 }
 
 export const useApp = create<State & Actions>((set, get) => {
+  /** After removals, a level with nothing left goes back up to the nearest level that has items. */
+  function ascendIfEmpty() {
+    setTimeout(() => {
+      const { disk, focus } = get();
+      let f = focus;
+      while (f !== disk.root && disk.nodes[f].children.every((c) => disk.nodes[c].size === 0 || !attached(disk, c))) f = disk.nodes[f].parent;
+      if (f !== focus) set({ focus: f, lens: lensForFocus(disk, f), selected: null, detailOpen: false });
+    }, 350);
+  }
+
   function log(action: string, target: string, size: number) {
     set((s) => ({ audit: [{ at: Date.now(), action, target, size }, ...s.audit].slice(0, 200) }));
   }
@@ -191,6 +201,7 @@ export const useApp = create<State & Actions>((set, get) => {
         plan: remainingPlan(s.plan, items.map((n) => n.id)),
       }));
       for (const n of items) log(t("audit.quarantined"), n.path, n.size);
+      ascendIfEmpty();
     },
 
     deleteNow: (ids) => {
@@ -202,6 +213,7 @@ export const useApp = create<State & Actions>((set, get) => {
       setTimeout(() => {
         detach(disk, items.map((n) => n.id));
         set((s) => ({ deleting: [], diskVersion: s.diskVersion + 1 }));
+        ascendIfEmpty();
       }, 260);
       for (const n of items) log(t("audit.deleted"), n.path, n.size);
     },
@@ -235,6 +247,7 @@ export const useApp = create<State & Actions>((set, get) => {
       zeroOut(disk, disk.ghostId);
       set((s) => ({ diskVersion: s.diskVersion + 1, selected: null, detailOpen: false }));
       log(t("audit.snapshotsThinned"), "/", size);
+      ascendIfEmpty();
     },
 
     planFree: (bytes) => {
@@ -289,12 +302,10 @@ export const useApp = create<State & Actions>((set, get) => {
       log(t("audit.quit"), get().disk.nodes[appId].name, 0);
     },
     confirmUninstall: (appId, ids) => {
-      const { disk, focus } = get();
+      const { disk } = get();
       set({ uninstall: null });
       get().addToTray(ids);
       log(t("audit.uninstalled"), disk.nodes[appId].path, ids.reduce((s, id) => s + disk.nodes[id].size, 0));
-      // Leave the emptied app and return to Apps.
-      if (focus === appId && disk.nodes[appId].children.every((c) => !attached(disk, c))) setTimeout(() => get().zoomOut(), 350);
     },
   };
 });
