@@ -107,13 +107,14 @@ export const map = {
   inset: { top: 64, right: 16, bottom: 76, left: 16 },
   tileGap: 6,
   tileRadius: 14,
-  tileFont: '650 15px -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif',
-  tileSizeFont: '650 26px -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif',
-  tileMetaFont: '500 12px -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif',
+  tileFont: '500 15px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", sans-serif',
+  tileSizeFont: '600 28px -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI Variable", "Segoe UI", sans-serif',
+  tileMetaFont: '400 12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", sans-serif',
+  tileIcon: 20,
   textureAlpha: 0.16,
-  labelFont: '600 12px -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif',
-  sizeFont: '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif',
-  headerFont: '650 11px -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif',
+  labelFont: '500 13px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", sans-serif',
+  sizeFont: '600 12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", sans-serif',
+  headerFont: '600 12px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", sans-serif',
   ghostDash: [6, 5],
   dimmedAlpha: 0.25,
 } as const;
@@ -185,12 +186,96 @@ export const blur = {
   scrim: "blur(2px)",
 } as const;
 
+// Fixed type scale (px). Names medium, sizes semibold, hints regular at 70% opacity.
+export const typeScale = [12, 13, 15, 17, 22, 28, 40, 64] as const;
 export const type = {
-  hero: "40px",
-  title: "20px",
-  body: "14px",
+  caption: "12px",
   label: "13px",
-  caption: "11.5px",
+  body: "15px",
+  heading: "17px",
+  title: "22px",
+  display: "28px",
+  hero: "40px",
+  giant: "64px",
+} as const;
+export const weight = { regular: 400, name: 500, size: 600, strong: 650 } as const;
+export const hintOpacity = 0.7;
+export const fontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", sans-serif';
+
+// Icons: one duotone family on a 24×24 grid with a 2px safe margin.
+export const icon = {
+  sizes: [16, 20, 24, 32] as const,
+  stroke: 1.75,
+  fillOpacity: 0.2,
+  grid: 24,
+} as const;
+export type IconSize = (typeof icon.sizes)[number];
+
+export type Tone =
+  | Category
+  | "accent"
+  | "safe"
+  | "yourCall"
+  | "keep"
+  | "warning"
+  | "neutral"
+  | "ghost";
+
+// Icon tones: bright enough to read on tiles and glass in each scheme.
+export const tones: Record<Scheme, Record<Tone, string>> = {
+  dark: {
+    apps: "#7fb0ff",
+    users: "#5fd8cc",
+    library: "#a3afff",
+    developer: "#4fdcf0",
+    aiModels: "#b9a4ff",
+    system: "#aab6c8",
+    other: "#9fb3c6",
+    accent: "#22e5ff",
+    safe: "#6ee7a8",
+    yourCall: "#ff8a73",
+    keep: "#9aa8bd",
+    warning: "#f5b83d",
+    neutral: "#e8f6ff",
+    ghost: "#c8e4f5",
+  },
+  light: {
+    apps: "#2f6fd6",
+    users: "#0f8f86",
+    library: "#4f5bd5",
+    developer: "#0b8aa5",
+    aiModels: "#7048d8",
+    system: "#5b6678",
+    other: "#556b80",
+    accent: "#0891b2",
+    safe: "#15803d",
+    yourCall: "#c2410c",
+    keep: "#64748b",
+    warning: "#b7791f",
+    neutral: "#06243a",
+    ghost: "#4a6378",
+  },
+};
+
+// Brand: the Wrasse mark and app icon colors.
+export const brand = {
+  iconFrom: "#0a1a3a", // deep navy
+  iconTo: "#0e7c86", // teal
+  fish: "#ffffff",
+  stripe: "#22e5ff",
+  highlight: "rgba(255, 255, 255, 0.22)",
+  ink: { dark: "#e8f6ff", light: "#06243a" }, // mono mark on each scheme
+  trayPreview: { light: "#ececec", dark: "#1c1c1e" }, // menu bar backgrounds for previews
+} as const;
+
+// Reef motif: caustic light on the backdrop (very low contrast) and scan bubbles.
+export const reef = {
+  caustics: {
+    dark: "radial-gradient(40% 30% at 20% 30%, rgba(120, 230, 255, 0.05) 0%, transparent 70%), radial-gradient(30% 25% at 70% 60%, rgba(120, 230, 255, 0.04) 0%, transparent 70%), radial-gradient(35% 28% at 45% 85%, rgba(120, 230, 255, 0.035) 0%, transparent 70%)",
+    light: "radial-gradient(40% 30% at 20% 30%, rgba(8, 145, 178, 0.06) 0%, transparent 70%), radial-gradient(30% 25% at 70% 60%, rgba(8, 145, 178, 0.05) 0%, transparent 70%), radial-gradient(35% 28% at 45% 85%, rgba(8, 145, 178, 0.04) 0%, transparent 70%)",
+  },
+  bubble: { dark: "rgba(160, 235, 255, 0.35)", light: "rgba(8, 145, 178, 0.28)" },
+  bubbleCount: 36,
 } as const;
 
 export const layout = {

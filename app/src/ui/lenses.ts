@@ -1,13 +1,12 @@
-import type { Icon } from "@phosphor-icons/react";
-import { AppWindow, Brain, Broom, Code, FileArchive, SquaresFour, TrendUp } from "@phosphor-icons/react";
+import type { IconName } from "../design/icons/nodes";
 import type { LensId } from "../design/tokens";
 
-export const LENSES: { id: LensId; icon: Icon }[] = [
-  { id: "all", icon: SquaresFour },
-  { id: "junk", icon: Broom },
-  { id: "apps", icon: AppWindow },
-  { id: "aiModels", icon: Brain },
-  { id: "dev", icon: Code },
-  { id: "largeOld", icon: FileArchive },
-  { id: "grew", icon: TrendUp },
+export const LENSES: { id: LensId; icon: IconName }[] = [
+  { id: "all", icon: "all" },
+  { id: "junk", icon: "junk" },
+  { id: "apps", icon: "app" },
+  { id: "aiModels", icon: "aiModel" },
+  { id: "dev", icon: "dev" },
+  { id: "largeOld", icon: "largeOld" },
+  { id: "grew", icon: "grew" },
 ];

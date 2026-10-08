@@ -4,7 +4,10 @@
 // frames, lens crossfades, camera zooms and the sonar sweep then composite one or two bitmaps,
 // so frame cost stays flat as the block count grows. Only the short reflow after removing blocks
 // draws blocks individually.
-import { categoryShades, lensColors, map as M, palette, type LensId, type Scheme } from "../design/tokens";
+import { drawMark } from "../design/brand/canvas";
+import { drawIcon } from "../design/icons/canvas";
+import { iconFor, toneFor } from "../design/icons/semantic";
+import { categoryShades, lensColors, map as M, palette, reef, tones, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
 import { formatBytes, type UnitSystem } from "../lib/format";
 import { clamp01, easeInOut, easeOut, smoothstep } from "../motion/easing";
@@ -401,10 +404,12 @@ export class MapRenderer {
     const muted = onLens ? palette[this.scheme].onAccent : pal.labelMuted;
     c.globalAlpha = (dimmed ? M.dimmedAlpha + 0.15 : 1) * this.alphaMul;
     c.textBaseline = "alphabetic";
+    const iconColor = onLens ? text : tones[this.scheme][toneFor(n)];
     if (b.w >= 120 && b.h >= 96) {
+      drawIcon(c, iconFor(n), b.x + 13, b.y + 11, M.tileIcon, iconColor);
       c.font = M.tileFont;
       c.fillStyle = text;
-      c.fillText(this.fit(c, `t${n.id}`, n.name, b.w - 28), b.x + 14, b.y + 26);
+      c.fillText(this.fit(c, `t${n.id}`, n.name, b.w - 56), b.x + 41, b.y + 26);
       c.font = M.tileSizeFont;
       c.fillText(this.bytes(n.size), b.x + 14, b.y + 56);
       c.font = M.tileMetaFont;
@@ -416,10 +421,13 @@ export class MapRenderer {
           ? t("map.tileMeta", { share: share < 1 ? "<1" : share, count: this.disk.nodes[throughSingles(this.disk, n.id)].children.length })
           : t("map.tileShare", { share: share < 1 ? "<1" : share });
       if (b.h >= 120) c.fillText(this.fit(c, `m${n.id}${lens}`, meta, b.w - 28), b.x + 14, b.y + 74);
-    } else if (b.w >= 64 && b.h >= 36) {
+    } else if (b.w >= 84 && b.h >= 36) {
+      drawIcon(c, iconFor(n), b.x + 7, b.y + 6, 16, iconColor);
       c.font = M.labelFont;
       c.fillStyle = text;
-      c.fillText(this.fit(c, `n${n.id}`, n.name, b.w - 14), b.x + 7, b.y + 17);
+      c.fillText(this.fit(c, `n${n.id}`, n.name, b.w - 34), b.x + 28, b.y + 18);
+    } else if (b.w >= 28 && b.h >= 28) {
+      drawIcon(c, iconFor(n), b.x + (b.w - 16) / 2, b.y + (b.h - 16) / 2, 16, iconColor);
       if (b.h >= 46) {
         c.font = M.sizeFont;
         c.fillStyle = muted;
@@ -428,28 +436,39 @@ export class MapRenderer {
     }
   }
 
-  private paintGhost(c: CanvasRenderingContext2D, layout: Layout, alpha: number) {
-    const item = layout.byId.get(this.disk.ghostId);
+  private paintGhost(c: CanvasRenderingContext2D, layout: Layout, alpha: number, ghostId = this.disk.ghostId) {
+    const item = layout.byId.get(ghostId);
     if (!item || alpha <= 0) return;
     const pal = M[this.scheme];
+    const r = this.tileRadius(item.w, item.h);
     c.globalAlpha = alpha;
     c.fillStyle = pal.ghostFill;
     c.strokeStyle = pal.ghostStroke;
     c.lineWidth = 1.5;
     c.setLineDash([...M.ghostDash]);
     c.beginPath();
-    c.roundRect(item.x + 1, item.y + 1, item.w - 2, item.h - 2, M.radius);
+    c.roundRect(item.x + 1, item.y + 1, item.w - 2, item.h - 2, r);
     c.fill();
     c.stroke();
     c.setLineDash([]);
-    if (item.w > 120 && item.h > 40) {
-      c.font = M.labelFont;
+    const size = this.bytes(this.disk.nodes[ghostId].size);
+    if (item.w >= 120 && item.h >= 96) {
+      drawIcon(c, "ghost", item.x + 13, item.y + 11, M.tileIcon, tones[this.scheme].ghost);
+      c.font = M.tileFont;
       c.fillStyle = pal.ghostLabel;
-      const label = t("map.ghost", { size: this.bytes(this.disk.nodes[this.disk.ghostId].size) });
-      c.fillText(this.fit(c, "ghost", label, item.w - 16), item.x + 8, item.y + 20);
+      c.fillText(this.fit(c, "ghostName", t("map.ghostName"), item.w - 56), item.x + 41, item.y + 26);
+      c.font = M.tileSizeFont;
+      c.fillText(size, item.x + 14, item.y + 56);
+      c.font = M.tileMetaFont;
+      c.fillText(this.fit(c, "ghostHint", t("map.ghostHint"), item.w - 28), item.x + 14, item.y + 74);
       c.font = M.sizeFont;
       c.fillStyle = pal.selection;
-      c.fillText(t("map.ghostAction"), item.x + 8, item.y + 36);
+      c.fillText(t("map.ghostAction"), item.x + 14, item.y + item.h - 14);
+    } else if (item.w > 84 && item.h > 36) {
+      drawIcon(c, "ghost", item.x + 7, item.y + 6, 16, tones[this.scheme].ghost);
+      c.font = M.labelFont;
+      c.fillStyle = pal.ghostLabel;
+      c.fillText(this.fit(c, "ghost", t("map.ghost", { size }), item.w - 34), item.x + 28, item.y + 18);
     }
     c.globalAlpha = 1;
   }
@@ -477,6 +496,18 @@ export class MapRenderer {
   private bytes(n: number): string {
     const f = formatBytes(n, this.units);
     return `${f.value} ${f.unit}`;
+  }
+
+  /** Paints one tile into any context (used by the Design page's sample blocks). */
+  paintSample(c: CanvasRenderingContext2D, rect: Rect, id: number, lens: LensKey = "all", dpr = 1) {
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const n = this.disk.nodes[id];
+    const item: Item = { ...rect, id, block: true, group: false, rel: 1 };
+    if (n.kind === "ghost") {
+      this.paintGhost(c, { ...(this.view ?? layoutFocus(this.disk, this.disk.root, 0, 0)), byId: new Map([[id, item]]) }, 1, id);
+    } else {
+      this.paintTile(c, item, n, lens, this.disk.nodes[n.parent]?.size || n.size);
+    }
   }
 
   // ---- frame loop ----------------------------------------------------------------------------
@@ -691,8 +722,12 @@ export class MapRenderer {
       ctx.clip();
       this.composite(view, IDENTITY, 1, lensT);
       ctx.restore();
-      // Tiles in the sonar band fade and scale in as the sweep passes them.
+      // Tiles in the sonar band fade and scale in as the sweep passes them, never outside it.
       ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, R, 0, Math.PI * 2);
+      ctx.clip();
       const parentSize = this.disk.nodes[view.focus].size || 1;
       for (const b of view.blocks) {
         const n = this.disk.nodes[b.id];
@@ -708,6 +743,24 @@ export class MapRenderer {
         this.paintTile(ctx, { ...b, x: b.x + (b.w * (1 - s)) / 2, y: b.y + (b.h * (1 - s)) / 2, w: b.w * s, h: b.h * s }, n, this.lens.to, parentSize);
       }
       this.alphaMul = 1;
+      ctx.restore();
+      // Bubbles drift up from the sonar front, only while scanning.
+      ctx.strokeStyle = reef.bubble[this.scheme];
+      ctx.lineWidth = 1;
+      for (let i = 0; i < reef.bubbleCount; i++) {
+        const h1 = fract(Math.sin(i * 12.9898) * 43758.5453);
+        const h2 = fract(Math.sin(i * 78.233) * 12345.678);
+        const rise = fract(now / 1000 / mapMotion.bubbleRise + h2);
+        const a = h1 * Math.PI * 2;
+        const rad = Math.max(0, R - feather * (0.2 + 0.8 * h2));
+        ctx.globalAlpha = (1 - rise) * (1 - p) * 0.9;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(a) * rad + Math.sin(rise * 6 + i) * 3, cy + Math.sin(a) * rad - rise * 36, 1.5 + h1 * 2.5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      // The Wrasse mark at the sonar's center, fading as the sweep travels out.
+      ctx.globalAlpha = 1 - smoothstep(0.1, 0.6, p);
+      drawMark(ctx, cx, cy, 56, tones[this.scheme].accent);
       ctx.strokeStyle = pal.sonar;
       ctx.globalAlpha = (1 - p) * 0.9;
       ctx.lineWidth = 2;
@@ -843,4 +896,8 @@ export class MapRenderer {
   destroy() {
     if (this.raf) cancelAnimationFrame(this.raf);
   }
+}
+
+function fract(v: number): number {
+  return v - Math.floor(v);
 }

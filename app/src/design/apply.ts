@@ -1,6 +1,6 @@
 // Publishes the design tokens as CSS variables on <html>.
 import { duration } from "../motion/tokens";
-import { backdrop, blur, layout, palette, radius, shadow, type as typeScale, type Scheme } from "./tokens";
+import { backdrop, blur, fontStack, hintOpacity, icon, layout, lensColors, palette, radius, reef, shadow, tones, type as typeScale, weight, type Scheme } from "./tokens";
 
 export type PlatformKey = "macos" | "windows";
 
@@ -29,6 +29,13 @@ export function applyTokens(scheme: Scheme, platform: PlatformKey) {
   for (const [k, v] of Object.entries(typeScale)) vars[`--t-${kebab(k)}`] = v;
   for (const [k, v] of Object.entries(layout)) vars[`--l-${kebab(k)}`] = v;
   vars["--backdrop"] = backdrop[scheme];
+  vars["--caustics"] = reef.caustics[scheme];
+  for (const [k, v] of Object.entries(lensColors[scheme])) vars[`--lens-${k}`] = v;
+  for (const [k, v] of Object.entries(tones[scheme])) vars[`--tone-${kebab(k)}`] = v;
+  for (const [k, v] of Object.entries(weight)) vars[`--w-${k}`] = String(v);
+  vars["--hint-opacity"] = String(hintOpacity);
+  vars["--icon-stroke"] = String(icon.stroke);
+  vars["--font"] = fontStack;
   for (const [k, v] of Object.entries(duration)) vars[`--d-${k}`] = `${v}s`;
 
   const root = document.documentElement;

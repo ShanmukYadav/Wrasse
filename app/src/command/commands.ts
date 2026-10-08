@@ -1,5 +1,8 @@
 // Command bar: parses what the user typed into ranked, runnable suggestions.
-import type { LensId } from "../design/tokens";
+import type { IconName } from "../design/icons/nodes";
+import { iconFor, toneFor } from "../design/icons/semantic";
+import type { LensId, Tone } from "../design/tokens";
+import { LENSES } from "../ui/lenses";
 import { t } from "../i18n";
 import { formatBytes } from "../lib/format";
 import { GB } from "../api/types";
@@ -9,6 +12,8 @@ export type Suggestion = {
   key: string;
   label: string;
   hint?: string;
+  icon: IconName;
+  tone?: Tone;
   run: () => void;
 };
 
@@ -41,7 +46,18 @@ const LENS_WORDS: [LensId, string[]][] = [
   ["grew", ["grew", "growth", "what grew"]],
 ];
 
-const OVERLAYS: [Exclude<Overlay, null>, string[]][] = [
+const ACTION_ICONS: Record<string, IconName> = {
+  scan: "scan",
+  list: "list",
+  map: "grid",
+  out: "chevronRight",
+  home: "system",
+  empty: "trash",
+  restore: "restore",
+  design: "settings",
+};
+
+const OVERLAYS: [Exclude<Overlay, null | "design">, string[]][] = [
   ["startup", ["startup items", "login items"]],
   ["settings", ["settings", "preferences"]],
   ["audit", ["audit log", "log", "history of actions"]],
@@ -59,16 +75,16 @@ export function suggest(raw: string): Suggestion[] {
   const free = /^(?:free|f|fr|fre)\s*(\d+(?:\.\d+)?)\s*(tb|t|gb|g)?$/i.exec(text);
   if (free) {
     const n = parseFloat(free[1]) * ((free[2] ?? "gb").toLowerCase().startsWith("t") ? 1000 : 1);
-    push({ key: "free", label: t("cmd.free", { size: `${n} GB` }), hint: t("cmd.freeHint"), run: () => app.planFree(n * GB) }, 5000);
+    push({ key: "free", icon: "free", tone: "accent", label: t("cmd.free", { size: `${n} GB` }), hint: t("cmd.freeHint"), run: () => app.planFree(n * GB) }, 5000);
   } else if (!text || fuzzy(lower, "free 30 gb") > 0) {
-    push({ key: "free30", label: t("cmd.free", { size: "30 GB" }), hint: t("cmd.freeHint"), run: () => app.planFree(30 * GB) }, text ? fuzzy(lower, "free 30 gb") : 900);
+    push({ key: "free30", icon: "free", tone: "accent", label: t("cmd.free", { size: "30 GB" }), hint: t("cmd.freeHint"), run: () => app.planFree(30 * GB) }, text ? fuzzy(lower, "free 30 gb") : 900);
   }
 
   // Lenses: "show models", "junk", "what grew"
   const lensQuery = lower.replace(/^(show|lens)\s+/, "");
   for (const [lens, words] of LENS_WORDS) {
     const score = text ? Math.max(...words.map((w) => fuzzy(lensQuery, w))) : lens === "junk" ? 800 : lens === "grew" ? 700 : -1;
-    push({ key: `lens-${lens}`, label: lens === "grew" ? t("cmd.whatGrew") : t("cmd.show", { lens: t(`lens.${lens}`) }), hint: t("cmd.lensHint"), run: () => app.setLens(lens) }, score);
+    push({ key: `lens-${lens}`, icon: LENSES.find((l) => l.id === lens)!.icon, label: lens === "grew" ? t("cmd.whatGrew") : t("cmd.show", { lens: t(`lens.${lens}`) }), hint: t("cmd.lensHint"), run: () => app.setLens(lens) }, score);
   }
 
   // Scan, views, overlays, tray
@@ -80,14 +96,15 @@ export function suggest(raw: string): Suggestion[] {
     ["home", ["home", "whole disk", "top"], () => app.setFocus(app.disk.root)],
     ["empty", ["empty tray", "empty quarantine"], () => app.emptyTray()],
     ["restore", ["restore tray", "undo"], () => app.restoreTray()],
+    ["design", ["design system", "design"], () => app.setOverlay("design")],
   ];
   for (const [key, words, run] of actions) {
     const score = text ? Math.max(...words.map((w) => fuzzy(lower, w))) : key === "scan" ? 600 : -1;
-    push({ key, label: t(`cmd.${key}`), run }, score);
+    push({ key, icon: ACTION_ICONS[key] ?? "info", label: t(`cmd.${key}`), run }, score);
   }
   for (const [overlay, words] of OVERLAYS) {
     const score = text ? Math.max(...words.map((w) => fuzzy(lower.replace(/^open\s+/, ""), w))) : overlay === "settings" ? 300 : -1;
-    push({ key: `overlay-${overlay}`, label: t(`overlay.${overlay}`), hint: t("cmd.openHint"), run: () => app.setOverlay(overlay) }, score);
+    push({ key: `overlay-${overlay}`, icon: overlay, label: t(`overlay.${overlay}`), hint: t("cmd.openHint"), run: () => app.setOverlay(overlay) }, score);
   }
 
   // where is <name> (also any free text that matches a file or folder name)
@@ -105,10 +122,10 @@ export function suggest(raw: string): Suggestion[] {
     for (const h of hits.slice(0, 6)) {
       const n = app.disk.nodes[h.id];
       const f = formatBytes(n.size, units);
-      push({ key: `where-${n.id}`, label: t("cmd.whereIs", { name: n.name }), hint: `${n.path} · ${f.value} ${f.unit}`, run: () => app.locate(n.id) }, (where ? 2000 : 400) + h.score);
+      push({ key: `where-${n.id}`, icon: iconFor(n), tone: toneFor(n), label: t("cmd.whereIs", { name: n.name }), hint: `${n.path} · ${f.value} ${f.unit}`, run: () => app.locate(n.id) }, (where ? 2000 : 400) + h.score);
     }
   } else if (!text) {
-    push({ key: "where-hint", label: t("cmd.whereIs", { name: "Xcode" }), hint: t("cmd.whereHint"), run: () => app.locate(app.disk.nodes.find((n) => n.name === "Xcode.app")?.id ?? app.disk.root) }, 500);
+    push({ key: "where-hint", icon: "search", label: t("cmd.whereIs", { name: "Xcode" }), hint: t("cmd.whereHint"), run: () => app.locate(app.disk.nodes.find((n) => n.name === "Xcode.app")?.id ?? app.disk.root) }, 500);
   }
 
   return out

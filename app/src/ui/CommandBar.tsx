@@ -1,4 +1,4 @@
-import { MagnifyingGlass } from "@phosphor-icons/react";
+import { Icon } from "../design/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { suggest } from "../command/commands";
@@ -77,7 +77,7 @@ export function CommandBar({ glassClass }: { glassClass: string }) {
   return (
     <div className="command-wrap">
       <div ref={barRef} className={`command-bar ${glassClass}`}>
-        <MagnifyingGlass size={17} weight="bold" className="text-muted shrink-0" aria-hidden />
+        <Icon name="search" size={20} className="text-muted" />
         <input
           ref={inputRef}
           className="command-input"
@@ -124,8 +124,13 @@ export function CommandBar({ glassClass }: { glassClass: string }) {
                 }}
               >
                 {i === active && <motion.span layoutId="command-active" className="command-active" transition={spring.snappy} aria-hidden />}
-                <span className="relative">{item.label}</span>
-                {item.hint && <span className="relative command-hint">{item.hint}</span>}
+                <span className="relative flex items-center gap-3">
+                  <Icon name={item.icon} tone={item.tone} size={20} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="command-label">{item.label}</span>
+                    {item.hint && <span className="command-hint">{item.hint}</span>}
+                  </span>
+                </span>
               </li>
             ))}
           </motion.ul>

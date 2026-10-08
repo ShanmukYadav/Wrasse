@@ -10,6 +10,8 @@ import { lensMatches } from "../api/types";
 import { leavesUnder } from "../map/tree";
 import { useApp } from "../store/app";
 import { SafetyLabel } from "./Safety";
+import { Icon } from "../design/icons/Icon";
+import { iconFor, toneFor } from "../design/icons/semantic";
 
 type SortKey = "name" | "category" | "size" | "lastOpened" | "safety";
 
@@ -138,7 +140,8 @@ function List() {
                 <span className="list-col list-col-name">
                   {dot && <span className="lens-dot" style={{ background: dot }} aria-hidden />}
                   {planRank.has(id) && <span className="rank">{planRank.get(id)}</span>}
-                  <span className="truncate">{n.name}</span>
+                  <Icon name={iconFor(n)} tone={toneFor(n)} size={20} />
+                  <span className="truncate list-name">{n.name}</span>
                   {n.parent >= 0 && <span className="truncate text-faint">{disk.nodes[n.parent].name}</span>}
                 </span>
                 <span className="list-col list-col-category text-muted">{t(`category.${n.category}`)}</span>

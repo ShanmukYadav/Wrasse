@@ -20,6 +20,8 @@ import { Overlays } from "./ui/Overlays";
 import { QuarantineTray } from "./ui/QuarantineTray";
 import { Toast } from "./ui/Toast";
 import { TopLeft } from "./ui/TopLeft";
+import { Caustics } from "./ui/Caustics";
+import { DesignPage } from "./ui/DesignPage";
 
 export function App() {
   const scheme = useScheme();
@@ -54,6 +56,7 @@ export function App() {
   return (
     <MotionConfig reducedMotion={reduced ? "always" : "never"}>
       <div className="app-backdrop" aria-hidden />
+      <Caustics />
       <div data-tauri-drag-region className="drag-strip" />
       <MapView />
       <ListView />
@@ -73,6 +76,7 @@ export function App() {
       <Flyers />
       <Toast />
       <Overlays />
+      <DesignPage />
       <FpsHud />
       <DevBadge />
     </MotionConfig>

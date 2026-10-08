@@ -1,4 +1,4 @@
-import { CaretRight, ListBullets, SquaresFour } from "@phosphor-icons/react";
+import { Icon } from "../design/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
 import { t } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
@@ -28,7 +28,7 @@ export function TopLeft() {
             onClick={() => setViewMode(mode)}
           >
             {viewMode === mode && <motion.span layoutId="view-toggle" className="toggle-indicator" transition={spring.soft} aria-hidden />}
-            {mode === "map" ? <SquaresFour size={16} weight="duotone" className="relative" /> : <ListBullets size={16} weight="bold" className="relative" />}
+            <span className="relative inline-flex"><Icon name={mode === "map" ? "grid" : "list"} size={16} /></span>
           </button>
         ))}
       </div>
@@ -43,7 +43,7 @@ export function TopLeft() {
               animate={{ opacity: 1, transition: { duration: duration.base, ease: ease.out } }}
               exit={{ opacity: 0, transition: { duration: duration.fast, ease: ease.inOut } }}
             >
-              {i > 0 && <CaretRight size={11} weight="bold" className="text-faint" aria-hidden />}
+              {i > 0 && <Icon name="chevronRight" size={16} className="text-faint" />}
               <button
                 type="button"
                 className={`crumb focus-ring ${i === trail.length - 1 ? "is-current" : ""}`}

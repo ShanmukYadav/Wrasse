@@ -1,4 +1,5 @@
-import { ArrowSquareOut, CaretDown, Trash, Tray, X } from "@phosphor-icons/react";
+import { Icon } from "../design/icons/Icon";
+import { iconFor, toneFor } from "../design/icons/semantic";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { Bytes } from "../components/Bytes";
@@ -51,9 +52,12 @@ function Detail({ id }: { id: number }) {
   return (
     <div className="flex h-full flex-col gap-4">
       <div className="flex items-start justify-between gap-3">
-        <h2 className="text-title break-words">{n.name}</h2>
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="item-icon"><Icon name={iconFor(n)} tone={toneFor(n)} size={32} /></span>
+          <h2 className="text-title break-words">{n.name}</h2>
+        </div>
         <button type="button" className="icon-btn focus-ring" aria-label={t("detail.close")} onClick={closeDetail}>
-          <X size={16} weight="bold" />
+          <Icon name="close" size={16} />
         </button>
       </div>
       <Bytes value={n.size} className="text-hero" unitClassName="text-hero-unit" />
@@ -74,7 +78,7 @@ function Detail({ id }: { id: number }) {
         <button type="button" className="why-toggle focus-ring" aria-expanded={why} onClick={() => setWhy(!why)}>
           {n.safety === "safe" ? t("detail.whySafe") : t("detail.whyThis")}
           <motion.span animate={{ rotate: why ? 180 : 0 }} transition={spring.snappy} className="inline-flex">
-            <CaretDown size={12} weight="bold" />
+            <Icon name="chevronDown" size={16} />
           </motion.span>
         </button>
         <AnimatePresence initial={false}>
@@ -104,14 +108,14 @@ function Detail({ id }: { id: number }) {
               </motion.button>
             )}
             <motion.button type="button" className="btn focus-ring" onClick={() => notify(t("detail.revealToast", { app: fileManager }))} {...pressable}>
-              <ArrowSquareOut size={15} weight="bold" /> {t("detail.reveal", { app: fileManager })}
+              <Icon name="reveal" size={16} /> {t("detail.reveal", { app: fileManager })}
             </motion.button>
             <motion.button type="button" className="btn btn-primary focus-ring" disabled={n.safety === "keep"} onClick={() => addToTray([n.id])} {...pressable}>
-              <Tray size={15} weight="bold" /> {t("detail.addToCleanup")}
+              <Icon name="tray" size={16} /> {t("detail.addToCleanup")}
             </motion.button>
             {n.safety === "safe" && (
               <motion.button type="button" className="btn btn-danger focus-ring" onClick={() => deleteNow([n.id])} {...pressable}>
-                <Trash size={15} weight="bold" /> {t("detail.deleteNow")}
+                <Icon name="trash" size={16} /> {t("detail.deleteNow")}
                 <span className="text-caption">{t("detail.notUndoable")}</span>
               </motion.button>
             )}

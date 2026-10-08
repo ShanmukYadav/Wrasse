@@ -1,4 +1,4 @@
-import { X } from "@phosphor-icons/react";
+import { Icon } from "../design/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Bytes } from "../components/Bytes";
@@ -20,7 +20,7 @@ export function Overlays() {
 
   return (
     <AnimatePresence>
-      {overlay && (
+      {overlay && overlay !== "design" && (
         <motion.div
           key="scrim"
           className="overlay-scrim"
@@ -47,7 +47,7 @@ export function Overlays() {
   );
 }
 
-function Panel({ overlay }: { overlay: Exclude<Overlay, null> }) {
+function Panel({ overlay }: { overlay: Exclude<Overlay, null | "design"> }) {
   const setOverlay = useApp((s) => s.setOverlay);
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => closeRef.current?.focus(), []);
@@ -56,7 +56,7 @@ function Panel({ overlay }: { overlay: Exclude<Overlay, null> }) {
       <div className="flex items-center justify-between">
         <h2 className="text-title">{t(`overlay.${overlay}`)}</h2>
         <button ref={closeRef} type="button" className="icon-btn focus-ring" aria-label={t("detail.close")} onClick={() => setOverlay(null)}>
-          <X size={16} weight="bold" />
+          <Icon name="close" size={16} />
         </button>
       </div>
       <div className="overlay-body">

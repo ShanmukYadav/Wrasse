@@ -1,4 +1,4 @@
-import { Tray } from "@phosphor-icons/react";
+import { Icon } from "../design/icons/Icon";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { useEffect, useRef } from "react";
 import { Bytes } from "../components/Bytes";
@@ -26,7 +26,7 @@ export function QuarantineTray() {
   return (
     <motion.section layout className="tray glass-css" aria-label={t("tray.label")} transition={spring.soft}>
       <span ref={scope} id="tray-target" className="tray-icon">
-        <Tray size={20} weight="duotone" aria-hidden />
+        <Icon name="tray" tone="accent" size={20} />
       </span>
       <div className="flex flex-col">
         <span className="text-label text-strong">{has ? t("tray.items", { count: tray.length }) : t("tray.empty")}</span>

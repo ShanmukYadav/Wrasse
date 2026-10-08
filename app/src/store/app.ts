@@ -9,7 +9,7 @@ import type { Rect } from "../map/layout";
 import type { RemovalMode } from "../map/renderer";
 import { attached, detach, reattach, zeroOut } from "../map/tree";
 
-export type Overlay = "startup" | "settings" | "audit" | "history" | null;
+export type Overlay = "startup" | "settings" | "audit" | "history" | "design" | null;
 export type ThemePref = "system" | "dark" | "light";
 export type MotionPref = "system" | "reduce" | "full";
 export type GlassMode = "native" | "css";
