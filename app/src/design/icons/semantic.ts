@@ -21,6 +21,14 @@ export function iconFor(n: DiskNode): IconName {
   const path = n.path;
   if (n.kind === "ghost") return "ghost";
   if (n.kind === "volume") return "system";
+  // Top-level categories use the D1 category icons.
+  if (n.depth === 1) {
+    const byCategory: Partial<Record<DiskNode["category"], IconName>> = {
+      files: "person", aiModels: "aiModel", developer: "dev", apps: "all", system: "monitor", junk: "junk",
+    };
+    const icon = byCategory[n.category];
+    if (icon) return icon;
+  }
   if (n.kind === "app" || name.endsWith(".app")) return "app";
   if (/\.app\//.test(path)) return n.children.length ? "folder" : "file"; // inside an app bundle
   if (n.kind === "model" || n.category === "aiModels" && n.depth >= 3) return "aiModel";

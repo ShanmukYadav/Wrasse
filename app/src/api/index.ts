@@ -2,12 +2,14 @@
 // swaps in Tauri commands backed by the Rust core, without touching components.
 import type { AppInfo } from "../lib/backend";
 import { mockApi } from "../mock/api";
-import type { Disk } from "./types";
+import type { Disk, Insight } from "./types";
 
 export interface WrasseApi {
   appInfo(): Promise<AppInfo>;
   /** Scans the system volume and returns the full tree. */
-  scan(options?: { files?: number; uniform?: boolean }): Promise<Disk>;
+  scan(): Promise<Disk>;
+  /** Insight chips for a tile (attention, safe, AI, protected). */
+  insights(disk: Disk, id: number): Insight[];
 }
 
 export const api: WrasseApi = mockApi;

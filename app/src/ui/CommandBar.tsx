@@ -2,16 +2,13 @@ import { Icon } from "../design/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { suggest } from "../command/commands";
-import { useGlassRegion } from "../glass/regions";
 import { t } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
 import { useApp, type Plan } from "../store/app";
 import { Bytes } from "../components/Bytes";
 
-export function CommandBar({ glassClass }: { glassClass: string }) {
-  const barRef = useRef<HTMLDivElement>(null);
+export function CommandBar() {
   const inputRef = useRef<HTMLInputElement>(null);
-  useGlassRegion("command", barRef, "top");
   const open = useApp((s) => s.commandOpen);
   const setOpen = useApp((s) => s.setCommandOpen);
   const plan = useApp((s) => s.plan);
@@ -76,8 +73,8 @@ export function CommandBar({ glassClass }: { glassClass: string }) {
 
   return (
     <div className="command-wrap">
-      <div ref={barRef} className={`command-bar ${glassClass}`}>
-        <Icon name="search" size={20} className="text-muted" />
+      <div className="command-bar">
+        <Icon name="search" size={16} className="command-icon" />
         <input
           ref={inputRef}
           className="command-input"
@@ -105,7 +102,7 @@ export function CommandBar({ glassClass }: { glassClass: string }) {
           <motion.ul
             id="command-results"
             role="listbox"
-            className="command-results glass-css"
+            className="command-results"
             initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0, transition: { duration: duration.fast, ease: ease.out } }}
             exit={{ opacity: 0, y: -6, transition: { duration: duration.fast, ease: ease.inOut } }}
@@ -150,7 +147,7 @@ function PlanMeter({ plan }: { plan: Plan }) {
   const short = plan.total < plan.target;
   return (
     <motion.div
-      className="plan-meter glass-css"
+      className="plan-meter"
       role="status"
       initial={{ opacity: 0, y: -6 }}
       animate={{ opacity: 1, y: 0, transition: { duration: duration.base, ease: ease.out } }}

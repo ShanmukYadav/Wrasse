@@ -1,6 +1,6 @@
 // Publishes the design tokens as CSS variables on <html>.
 import { duration } from "../motion/tokens";
-import { backdrop, blur, fontStack, hintOpacity, icon, layout, lensColors, palette, radius, reef, shadow, tones, type as typeScale, weight, type Scheme } from "./tokens";
+import { backdrop, blur, chips, d1, fontStack, hintOpacity, icon, layout, lensColors, palette, radius, reef, shadow, tones, type as typeScale, weight, type Scheme } from "./tokens";
 
 export type PlatformKey = "macos" | "windows";
 
@@ -16,11 +16,24 @@ export function onSystemSchemeChange(listener: (scheme: Scheme) => void): () => 
   return () => query.removeEventListener("change", handler);
 }
 
+const UNITLESS = new Set(["dimmed", "emphasis", "cols", "rows", "maxTiles", "hoverLift"]);
+
+/** Publishes nested tokens as --prefix-path variables; numbers become px unless unitless. */
+function flatten(prefix: string, obj: object, vars: Record<string, string>) {
+  for (const [k, v] of Object.entries(obj)) {
+    const name = `${prefix}-${kebab(k)}`;
+    if (v && typeof v === "object" && !Array.isArray(v)) flatten(name, v, vars);
+    else if (typeof v === "number") vars[`--${name}`] = UNITLESS.has(k) ? String(v) : `${v}px`;
+    else if (typeof v === "string") vars[`--${name}`] = v;
+  }
+}
+
 function kebab(name: string): string {
   return name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 }
 
-export function applyTokens(scheme: Scheme, platform: PlatformKey) {
+/** All CSS variables for a scheme (also used to preview the other theme inline). */
+export function themeVars(scheme: Scheme, platform: PlatformKey = "macos"): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const [k, v] of Object.entries(palette[scheme])) vars[`--c-${kebab(k)}`] = v;
   for (const [k, v] of Object.entries(radius[platform])) vars[`--r-${kebab(k)}`] = v;
@@ -36,8 +49,22 @@ export function applyTokens(scheme: Scheme, platform: PlatformKey) {
   vars["--hint-opacity"] = String(hintOpacity);
   vars["--icon-stroke"] = String(icon.stroke);
   vars["--font"] = fontStack;
+  for (const [k, v] of Object.entries(chips[scheme])) {
+    vars[`--chip-${k}-bg`] = v.bg;
+    vars[`--chip-${k}-text`] = v.text;
+  }
+  flatten("d1", d1, vars);
+  // Scheme-specific D1 surfaces.
+  vars["--d1-row-surface"] = scheme === "dark" ? d1.row.bgDark : d1.row.bg;
+  vars["--d1-ghost-surface"] = scheme === "dark" ? d1.ghost.bgDark : d1.ghost.bg;
+  vars["--d1-ghost-line"] = scheme === "dark" ? d1.ghost.borderDark : d1.ghost.border;
   for (const [k, v] of Object.entries(duration)) vars[`--d-${k}`] = `${v}s`;
 
+  return vars;
+}
+
+export function applyTokens(scheme: Scheme, platform: PlatformKey) {
+  const vars = themeVars(scheme, platform);
   const root = document.documentElement;
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
   root.style.colorScheme = scheme;

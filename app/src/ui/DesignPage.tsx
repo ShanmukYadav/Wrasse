@@ -1,19 +1,21 @@
 // Hidden "Design" page (command: "design system"): every icon in every tone and size, logo
 // variants, color tokens, the type scale and sample blocks of each item type in both themes.
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, type CSSProperties } from "react";
 import type { Disk } from "../api/types";
 import { BrandMark } from "../design/brand/BrandMark";
 import { Icon } from "../design/icons/Icon";
 import { ICONS, type IconName } from "../design/icons/nodes";
 import { iconFor } from "../design/icons/semantic";
+import { themeVars } from "../design/apply";
 import {
-  brand, categoryShades, icon as iconTokens, lensColors, map as mapTokens, palette, tones, type as typeScale,
+  brand, categories, chips, icon as iconTokens, lensColors, palette, tones, type as typeScale,
   type Category, type LensId, type Scheme, type Tone,
 } from "../design/tokens";
 import { t } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
-import { MapRenderer } from "../map/renderer";
+import { Tile } from "./home/Tile";
+import type { Cell } from "./home/gridLayout";
 import { useApp } from "../store/app";
 
 const TONES = Object.keys(tones.dark) as Tone[];
@@ -189,15 +191,25 @@ function Colors() {
           </div>
           <h3 className="design-h3">{t("design.categories")}</h3>
           <div className="swatch-grid">
-            {(Object.keys(categoryShades[scheme]) as Category[]).map((c) => (
-              <div key={c} className="swatch">
-                <span className="flex">
-                  {categoryShades[scheme][c].map((v) => (
-                    <span key={v} className="swatch-chip swatch-chip-sm" style={{ background: v }} />
-                  ))}
-                </span>
-                <span className="text-caption">{c}</span>
-              </div>
+            {(Object.keys(categories[scheme]) as Category[]).map((c) => {
+              const v = categories[scheme][c];
+              return (
+                <div key={c} className="swatch">
+                  <span className="swatch-chip" style={{ background: `linear-gradient(160deg, ${v.from}, ${v.to})`, borderColor: v.border }} />
+                  <span className="text-caption">{c}</span>
+                  <span className="text-caption text-muted">
+                    {v.accent} · {v.ink}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <h3 className="design-h3">{t("design.chips")}</h3>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(chips[scheme]).map(([k, v]) => (
+              <span key={k} className="chip" style={{ background: v.bg, color: v.text }}>
+                {k}
+              </span>
             ))}
           </div>
           <h3 className="design-h3">{t("design.lensColors")}</h3>
@@ -244,25 +256,26 @@ function TypeScale() {
 }
 
 const SAMPLE_TYPES: IconName[] = [
-  "folder", "app", "aiModel", "video", "photo", "audio", "document", "installer", "diskImage", "archive",
-  "nodeModules", "pythonEnv", "xcode", "packageCache", "log", "cache", "system", "ghost",
+  "person", "aiModel", "dev", "all", "monitor", "junk", "folder", "video", "archive", "installer", "diskImage",
+  "nodeModules", "docker", "xcode", "packageCache", "app", "log", "cache",
 ];
 
 function SampleBlocks() {
   const disk = useApp((s) => s.disk);
   const samples = useMemo(() => pickSamples(disk), [disk]);
-  // A top-level folder that holds some junk, to show a lens fill.
-  const junkSample = useMemo(() => disk.nodes.find((n) => n.depth === 1 && (n.matchBytes.junk ?? 0) > 0)?.id, [disk]);
   return (
     <Section title={t("design.blocks")} note={t("design.blocksNote")}>
       {SCHEMES.map((scheme) => (
-        <div key={scheme} className="sample-board" style={{ background: palette[scheme].canvas, color: palette[scheme].text }}>
+        <div key={scheme} className="sample-board" style={{ ...(themeVars(scheme) as CSSProperties), background: palette[scheme].canvas, color: palette[scheme].text }}>
           <h3 className="design-h3">{t(scheme === "dark" ? "settings.night" : "settings.day")}</h3>
           <div className="sample-grid">
-            {samples.map(({ type, id }) => (
-              <SampleTile key={`${type}-${scheme}`} disk={disk} id={id} scheme={scheme} />
-            ))}
-            {junkSample !== undefined && <SampleTile disk={disk} id={junkSample} scheme={scheme} lens="junk" />}
+            {samples.map(({ id }, i) => {
+              const big = i === 0;
+              const cell: Cell = big
+                ? { id, col: 1, row: 1, colSpan: 2, rowSpan: 6 }
+                : { id, col: 3 + ((i - 1) % 2), row: 1 + Math.floor((i - 1) / 2) * 2, colSpan: 1, rowSpan: 2 };
+              return <SampleTile key={`${id}-${scheme}`} id={id} cell={cell} scheme={scheme} lens={i === 1 ? "aiModels" : "all"} />;
+            })}
           </div>
         </div>
       ))}
@@ -273,30 +286,31 @@ function SampleBlocks() {
 function pickSamples(disk: Disk): { type: IconName; id: number }[] {
   const out: { type: IconName; id: number }[] = [];
   for (const type of SAMPLE_TYPES) {
-    const n = disk.nodes.find((n) => n.parent >= 0 && n.size > 0 && iconFor(n) === type && (type !== "folder" || n.depth === 1));
+    const n = disk.nodes.find((n) => n.parent >= 0 && n.size > 0 && iconFor(n) === type && !out.some((o) => o.id === n.id));
     if (n) out.push({ type, id: n.id });
   }
   return out;
 }
 
-const SAMPLE = { w: 220, h: 140 };
-
-function SampleTile({ disk, id, scheme, lens = "all" }: { disk: Disk; id: number; scheme: Scheme; lens?: LensId }) {
-  const ref = useRef<HTMLCanvasElement>(null);
+function SampleTile({ id, cell, scheme, lens }: { id: number; cell: Cell; scheme: Scheme; lens: LensId }) {
+  const disk = useApp((s) => s.disk);
   const units = useApp((s) => s.info?.units ?? "decimal");
-  useEffect(() => {
-    const canvas = ref.current!;
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = SAMPLE.w * dpr;
-    canvas.height = SAMPLE.h * dpr;
-    const r = new MapRenderer(document.createElement("canvas"), disk);
-    r.scheme = scheme;
-    r.units = units;
-    const ctx = canvas.getContext("2d")!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = mapTokens[scheme].background;
-    ctx.fillRect(0, 0, SAMPLE.w, SAMPLE.h);
-    r.paintSample(ctx, { x: 6, y: 6, w: SAMPLE.w - 12, h: SAMPLE.h - 12 }, id, lens, dpr);
-  }, [disk, id, scheme, lens, units]);
-  return <canvas ref={ref} className="sample-tile" style={{ width: SAMPLE.w, height: SAMPLE.h }} aria-label={disk.nodes[id].name} />;
+  const n = disk.nodes[id];
+  return (
+    <Tile
+      disk={disk}
+      node={n}
+      cell={cell}
+      metrics={{ cellW: 250, cellH: 74 }}
+      parentSize={disk.nodes[n.parent]?.size ?? n.size}
+      scheme={scheme}
+      units={units}
+      lens={lens}
+      selected={false}
+      deleting={false}
+      pulseKey={null}
+      reveal={null}
+      onOpen={() => {}}
+    />
+  );
 }

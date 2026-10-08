@@ -33,6 +33,12 @@ export type DiskNode = {
   matchBytes: Partial<Record<Exclude<LensId, "all">, number>>;
   grewBy: number;
   shade: 0 | 1 | 2;
+  /** Set when this item is a byte-identical copy of another node. */
+  duplicateOf?: number;
+  /** App-managed libraries (Photos, Music): read-only, shown for size only. */
+  readOnly?: boolean;
+  /** Rebuilt automatically by its tool (node_modules, build products). */
+  rebuildable?: boolean;
 };
 
 export type Disk = {
@@ -73,7 +79,7 @@ export function emptyDisk(): Disk {
     nodes: [
       {
         id: 0, name: "Macintosh HD", path: "/", size: 0, parent: -1, children: [], depth: 0, category: "other", kind: "volume",
-        lastOpenedDays: 0, safety: "keep", why: "", lenses: 0, deep: 0, matchBytes: {}, grewBy: 0, shade: 0,
+        lastOpenedDays: 0, safety: "keep", why: "", lenses: 0, deep: 0, matchBytes: {}, grewBy: 0, shade: 0, duplicateOf: undefined,
       },
     ],
     root: 0,
@@ -82,3 +88,6 @@ export function emptyDisk(): Disk {
     leafCount: 0,
   };
 }
+
+/** An insight chip on a tile: amber = attention, green = safe, violet = AI, protected = slate. */
+export type Insight = { tone: "amber" | "green" | "violet" | "protected"; text: string };

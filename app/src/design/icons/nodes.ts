@@ -3,9 +3,9 @@
 // custom. Rendering (stroke, duotone fill, size) happens in Icon.tsx and canvas.ts, so the
 // whole set is restyled consistently in one place.
 import {
-  AppWindow, Boxes, Broom, Check, ChevronDown, ChevronRight, CircleQuestionMark, Clock, Cloud, Code, Container,
+  AppWindow, Boxes, Broom, Check, ChevronDown, ChevronLeft, ChevronRight, CircleQuestionMark, Clock, Cloud, Code, Container,
   Disc, ExternalLink, File, FileArchive, FileText, Film, Folder, Hammer, Hourglass, Image, Info, Layers,
-  LayoutGrid, List, ListChecks, Lock, MonitorCog, Music, Package, Power, Radar, Scale, ScrollText, Search,
+  LayoutGrid, List, ListChecks, Lock, Monitor, MonitorCog, User, Music, Package, Power, Radar, Scale, ScrollText, Search,
   Settings, ShieldCheck, Sparkles, Trash, TrendingUp, TriangleAlert, Undo2, X,
 } from "lucide";
 
@@ -68,6 +68,9 @@ export const ICONS = {
   system: strip(MonitorCog),
   cloud: strip(Cloud),
   ghost: custom.ghost,
+  // Categories
+  person: strip(User),
+  monitor: strip(Monitor),
   // App surfaces
   tray: custom.tray,
   startup: strip(Power),
@@ -94,6 +97,7 @@ export const ICONS = {
   grid: strip(LayoutGrid),
   chevronRight: strip(ChevronRight),
   chevronDown: strip(ChevronDown),
+  chevronLeft: strip(ChevronLeft),
   close: strip(X),
   trash: strip(Trash),
   restore: strip(Undo2),

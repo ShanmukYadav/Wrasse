@@ -7,7 +7,7 @@ import { formatBytes } from "../lib/format";
 import { useScheme } from "../lib/prefs";
 import { duration, ease } from "../motion/tokens";
 import { lensMatches } from "../api/types";
-import { leavesUnder } from "../map/tree";
+import { leavesUnder } from "../mock/tree";
 import { useApp } from "../store/app";
 import { SafetyLabel } from "./Safety";
 import { Icon } from "../design/icons/Icon";

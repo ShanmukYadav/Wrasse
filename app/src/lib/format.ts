@@ -20,5 +20,7 @@ export function formatBytes(bytes: number, system: UnitSystem): { value: string;
     value /= base;
     unit++;
   }
-  return { value: value < 10 ? value.toFixed(1) : value.toFixed(0), unit: UNITS[unit] };
+  // One decimal below 100 ("19.8 GB", "6.1 GB"), dropped when it's .0 ("39 GB").
+  const text = value < 100 ? value.toFixed(1).replace(/\.0$/, "") : value.toFixed(0);
+  return { value: text, unit: UNITS[unit] };
 }

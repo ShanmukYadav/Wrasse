@@ -1,19 +1,17 @@
 import { create } from "zustand";
+import { api, emptyDisk, GB, throughSingles, type Disk } from "../api";
 import { systemScheme } from "../design/apply";
-import type { LensId, Scheme } from "../design/tokens";
+import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
 import type { AppInfo } from "../lib/backend";
-import { api, emptyDisk, GB, throughSingles, type Disk, type DiskNode } from "../api";
-import { renderer } from "../map/controller";
-import type { Rect } from "../map/layout";
-import type { RemovalMode } from "../map/renderer";
-import { attached, detach, reattach, zeroOut } from "../map/tree";
+import { attached, detach, reattach, zeroOut } from "../mock/tree";
+import { mapMotion } from "../motion/tokens";
 
 export type Overlay = "startup" | "settings" | "audit" | "history" | "design" | null;
 export type ThemePref = "system" | "dark" | "light";
 export type MotionPref = "system" | "reduce" | "full";
-export type GlassMode = "native" | "css";
 
+export type Rect = { x: number; y: number; w: number; h: number };
 export type TrayItem = { id: number; name: string; size: number };
 export type AuditEntry = { at: number; action: string; target: string; size: number };
 export type Batch = { id: number; at: number; items: TrayItem[]; state: "inTray" | "emptied" | "restored" };
@@ -33,18 +31,18 @@ type State = {
   audit: AuditEntry[];
   plan: Plan | null;
   flights: Flight[];
+  /** Tiles that were just permanently deleted (they fade and collapse instead of flying). */
+  deleting: number[];
+  pulse: { id: number; key: number } | null;
   viewMode: "map" | "list";
   overlay: Overlay;
   commandOpen: boolean;
   scan: "idle" | "scanning" | "done";
+  scanKey: number;
   toast: { key: number; text: string } | null;
   systemScheme: Scheme;
   theme: ThemePref;
   motion: MotionPref;
-  glass: GlassMode;
-  nativeGlass: boolean; // the backend reported native glass support
-  showFps: boolean;
-  blockCount: 2000 | 20000;
 };
 
 type Actions = {
@@ -64,28 +62,45 @@ type Actions = {
   clearPlan: () => void;
   locate: (id: number) => void;
   startScan: () => void;
-  finishScan: () => void;
+  scanDisk: () => Promise<void>;
   setViewMode: (mode: "map" | "list") => void;
   setOverlay: (o: Overlay) => void;
   setCommandOpen: (open: boolean) => void;
   notify: (text: string) => void;
   endFlight: (key: number) => void;
-  setPrefs: (p: Partial<Pick<State, "theme" | "motion" | "glass" | "showFps" | "nativeGlass">>) => void;
-  setBlockCount: (n: 2000 | 20000) => Promise<void>;
-  /** Loads the disk from the api, then runs the sonar scan over the empty map. */
-  scanDisk: () => Promise<void>;
+  setPrefs: (p: Partial<Pick<State, "theme" | "motion">>) => void;
 };
 
 let flightKey = 0;
 let batchId = 0;
+let scanTimer = 0;
+
+/** The tile currently on screen that is, or contains, a node. */
+export function visibleTileOf(disk: Disk, focus: number, id: number): number | null {
+  for (let n = disk.nodes[id]; n; n = disk.nodes[n.parent]) {
+    if (n.parent === focus) return n.id;
+    if (n.parent < 0) return null;
+  }
+  return null;
+}
+
+function tileRect(id: number): Rect | null {
+  const el = document.querySelector<HTMLElement>(`[data-tile-id="${id}"]`);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.left, y: r.top, w: r.width, h: r.height };
+}
 
 export const useApp = create<State & Actions>((set, get) => {
-  const disk = emptyDisk();
-
   function log(action: string, target: string, size: number) {
     set((s) => ({ audit: [{ at: Date.now(), action, target, size }, ...s.audit].slice(0, 200) }));
   }
+  const scheme = () => {
+    const s = get();
+    return s.theme === "system" ? s.systemScheme : s.theme;
+  };
 
+  const disk = emptyDisk();
   return {
     info: null,
     disk,
@@ -99,18 +114,17 @@ export const useApp = create<State & Actions>((set, get) => {
     audit: [],
     plan: null,
     flights: [],
+    deleting: [],
+    pulse: null,
     viewMode: "map",
     overlay: null,
     commandOpen: false,
     scan: "idle",
+    scanKey: 0,
     toast: null,
     systemScheme: systemScheme(),
-    theme: "system",
+    theme: "light", // Day reef first; night comes after the light theme is approved
     motion: "system",
-    glass: "native",
-    nativeGlass: false,
-    showFps: false,
-    blockCount: 2000,
 
     setInfo: (info) => set({ info }),
     setSystemScheme: (systemScheme) => set({ systemScheme }),
@@ -118,54 +132,49 @@ export const useApp = create<State & Actions>((set, get) => {
     setFocus: (id) => {
       const n = get().disk.nodes[id];
       if (!n || (n.children.length === 0 && n.kind !== "volume")) return;
-      set({ focus: throughSingles(get().disk, id) });
+      set({ focus: throughSingles(get().disk, id), selected: null, detailOpen: false });
     },
     zoomOut: () => {
       const { disk, focus } = get();
-      // Skip back over single-child folders too, so zooming out always changes the view.
+      // Skip back over single-child folders too, so going up always changes the view.
       let parent = disk.nodes[focus].parent;
       while (parent >= 0 && disk.nodes[parent].children.length === 1 && disk.nodes[parent].parent >= 0) parent = disk.nodes[parent].parent;
-      if (parent >= 0) set({ focus: parent });
+      if (parent >= 0) set({ focus: parent, selected: null, detailOpen: false });
     },
 
     setLens: (lens) => set({ lens, plan: null }),
 
     select: (id, open = true) => set({ selected: id, detailOpen: id !== null && open }),
-    closeDetail: () => set({ detailOpen: false }),
+    closeDetail: () => set({ detailOpen: false, selected: null }),
 
     addToTray: (ids) => {
-      const { disk } = get();
-      const items = ids
-        .map((id) => disk.nodes[id])
-        .filter((n) => n && n.safety !== "keep" && n.kind !== "ghost" && n.parent >= 0);
+      const { disk, focus } = get();
+      const items = ids.map((id) => disk.nodes[id]).filter((n) => n && n.safety !== "keep" && n.kind !== "ghost" && n.parent >= 0);
       if (!items.length) return;
-      const r = renderer();
+      // One flight per tile involved (many files can share a tile).
       const flights: Flight[] = [];
-      // One flight per visible tile involved (many files can share a tile).
       const seen = new Set<number>();
       for (const n of items) {
-        const visible = r?.visibleTileOf(n.id);
-        if (visible === undefined || visible === null || seen.has(visible) || flights.length >= 12) continue;
-        seen.add(visible);
-        const rect = r!.screenRect(visible)!;
-        const whole = visible === n.id;
-        // A file inside a tile flies out as a small chip from the tile's center.
-        const from = whole ? rect : { x: rect.x + rect.w / 2 - 18, y: rect.y + rect.h / 2 - 18, w: 36, h: 36 };
-        flights.push({ key: ++flightKey, id: n.id, from, color: nodeColor(disk.nodes[visible]), delay: flights.length * 0.05 });
+        const tile = visibleTileOf(disk, focus, n.id);
+        if (tile === null || seen.has(tile) || flights.length >= 12) continue;
+        seen.add(tile);
+        const rect = tileRect(tile);
+        if (!rect) continue;
+        const whole = tile === n.id;
+        const from = whole ? rect : { x: rect.x + rect.w / 2 - 22, y: rect.y + rect.h / 2 - 22, w: 44, h: 44 };
+        flights.push({ key: ++flightKey, id: n.id, from, color: categories[scheme()][disk.nodes[tile].category].accent, delay: flights.length * 0.05 });
       }
       detach(disk, items.map((n) => n.id));
       const trayItems = items.map((n) => ({ id: n.id, name: n.name, size: n.size }));
-      const batch: Batch = { id: ++batchId, at: Date.now(), items: trayItems, state: "inTray" };
       set((s) => ({
         tray: [...s.tray, ...trayItems],
-        batches: [batch, ...s.batches],
+        batches: [{ id: ++batchId, at: Date.now(), items: trayItems, state: "inTray" }, ...s.batches],
         flights: [...s.flights, ...flights],
         diskVersion: s.diskVersion + 1,
-        selected: s.selected !== null && items.some((n) => n.id === s.selected) ? null : s.selected,
-        detailOpen: s.selected !== null && items.some((n) => n.id === s.selected) ? false : s.detailOpen,
+        selected: null,
+        detailOpen: false,
         plan: remainingPlan(s.plan, items.map((n) => n.id)),
       }));
-      r?.relayout(new Map(items.map((n) => [n.id, "quarantine" as RemovalMode])));
       for (const n of items) log(t("audit.quarantined"), n.path, n.size);
     },
 
@@ -173,13 +182,12 @@ export const useApp = create<State & Actions>((set, get) => {
       const { disk } = get();
       const items = ids.map((id) => disk.nodes[id]).filter((n) => n && n.safety === "safe" && n.parent >= 0);
       if (!items.length) return;
-      detach(disk, items.map((n) => n.id));
-      set((s) => ({
-        diskVersion: s.diskVersion + 1,
-        selected: null,
-        detailOpen: false,
-      }));
-      renderer()?.relayout(new Map(items.map((n) => [n.id, "delete" as RemovalMode])));
+      // Fade and collapse first, then remove (no flight, so the difference is visible).
+      set({ deleting: items.map((n) => n.id), selected: null, detailOpen: false });
+      setTimeout(() => {
+        detach(disk, items.map((n) => n.id));
+        set((s) => ({ deleting: [], diskVersion: s.diskVersion + 1 }));
+      }, 260);
       for (const n of items) log(t("audit.deleted"), n.path, n.size);
     },
 
@@ -187,10 +195,7 @@ export const useApp = create<State & Actions>((set, get) => {
       const { tray } = get();
       if (!tray.length) return;
       const total = tray.reduce((s, i) => s + i.size, 0);
-      set((s) => ({
-        tray: [],
-        batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "emptied" } : b)),
-      }));
+      set((s) => ({ tray: [], batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "emptied" } : b)) }));
       log(t("audit.emptied"), t("tray.items", { count: tray.length }), total);
       get().notify(t("tray.emptiedToast"));
     },
@@ -204,24 +209,21 @@ export const useApp = create<State & Actions>((set, get) => {
         diskVersion: s.diskVersion + 1,
         batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "restored" } : b)),
       }));
-      renderer()?.relayout();
       log(t("audit.restored"), t("tray.items", { count: tray.length }), tray.reduce((s, i) => s + i.size, 0));
     },
 
     freeGhost: () => {
       const { disk } = get();
       const ghost = disk.nodes[disk.ghostId];
-      if (ghost.size === 0) return;
+      if (!ghost || ghost.size === 0) return;
       const size = ghost.size;
       zeroOut(disk, disk.ghostId);
       set((s) => ({ diskVersion: s.diskVersion + 1, selected: null, detailOpen: false }));
-      renderer()?.relayout(new Map([[disk.ghostId, "delete" as RemovalMode]]));
       log(t("audit.snapshotsThinned"), "/", size);
     },
 
     planFree: (bytes) => {
       const { disk } = get();
-      // Rank every removable file on the disk; the map lights up the tiles that contain them.
       const ranked = disk.nodes
         .filter((n) => n.children.length === 0 && n.size > 0 && n.safety !== "keep" && n.kind !== "ghost" && n.parent >= 0 && attached(disk, n.id))
         .map((n) => ({ n, score: n.size * unusedFactor(n.lastOpenedDays) * (n.safety === "safe" ? 1 : 0.7) }))
@@ -240,22 +242,21 @@ export const useApp = create<State & Actions>((set, get) => {
     locate: (id) => {
       const { disk } = get();
       const n = disk.nodes[id];
-      if (!n) return;
-      const focus = n.children.length > 0 && n.parent >= 0 ? disk.nodes[n.parent].id : n.parent >= 0 ? n.parent : disk.root;
-      set({ focus, selected: id, detailOpen: false });
-      const pulse = () => renderer()?.pulse(id);
-      // Pulse once the camera has arrived.
-      setTimeout(pulse, 450);
-      setTimeout(pulse, 1100);
+      if (!n || n.parent < 0) return;
+      set({ focus: n.parent, selected: id, detailOpen: false });
+      setTimeout(() => set({ pulse: { id, key: Date.now() } }), 450);
     },
 
     startScan: () => {
-      const r = renderer();
-      if (!r || r.scanning) return;
-      set({ scan: "scanning", focus: get().disk.root, plan: null });
-      r.startScan(() => get().finishScan());
+      clearTimeout(scanTimer);
+      set((s) => ({ scan: "scanning", scanKey: s.scanKey + 1, focus: s.disk.root, plan: null, selected: null, detailOpen: false }));
+      scanTimer = window.setTimeout(() => set({ scan: "done" }), mapMotion.sonar * 1000);
     },
-    finishScan: () => set({ scan: "done" }),
+    scanDisk: async () => {
+      const disk = await api.scan();
+      set((s) => ({ disk, focus: disk.root, tray: [], plan: null, diskVersion: s.diskVersion + 1 }));
+      get().startScan();
+    },
 
     setViewMode: (viewMode) => set({ viewMode }),
     setOverlay: (overlay) => set({ overlay, commandOpen: false }),
@@ -263,17 +264,6 @@ export const useApp = create<State & Actions>((set, get) => {
     notify: (text) => set({ toast: { key: Date.now(), text } }),
     endFlight: (key) => set((s) => ({ flights: s.flights.filter((f) => f.key !== key) })),
     setPrefs: (p) => set(p),
-    scanDisk: async () => {
-      const disk = await loadDisk(get().blockCount);
-      set({ disk, focus: disk.root, selected: null, detailOpen: false, tray: [], plan: null, diskVersion: get().diskVersion + 1 });
-      renderer()?.setDisk(disk);
-      get().startScan();
-    },
-    setBlockCount: async (blockCount) => {
-      const disk = await loadDisk(blockCount);
-      set({ blockCount, disk, focus: disk.root, selected: null, detailOpen: false, tray: [], plan: null, diskVersion: get().diskVersion + 1 });
-      renderer()?.setDisk(disk);
-    },
   };
 });
 
@@ -282,11 +272,6 @@ function remainingPlan(plan: Plan | null, removed: number[]): Plan | null {
   if (!plan) return null;
   const ids = plan.ids.filter((id) => !removed.includes(id));
   return ids.length ? { ...plan, ids } : null;
-}
-
-/** ~2,000 visible blocks, or the 20,000-file stress disk. */
-function loadDisk(count: 2000 | 20000): Promise<Disk> {
-  return count === 2000 ? api.scan() : api.scan({ files: 20000, uniform: true });
 }
 
 export function unusedFactor(days: number): number {
@@ -305,12 +290,3 @@ export function trayBytes(tray: TrayItem[]): number {
 }
 
 export const DEFAULT_FREE_TARGET = 30 * GB;
-
-// Resolved by the map module; set at startup so flights can match block colors.
-let colorOf: (n: DiskNode) => string = () => "";
-export function setNodeColorResolver(fn: (n: DiskNode) => string) {
-  colorOf = fn;
-}
-function nodeColor(n: DiskNode): string {
-  return colorOf(n);
-}

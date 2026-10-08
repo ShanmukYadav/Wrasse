@@ -3,9 +3,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Bytes } from "../components/Bytes";
 import { t, type MessageKey } from "../i18n";
-import { inTauri } from "../lib/backend";
 import { duration, ease, spring } from "../motion/tokens";
-import { runBenchmark } from "../map/bench";
 import { useApp, type Overlay } from "../store/app";
 
 export function Overlays() {
@@ -129,17 +127,6 @@ function Settings() {
       </Setting>
       <Setting title={t("settings.motion")}>
         <Segmented label="motion" value={s.motion} onChange={(motion) => s.setPrefs({ motion })} options={[["system", "settings.system"], ["reduce", "settings.reduce"], ["full", "settings.full"]]} />
-      </Setting>
-      <Setting title={t("settings.blocks")} note={t("settings.blocksNote")}>
-        <Segmented label="blocks" value={String(s.blockCount) as "2000" | "20000"} onChange={(v) => s.setBlockCount(Number(v) as 2000 | 20000)} options={[["2000", "settings.blocks2k"], ["20000", "settings.blocks20k"]]} />
-      </Setting>
-      <Setting title={t("settings.fps")}>
-        <Switch checked={s.showFps} label={t("settings.fps")} onChange={(showFps) => s.setPrefs({ showFps })} />
-      </Setting>
-      <Setting title={t("settings.bench")} note={inTauri ? t("settings.benchNote") : t("settings.benchNoteBrowser")}>
-        <button type="button" className="btn focus-ring" onClick={() => { s.setOverlay(null); void runBenchmark(); }}>
-          {t("settings.runBench")}
-        </button>
       </Setting>
     </div>
   );

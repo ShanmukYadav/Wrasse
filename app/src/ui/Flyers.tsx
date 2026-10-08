@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { map as mapTokens } from "../design/tokens";
+import { d1 } from "../design/tokens";
 import { ease, mapMotion } from "../motion/tokens";
 import { useApp, type Flight } from "../store/app";
 
@@ -34,7 +34,7 @@ function Flyer({ flight }: { flight: Flight }) {
   return (
     <motion.div
       className="flyer"
-      style={{ left: from.x, top: from.y, width: w, height: h, background: flight.color, borderRadius: mapTokens.radius }}
+      style={{ left: from.x, top: from.y, width: w, height: h, background: flight.color, borderRadius: d1.tile.radius }}
       initial={{ x: 0, y: 0, scale: 1, opacity: 1 }}
       animate={{
         x: [0, 0, dx],

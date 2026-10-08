@@ -23,8 +23,18 @@ export function QuarantineTray() {
   }, [flights, animate, scope]);
 
   const has = tray.length > 0;
+  // Hidden while empty (the D1 home has no tray); it rises in when the first item flies over.
   return (
-    <motion.section layout className="tray glass-css" aria-label={t("tray.label")} transition={spring.soft}>
+    <AnimatePresence>
+      {(has || flights > 0) && (
+    <motion.section
+      layout
+      className="tray glass-css"
+      aria-label={t("tray.label")}
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0, transition: spring.soft }}
+      exit={{ opacity: 0, y: 12, transition: { duration: duration.base, ease: ease.inOut } }}
+    >
       <span ref={scope} id="tray-target" className="tray-icon">
         <Icon name="tray" tone="accent" size={20} />
       </span>
@@ -52,5 +62,7 @@ export function QuarantineTray() {
         )}
       </AnimatePresence>
     </motion.section>
+      )}
+    </AnimatePresence>
   );
 }
