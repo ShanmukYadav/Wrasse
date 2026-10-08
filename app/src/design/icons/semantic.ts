@@ -29,6 +29,12 @@ export function iconFor(n: DiskNode): IconName {
     const icon = byCategory[n.category];
     if (icon) return icon;
   }
+  if (n.leftover) {
+    const byLeftover: Record<NonNullable<DiskNode["leftover"]>, IconName> = {
+      caches: "cache", logs: "log", preferences: "settings", savedState: "history", support: "folder", containers: "folder",
+    };
+    return byLeftover[n.leftover];
+  }
   if (n.kind === "app" || name.endsWith(".app")) return "app";
   if (/\.app\//.test(path)) return n.children.length ? "folder" : "file"; // inside an app bundle
   if (n.kind === "model" || n.category === "aiModels" && n.depth >= 3) return "aiModel";

@@ -39,6 +39,12 @@ export type DiskNode = {
   readOnly?: boolean;
   /** Rebuilt automatically by its tool (node_modules, build products). */
   rebuildable?: boolean;
+  /** An app (kind "app") whose process is running right now. */
+  running?: boolean;
+  /** The .app bundle inside an app: the item "Uninstall" targets. */
+  appBundle?: boolean;
+  /** For an app's leftovers: what kind of leftover it is (Caches, Logs, …). */
+  leftover?: "caches" | "support" | "containers" | "logs" | "preferences" | "savedState";
 };
 
 export type Disk = {
@@ -64,6 +70,14 @@ export function ancestors(disk: Disk, id: number): number[] {
 export function isAncestor(disk: Disk, ancestor: number, id: number): boolean {
   for (let n = disk.nodes[id]; n.parent >= 0; n = disk.nodes[n.parent]) if (n.parent === ancestor) return true;
   return false;
+}
+
+/** The lens that matches a category, so the lens bar follows the category you open. */
+export function lensForFocus(disk: Disk, focus: number): LensId {
+  let n = disk.nodes[focus];
+  while (n.parent >= 0 && n.depth > 1) n = disk.nodes[n.parent];
+  const byCategory: Partial<Record<DiskNode["category"], LensId>> = { aiModels: "aiModels", apps: "apps", developer: "dev", junk: "junk" };
+  return (n.depth === 1 && byCategory[n.category]) || "all";
 }
 
 /** Follows a chain of single-child folders (Users → shanmuk) to the first level worth showing. */

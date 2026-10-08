@@ -38,6 +38,8 @@ const WHY = {
   source: "Your source code. Wrasse never removes it.",
   system: "Part of macOS. Shown for size only.",
   generic: "A file you created or downloaded. Check it before removing.",
+  appData: "Data this app keeps for you, such as settings, documents and databases. Removing it resets the app.",
+  prefs: "This app's settings. Removing it resets the app to its defaults.",
 };
 
 type Spec = Partial<Pick<DiskNode, "safety" | "why" | "lastOpenedDays" | "kind" | "lenses" | "category">> & { path?: string };
@@ -173,10 +175,30 @@ export function generateDisk(seed = 7): Disk {
     "Audacity", "HandBrake", "Calibre",
   ];
   const unused = new Set(["Unity Hub", "Steam", "Webex", "Parallels Desktop"]);
+  const running = new Set(["Xcode", "Google Chrome", "Slack", "Spotify", "Visual Studio Code", "Figma", "Raycast", "1Password", "Docker"]);
+  const bundleId = (name: string) => `com.${name.toLowerCase().replace(/[^a-z0-9]+/g, "")}`;
+  // Each app holds its bundle plus the leftovers it keeps in ~/Library (PLAN.md §6.4: true app size).
+  const LEFTOVERS: [NonNullable<DiskNode["leftover"]>, string, (id: string) => string, number, string][] = [
+    ["caches", "Caches", (id) => `~/Library/Caches/${id}`, 0.12, WHY.cache],
+    ["support", "Application Support", (id) => `~/Library/Application Support/${id}`, 0.1, WHY.appData],
+    ["containers", "Containers", (id) => `~/Library/Containers/${id}`, 0.05, WHY.appData],
+    ["logs", "Logs", (id) => `~/Library/Logs/${id}`, 0.02, WHY.logs],
+    ["savedState", "Saved Application State", (id) => `~/Library/Saved Application State/${id}.savedState`, 0.003, WHY.appData],
+    ["preferences", "Preferences", (id) => `~/Library/Preferences/${id}.plist`, 0.0002, WHY.prefs],
+  ];
   split(71 * GB, appNames.length, 1.1).forEach((b, i) => {
     const name = appNames[i];
-    const a = add(apps, `${name}.app`, "app", { path: `/Applications/${name}.app`, lastOpenedDays: unused.has(name) ? days(200, 500) : days(0, 60) }, 0);
-    fill(a, b, ["Contents/Frameworks", "Contents/Resources", "Contents/MacOS"], {}, 0.8);
+    const id = bundleId(name);
+    const age = unused.has(name) ? days(200, 500) : days(0, 60);
+    const a = add(apps, name, "app", { path: `/Applications/${name}.app`, lastOpenedDays: age }, 0);
+    nodes[a].running = running.has(name) && !unused.has(name);
+    const share = LEFTOVERS.reduce((s, l) => s + l[3], 0);
+    const bundle = file(a, `${name}.app`, Math.round(b * (1 - share)), { path: `/Applications/${name}.app`, why: WHY.app });
+    nodes[bundle].appBundle = true;
+    for (const [kind, label, path, frac, why] of LEFTOVERS) {
+      const f = file(a, label, Math.max(4096, Math.round(b * frac * (0.6 + rand() * 0.8))), { path: path(id), why, safety: kind === "caches" || kind === "logs" ? "safe" : "yourCall" });
+      nodes[f].leftover = kind;
+    }
   });
 
   // ---- System: 52 GB ----------------------------------------------------------------------

@@ -60,7 +60,7 @@ function Detail({ id }: { id: number }) {
   const units = useApp((s) => s.info?.units ?? "decimal");
   const fileManager = useApp((s) => s.info?.fileManager ?? "Finder");
   const scheme = useScheme();
-  const { closeDetail, addToTray, deleteNow, freeGhost, notify, setFocus } = useApp.getState();
+  const { closeDetail, addToTray, deleteNow, freeGhost, notify, setFocus, openUninstall } = useApp.getState();
   const n = disk.nodes[id];
   const ghost = n.kind === "ghost";
   const size = formatBytes(n.size, units);
@@ -109,10 +109,26 @@ function Detail({ id }: { id: number }) {
           </motion.button>
         ) : (
           <>
-            {n.safety !== "keep" && (
+            {n.appBundle ? (
+              <>
+                {disk.nodes[n.parent].running && <p className="detail-note">{t("detail.runningNote", { name: disk.nodes[n.parent].name })}</p>}
+                <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => openUninstall(n.parent)} {...pressable}>
+                  <Icon name="trash" size={16} /> {t("detail.uninstall", { name: disk.nodes[n.parent].name })}
+                </motion.button>
+                <motion.button type="button" className="btn btn-wide focus-ring" onClick={() => addToTray([n.id])} {...pressable}>
+                  <Icon name="tray" size={16} /> {t("detail.removeAppOnly", { size: sizeText })}
+                </motion.button>
+              </>
+            ) : n.leftover ? (
               <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => addToTray([n.id])} {...pressable}>
-                <Icon name="tray" size={16} /> {t("detail.quarantineSize", { size: sizeText })}
+                <Icon name="tray" size={16} /> {t("detail.remove", { size: sizeText })}
               </motion.button>
+            ) : (
+              n.safety !== "keep" && (
+                <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => addToTray([n.id])} {...pressable}>
+                  <Icon name="tray" size={16} /> {t("detail.quarantineSize", { size: sizeText })}
+                </motion.button>
+              )
             )}
             {n.safety === "safe" && (
               <motion.button type="button" className="btn btn-danger btn-wide focus-ring" onClick={() => deleteNow([n.id])} {...pressable}>

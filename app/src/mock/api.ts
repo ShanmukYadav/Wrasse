@@ -41,6 +41,15 @@ function insights(disk: Disk, id: number): Insight[] {
   });
   if (n.kind === "ghost") return out;
   if (n.duplicateOf !== undefined) return [{ tone: "amber", text: t("detail.duplicateLabel") }];
+  // Apps: running state and long-unused, on the app tile and on its bundle.
+  const app = n.kind === "app" ? n : n.appBundle ? disk.nodes[n.parent] : null;
+  if (app) {
+    const chips: Insight[] = [];
+    if (app.running) chips.push({ tone: "protected", text: t("insight.running") });
+    if (app.lastOpenedDays > 180) chips.push({ tone: "amber", text: t("insight.unusedApp") });
+    return chips;
+  }
+  if (n.leftover) return n.safety === "safe" ? [{ tone: "green", text: t("insight.safeToClear") }] : [];
   if (n.category === "system" || (n.safety === "keep" && n.depth > 1)) return [{ tone: "protected", text: t("insight.protected") }];
   if (n.category === "junk") return [{ tone: "green", text: t("insight.allSafe") }];
   if (n.category === "aiModels" && dupCount > 0) out.push({ tone: "violet", text: t("insight.modelDuplicates", { count: dupCount, size: fmt(dupBytes) }) });

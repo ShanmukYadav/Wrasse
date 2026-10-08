@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, emptyDisk, GB, throughSingles, type Disk } from "../api";
+import { api, emptyDisk, GB, lensForFocus, throughSingles, type Disk } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -43,6 +43,8 @@ type State = {
   systemScheme: Scheme;
   theme: ThemePref;
   motion: MotionPref;
+  /** The app whose uninstall sheet is open. */
+  uninstall: number | null;
 };
 
 type Actions = {
@@ -69,6 +71,10 @@ type Actions = {
   notify: (text: string) => void;
   endFlight: (key: number) => void;
   setPrefs: (p: Partial<Pick<State, "theme" | "motion">>) => void;
+  openUninstall: (appId: number) => void;
+  closeUninstall: () => void;
+  quitApp: (appId: number) => void;
+  confirmUninstall: (appId: number, ids: number[]) => void;
 };
 
 let flightKey = 0;
@@ -125,6 +131,7 @@ export const useApp = create<State & Actions>((set, get) => {
     systemScheme: systemScheme(),
     theme: "light", // Day reef first; night comes after the light theme is approved
     motion: "system",
+    uninstall: null,
 
     setInfo: (info) => set({ info }),
     setSystemScheme: (systemScheme) => set({ systemScheme }),
@@ -132,7 +139,9 @@ export const useApp = create<State & Actions>((set, get) => {
     setFocus: (id) => {
       const n = get().disk.nodes[id];
       if (!n || (n.children.length === 0 && n.kind !== "volume")) return;
-      set({ focus: throughSingles(get().disk, id), selected: null, detailOpen: false });
+      const focus = throughSingles(get().disk, id);
+      // The lens bar follows the category you open (AI Models → AI Models, Files → All).
+      set({ focus, lens: lensForFocus(get().disk, focus), plan: null, selected: null, detailOpen: false });
     },
     zoomOut: () => {
       const { disk, focus, viewMode } = get();
@@ -141,7 +150,7 @@ export const useApp = create<State & Actions>((set, get) => {
       // Skip back over single-child folders too, so going up always changes the view.
       let parent = disk.nodes[focus].parent;
       while (parent >= 0 && disk.nodes[parent].children.length === 1 && disk.nodes[parent].parent >= 0) parent = disk.nodes[parent].parent;
-      if (parent >= 0) set({ focus: parent, selected: null, detailOpen: false });
+      if (parent >= 0) set({ focus: parent, lens: lensForFocus(disk, parent), plan: null, selected: null, detailOpen: false });
     },
 
     setLens: (lens) =>
@@ -249,13 +258,13 @@ export const useApp = create<State & Actions>((set, get) => {
       const { disk } = get();
       const n = disk.nodes[id];
       if (!n || n.parent < 0) return;
-      set({ focus: n.parent, selected: id, detailOpen: false });
+      set({ focus: n.parent, lens: lensForFocus(disk, n.parent), selected: id, detailOpen: false });
       setTimeout(() => set({ pulse: { id, key: Date.now() } }), 450);
     },
 
     startScan: () => {
       clearTimeout(scanTimer);
-      set((s) => ({ scan: "scanning", scanKey: s.scanKey + 1, focus: s.disk.root, plan: null, selected: null, detailOpen: false }));
+      set((s) => ({ scan: "scanning", scanKey: s.scanKey + 1, focus: s.disk.root, lens: "all", plan: null, selected: null, detailOpen: false }));
       scanTimer = window.setTimeout(() => set({ scan: "done" }), mapMotion.sonar * 1000);
     },
     scanDisk: async () => {
@@ -270,6 +279,23 @@ export const useApp = create<State & Actions>((set, get) => {
     notify: (text) => set({ toast: { key: Date.now(), text } }),
     endFlight: (key) => set((s) => ({ flights: s.flights.filter((f) => f.key !== key) })),
     setPrefs: (p) => set(p),
+
+    openUninstall: (appId) => set({ uninstall: appId, detailOpen: false }),
+    closeUninstall: () => set({ uninstall: null }),
+    quitApp: (appId) => {
+      // Mock: Stage B asks the app to quit and waits for it.
+      get().disk.nodes[appId].running = false;
+      set((s) => ({ diskVersion: s.diskVersion + 1 }));
+      log(t("audit.quit"), get().disk.nodes[appId].name, 0);
+    },
+    confirmUninstall: (appId, ids) => {
+      const { disk, focus } = get();
+      set({ uninstall: null });
+      get().addToTray(ids);
+      log(t("audit.uninstalled"), disk.nodes[appId].path, ids.reduce((s, id) => s + disk.nodes[id].size, 0));
+      // Leave the emptied app and return to Apps.
+      if (focus === appId && disk.nodes[appId].children.every((c) => !attached(disk, c))) setTimeout(() => get().zoomOut(), 350);
+    },
   };
 });
 

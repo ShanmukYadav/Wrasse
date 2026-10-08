@@ -16,6 +16,7 @@ import { ListView } from "./ui/ListView";
 import { Overlays } from "./ui/Overlays";
 import { QuarantineTray } from "./ui/QuarantineTray";
 import { Toast } from "./ui/Toast";
+import { UninstallSheet } from "./ui/UninstallSheet";
 
 export function App() {
   const scheme = useScheme();
@@ -36,7 +37,7 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       const s = useApp.getState();
       const typing = (e.target as HTMLElement).tagName === "INPUT";
-      if (e.key === "Escape" && !typing && !s.overlay && !s.detailOpen && !s.commandOpen) s.zoomOut();
+      if (e.key === "Escape" && !typing && !s.overlay && !s.detailOpen && !s.commandOpen && s.uninstall === null) s.zoomOut();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -57,6 +58,7 @@ export function App() {
       <Flyers />
       <Toast />
       <Overlays />
+      <UninstallSheet />
       <DesignPage />
       <DevBadge />
     </MotionConfig>
