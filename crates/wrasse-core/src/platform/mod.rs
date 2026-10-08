@@ -9,6 +9,9 @@ mod windows;
 pub use volume::{system_volume, VolumeSpace};
 
 use crate::format::UnitSystem;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 
 pub trait Platform: Send + Sync {
     /// Human-readable OS name for labels, e.g. "macOS".
@@ -46,5 +49,165 @@ impl Platform for Unsupported {
     }
     fn units(&self) -> UnitSystem {
         UnitSystem::Decimal
+    }
+}
+
+// ---- Scanner support -------------------------------------------------------------------------
+
+/// Where a whole-volume scan starts, and the prefix to strip so paths read as the user sees them.
+/// macOS scans the Data volume (`/System/Volumes/Data`): the sealed system volume is shown as one
+/// block, and firmlinked folders (`/Users`, `/Applications`, …) are counted once.
+pub fn scan_root() -> (PathBuf, &'static str) {
+    #[cfg(target_os = "macos")]
+    {
+        const DATA: &str = "/System/Volumes/Data";
+        if Path::new(DATA).is_dir() {
+            return (PathBuf::from(DATA), DATA);
+        }
+    }
+    #[cfg(windows)]
+    {
+        let drive = std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into());
+        return (PathBuf::from(format!("{drive}\\")), "");
+    }
+    #[allow(unreachable_code)]
+    (PathBuf::from("/"), "")
+}
+
+pub fn home_dir() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(PathBuf::from)
+}
+
+/// Space on the system volume (or APFS container), and how much of it the OS itself uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Volumes {
+    pub capacity: u64,
+    pub available: u64,
+    /// The sealed, read-only OS volume (macOS); 0 where the OS lives in the scanned volume.
+    pub os_used: u64,
+}
+
+impl Volumes {
+    pub fn used(&self) -> u64 {
+        self.capacity.saturating_sub(self.available)
+    }
+}
+
+pub fn volumes() -> Option<Volumes> {
+    #[cfg(target_os = "macos")]
+    {
+        let (capacity, available) = macos::container_space(Path::new("/"))?;
+        let os_used = macos::volume_space_used(Path::new("/")).unwrap_or(0);
+        return Some(Volumes {
+            capacity,
+            available,
+            os_used,
+        });
+    }
+    #[allow(unreachable_code)]
+    system_volume().map(|v| Volumes {
+        capacity: v.total,
+        available: v.available,
+        os_used: 0,
+    })
+}
+
+/// Runs the calling thread at background priority (scan workers).
+pub fn lower_thread_priority() {
+    #[cfg(target_os = "macos")]
+    macos::lower_thread_priority();
+}
+
+/// An iCloud (or other cloud) placeholder with no local data.
+pub fn is_dataless(md: &fs::Metadata) -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::is_dataless(md);
+    #[allow(unreachable_code)]
+    {
+        let _ = md;
+        false
+    }
+}
+
+/// Bytes a file shares with APFS clones, if any.
+pub fn clone_shared_bytes(path: &Path, allocated: u64) -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    return macos::clone_shared_bytes(path, allocated);
+    #[allow(unreachable_code)]
+    {
+        let _ = (path, allocated);
+        None
+    }
+}
+
+/// Whether Wrasse can read everything it needs (macOS Full Disk Access). Always true elsewhere.
+pub fn full_disk_access() -> bool {
+    #[cfg(target_os = "macos")]
+    return home_dir().map_or(true, |h| macos::full_disk_access(&h));
+    #[allow(unreachable_code)]
+    true
+}
+
+/// Opens the OS page where the user grants Full Disk Access.
+pub fn open_full_disk_access_settings() -> io::Result<()> {
+    #[cfg(target_os = "macos")]
+    return macos::open_full_disk_access_settings();
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
+/// The system volume's name as the file manager shows it ("Macintosh HD").
+pub fn volume_name() -> String {
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let root = if cfg!(windows) {
+        std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()) + "\\"
+    } else {
+        "/".into()
+    };
+    disks
+        .list()
+        .iter()
+        .find(|d| d.mount_point() == Path::new(&root))
+        .map(|d| d.name().to_string_lossy().into_owned())
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| {
+            if cfg!(windows) {
+                "Local Disk".into()
+            } else {
+                "Macintosh HD".into()
+            }
+        })
+}
+
+/// Executable paths of running processes (to mark apps as running). Read-only.
+pub fn running_executables() -> Vec<PathBuf> {
+    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let mut sys = System::new();
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::All,
+        true,
+        ProcessRefreshKind::nothing().with_exe(UpdateKind::OnlyIfNotSet),
+    );
+    sys.processes()
+        .values()
+        .filter_map(|p| p.exe().map(Path::to_path_buf))
+        .collect()
+}
+
+/// An app bundle's identifier (`CFBundleIdentifier`), e.g. "com.apple.dt.Xcode".
+pub fn bundle_id(app: &Path) -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        let info = plist::Value::from_file(app.join("Contents/Info.plist")).ok()?;
+        return info
+            .as_dictionary()?
+            .get("CFBundleIdentifier")?
+            .as_string()
+            .map(str::to_string);
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = app;
+        None
     }
 }
