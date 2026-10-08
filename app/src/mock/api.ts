@@ -40,6 +40,7 @@ function insights(disk: Disk, id: number): Insight[] {
     if (m.kind === "app" && m.lastOpenedDays > 180) unusedApps++;
   });
   if (n.kind === "ghost") return out;
+  if (n.duplicateOf !== undefined) return [{ tone: "amber", text: t("detail.duplicateLabel") }];
   if (n.category === "system" || (n.safety === "keep" && n.depth > 1)) return [{ tone: "protected", text: t("insight.protected") }];
   if (n.category === "junk") return [{ tone: "green", text: t("insight.allSafe") }];
   if (n.category === "aiModels" && dupCount > 0) out.push({ tone: "violet", text: t("insight.modelDuplicates", { count: dupCount, size: fmt(dupBytes) }) });

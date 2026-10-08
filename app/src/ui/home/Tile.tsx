@@ -25,6 +25,7 @@ type Props = {
   deleting: boolean;
   pulseKey: number | null;
   reveal: { key: number; delay: number } | null;
+  drillable?: boolean;
   onOpen: (node: DiskNode) => void;
 };
 
@@ -35,7 +36,7 @@ export function lensMatch(n: DiskNode, lens: LensId): boolean {
 }
 
 // One D1 tile: badge + name + meta, big size, top items as rows, insight chips.
-export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, lens, selected, deleting, pulseKey, reveal, onOpen }: Props) {
+export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, lens, selected, deleting, pulseKey, reveal, drillable = node.children.length > 0, onOpen }: Props) {
   const c = categories[scheme][node.category];
   const cells = cell.colSpan * cell.rowSpan;
   const size = formatBytes(node.size, units);
@@ -43,7 +44,8 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
   const heightPx = cell.rowSpan * metrics.cellH + (cell.rowSpan - 1) * d1.grid.gap;
   const widthPx = cell.colSpan * metrics.cellW + (cell.colSpan - 1) * d1.grid.gap;
   const share = Math.round((node.size / Math.max(1, parentSize)) * 100);
-  const unitKey = UNIT[node.category];
+  // Category tiles count in their own unit (folders, models, apps); deeper tiles count items.
+  const unitKey = node.depth === 1 ? UNIT[node.category] : "unit.items";
   // Actionable items first; read-only libraries (Photos, Music) collapse into "+N more".
   const kids = node.children
     .map((k) => disk.nodes[k])
@@ -53,7 +55,8 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
   // Rows: XL tiles show five items plus "+N more"; L tiles show their top three.
   const rowRoom = Math.floor((heightPx - 160 - sizeFont) / (d1.row.height + d1.row.stackGap));
   const maxRows = sizeFont === d1.tile.sizeXL ? 6 : sizeFont === d1.tile.sizeL ? 3 : 0;
-  const rowCount = widthPx >= 220 ? Math.max(0, Math.min(maxRows, rowRoom)) : 0;
+  // Single items (apps, models, files) show no rows: their parts aren't separate choices.
+  const rowCount = drillable && widthPx >= 220 ? Math.max(0, Math.min(maxRows, rowRoom)) : 0;
   let rows = kids.slice(0, rowCount);
   let more: { count: number; size: number } | null = null;
   if (rowCount >= 5 && kids.length > rowCount) {
@@ -71,7 +74,6 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
       ? t("home.apps", { count: kids.length })
       : "";
   const insights = api.insights(disk, node.id);
-  const drillable = kids.length > 0;
   const dimmed = !lensMatch(node, lens);
 
   const style = {
@@ -90,6 +92,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
     <motion.button
       type="button"
       layout
+      layoutId={`tile-${node.id}`}
       data-tile-id={node.id}
       className={`tile focus-ring ${selected ? "is-selected" : ""} ${dimmed ? "is-dimmed" : ""}`}
       style={style}
@@ -107,9 +110,12 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
     >
       <span className="tile-glow" aria-hidden />
       <span className="tile-head">
-        <span className="tile-badge">
-          <Icon name={iconFor(node)} tone="white" size={20} />
-        </span>
+        {/* Narrow tiles drop the badge so the name stays readable. */}
+        {widthPx >= 120 && (
+          <span className="tile-badge">
+            <Icon name={iconFor(node)} tone="white" size={20} />
+          </span>
+        )}
         <span className="tile-name">{node.name}</span>
         {meta && <span className="tile-meta">{meta}</span>}
       </span>

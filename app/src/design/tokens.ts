@@ -166,7 +166,8 @@ export const d1 = {
   chip: { fontSize: 12, padding: "5px 10px", gap: 6 },
   ghost: { radius: 16, border: "1.5px dashed rgba(11, 26, 46, 0.25)", borderDark: "1.5px dashed rgba(255, 255, 255, 0.25)", bg: "rgba(255, 255, 255, 0.4)", bgDark: "rgba(255, 255, 255, 0.04)", padX: 14, titleSize: 13, hintSize: 11, actionSize: 12 },
   lens: { bottom: 22, gap: 4, pad: 6, radius: 18, bg: "rgba(255, 255, 255, 0.82)", shadow: "0 10px 30px rgba(11, 26, 46, 0.12)", pillHeight: 40, pillPadX: 16, pillRadius: 12, fontSize: 14 },
-  detail: { width: 330 },
+  detail: { width: 330, bg: "rgba(255, 255, 255, 0.86)" },
+  level: { pad: 14 }, // inset of child tiles inside an opened tile
   dimmed: 0.35,
   frameRadius: 14,
 } as const;
