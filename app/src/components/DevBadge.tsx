@@ -8,7 +8,7 @@ export function DevBadge() {
   return (
     <span
       title={t("app.devTooltip")}
-      className="pointer-events-none fixed right-3 top-3 z-50 rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-bold tracking-wider text-white"
+      className="dev-badge"
     >
       {t("app.dev")}
     </span>

@@ -10,3 +10,11 @@ export const spring = {
   gentle: { type: "spring", stiffness: 140, damping: 22 },
 } as const;
 export const stagger = 0.035;
+
+// Slow ambient loops (scan button glow rings, breathing glow).
+export const ambient = {
+  ringDuration: 4.2,
+  ringScale: 1.55,
+  ringCount: 3,
+  breathe: 3.6,
+} as const;

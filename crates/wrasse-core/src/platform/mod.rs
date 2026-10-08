@@ -2,8 +2,11 @@
 
 #[cfg(target_os = "macos")]
 mod macos;
+mod volume;
 #[cfg(windows)]
 mod windows;
+
+pub use volume::{system_volume, VolumeSpace};
 
 use crate::format::UnitSystem;
 
@@ -13,9 +16,6 @@ pub trait Platform: Send + Sync {
     /// The file manager's name, used in "Reveal in …" labels.
     fn file_manager(&self) -> &'static str;
     fn units(&self) -> UnitSystem;
-    /// Whether the native window backdrop (vibrancy on macOS, Mica on Windows 11) is available.
-    /// Without it the UI paints a solid sidebar.
-    fn window_effects(&self) -> bool;
 }
 
 pub fn current() -> &'static dyn Platform {
@@ -46,8 +46,5 @@ impl Platform for Unsupported {
     }
     fn units(&self) -> UnitSystem {
         UnitSystem::Decimal
-    }
-    fn window_effects(&self) -> bool {
-        false
     }
 }

@@ -2,6 +2,8 @@
 
 use serde::Serialize;
 use tauri::Manager;
+use wrasse_core::format::UnitSystem;
+use wrasse_core::platform::{self, VolumeSpace};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -9,20 +11,25 @@ struct AppInfo {
     version: &'static str,
     platform: &'static str,
     file_manager: &'static str,
-    window_effects: bool,
+    units: UnitSystem,
     dev: bool,
 }
 
 #[tauri::command]
 fn app_info() -> AppInfo {
-    let platform = wrasse_core::platform::current();
+    let platform = platform::current();
     AppInfo {
         version: wrasse_core::VERSION,
         platform: platform.name(),
         file_manager: platform.file_manager(),
-        window_effects: platform.window_effects(),
+        units: platform.units(),
         dev: cfg!(debug_assertions),
     }
+}
+
+#[tauri::command]
+fn system_volume() -> Option<VolumeSpace> {
+    platform::system_volume()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -36,34 +43,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .setup(|app| {
-            let window = app
-                .get_webview_window("main")
-                .expect("main window is defined in tauri.conf.json");
-            if wrasse_core::platform::current().window_effects() {
-                apply_window_effects(&window);
-            }
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![app_info])
+        .invoke_handler(tauri::generate_handler![app_info, system_volume])
         .run(tauri::generate_context!())
         .expect("error while running Wrasse");
-}
-
-/// Sidebar vibrancy on macOS, Mica on Windows 11 (PLAN.md §7.5).
-/// Only called when the platform supports it; otherwise the UI paints a solid sidebar.
-fn apply_window_effects(window: &tauri::WebviewWindow) {
-    use tauri::window::{Effect, EffectState, EffectsBuilder};
-
-    #[cfg(target_os = "macos")]
-    let effects = EffectsBuilder::new()
-        .effect(Effect::Sidebar)
-        .state(EffectState::FollowsWindowActiveState)
-        .build();
-    #[cfg(windows)]
-    let effects = EffectsBuilder::new().effect(Effect::Mica).build();
-    #[cfg(not(any(target_os = "macos", windows)))]
-    let effects = EffectsBuilder::new().build();
-
-    let _ = window.set_effects(effects);
 }

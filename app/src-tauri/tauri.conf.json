@@ -10,7 +10,6 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
@@ -19,10 +18,13 @@
         "height": 760,
         "minWidth": 900,
         "minHeight": 600,
-        "transparent": true,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "trafficLightPosition": { "x": 18, "y": 22 }
+        "trafficLightPosition": {
+          "x": 18,
+          "y": 22
+        },
+        "backgroundColor": "#050b1a"
       }
     ],
     "security": {
@@ -31,7 +33,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app", "nsis"],
+    "targets": [
+      "dmg",
+      "app",
+      "nsis"
+    ],
     "category": "Utility",
     "shortDescription": "Offline disk cleaner and storage analyzer",
     "icon": [

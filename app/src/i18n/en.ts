@@ -27,7 +27,17 @@ export const en = {
   "screen.diagnostics.body": "Find out why deleted space hasn't come back, and fix it where possible.",
   "screen.quarantine.body": "Restore anything Wrasse moved aside in the last 7 days.",
   "screen.settings.body": "Rules, quarantine, never-touch list, motion and updates.",
-  "screen.comingSoon": "Coming in a later phase",
+  "screen.arrivesIn": "Arrives in Phase {phase}",
+
+  "home.scan": "Scan",
+  "home.availableOf": "available of",
+  "home.scanArrives": "Scanning arrives in Phase 1",
+
+  "storage.systemDisk": "System disk",
+  "storage.used": "used",
+  "storage.available": "available",
+  "storage.total": "total",
+  "storage.breakdownArrives": "Breakdown arrives in Phase 1",
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -4,6 +4,7 @@ import { t } from "../i18n";
 import { spring } from "../motion/tokens";
 import { allScreens, screenGroups, settingsScreen, type ScreenDef } from "../screens/registry";
 import { useApp } from "../store/app";
+import { SectionIcon } from "./SectionIcon";
 
 export function Sidebar() {
   const navRef = useRef<HTMLElement>(null);
@@ -22,28 +23,19 @@ export function Sidebar() {
   }
 
   return (
-    <nav
-      ref={navRef}
-      aria-label={t("nav.label")}
-      onKeyDown={onKeyDown}
-      className="sidebar flex h-full w-[232px] shrink-0 flex-col px-3 pb-3"
-    >
-      <div data-tauri-drag-region className="titlebar-space shrink-0" />
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto">
+    <nav ref={navRef} aria-label={t("nav.label")} onKeyDown={onKeyDown} className="sidebar">
+      <div data-tauri-drag-region className="titlebar-space" />
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto">
         {screenGroups.map((group, i) => (
-          <ul key={i} className="flex flex-col gap-0.5">
+          <ul key={i} className="flex flex-col gap-1">
             {group.map((def) => (
               <SidebarItem key={def.id} def={def} active={def.id === screen} onSelect={setScreen} />
             ))}
           </ul>
         ))}
       </div>
-      <ul className="flex flex-col gap-0.5 pt-2">
-        <SidebarItem
-          def={settingsScreen}
-          active={settingsScreen.id === screen}
-          onSelect={setScreen}
-        />
+      <ul className="flex flex-col gap-1 pt-2">
+        <SidebarItem def={settingsScreen} active={settingsScreen.id === screen} onSelect={setScreen} />
       </ul>
     </nav>
   );
@@ -58,7 +50,6 @@ function SidebarItem({
   active: boolean;
   onSelect: (id: ScreenDef["id"]) => void;
 }) {
-  const Icon = def.icon;
   return (
     <li>
       <button
@@ -67,24 +58,12 @@ function SidebarItem({
         aria-current={active ? "page" : undefined}
         tabIndex={active ? 0 : -1}
         onClick={() => onSelect(def.id)}
-        className={`focus-ring relative flex h-8 w-full items-center gap-2.5 rounded-[var(--radius-sm)] px-2.5 text-left text-[13px] transition-colors duration-150 ${
-          active ? "text-[var(--text)]" : "text-[var(--text-muted)] hover:text-[var(--text)]"
-        }`}
+        className={`sidebar-item focus-ring ${active ? "is-active" : ""}`}
       >
         {active && (
-          <motion.span
-            layoutId="sidebar-pill"
-            transition={spring.soft}
-            className="absolute inset-0 rounded-[var(--radius-sm)] bg-[var(--pill)]"
-            aria-hidden
-          />
+          <motion.span layoutId="sidebar-pill" transition={spring.soft} className="sidebar-pill" aria-hidden />
         )}
-        <Icon
-          size={16}
-          strokeWidth={1.9}
-          className={`relative ${active ? "text-[var(--accent)]" : ""}`}
-          aria-hidden
-        />
+        <SectionIcon def={def} size="sm" />
         <span className="relative truncate">{t(def.title)}</span>
       </button>
     </li>

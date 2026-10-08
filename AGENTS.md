@@ -7,7 +7,7 @@
 1. **Work phase by phase** (PLAN.md §11). Implement on macOS first, then Windows parity. Stop and report at each checkpoint; do not start the next phase until both checkpoints pass and CI is green on both OSes.
 2. **All deletion goes through `safety::remove` or `safety::delegate`** in `wrasse-core`. Never add another path. `remove_file`, `remove_dir*`, `fs::rename`, `std::process::Command` and `ShellExecute*` are allowed only in `safety/`, `quarantine/` and `platform/`; `scripts/check-forbidden-apis.sh` enforces this in CI.
 3. **Never touch the real home folder or the Windows registry in development.** Destructive code is tested only against `wrasse-fixtures` temp dirs, fakes and dry-run.
-4. **Motion tokens only.** Every animation uses `app/src/motion/tokens.ts` (or the variants built from it). No ad-hoc durations, easings or springs.
+4. **Tokens only.** Every animation uses `app/src/motion/tokens.ts` (or the variants built from it), and every color, gradient, radius, shadow, blur and type size comes from `app/src/design/tokens.ts`. No ad-hoc values in components or CSS. Animate only `transform` and `opacity`.
 5. `wrasse-core` has **no Tauri dependency**; the app and CLI are thin wrappers.
 6. Platform-specific code lives in `crates/wrasse-core/src/platform/` behind the `Platform` trait. The UI has no `if mac / if windows` logic beyond labels and shortcuts.
 7. Every cleanup target is a TOML rule with a test, or a `safety::delegate` action with a test.
