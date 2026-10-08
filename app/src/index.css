@@ -394,6 +394,21 @@ button {
   text-overflow: ellipsis;
   min-width: 0;
 }
+.tile-name-keep {
+  flex-shrink: 0;
+}
+.tile-head.is-short {
+  flex: 1;
+}
+.tile-size-inline {
+  margin-left: auto;
+  font-size: var(--d1-tile-inline-size);
+  font-weight: var(--w-strong);
+  color: var(--ink);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
 .tile-meta {
   margin-left: auto;
   font-size: var(--d1-tile-meta-size);
@@ -479,6 +494,8 @@ button {
 .tile-chips {
   display: flex;
   flex-wrap: wrap;
+  overflow: hidden;
+  max-height: 27px; /* one line of chips; extra chips wrap out of view instead of overflowing */
   gap: var(--d1-chip-gap);
   min-width: 0;
   flex: 1;

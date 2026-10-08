@@ -43,6 +43,11 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
   const sizeFont = cells >= 30 ? d1.tile.sizeXL : cells >= 12 ? d1.tile.sizeL : cells >= 4 ? d1.tile.sizeM : d1.tile.sizeS;
   const heightPx = cell.rowSpan * metrics.cellH + (cell.rowSpan - 1) * d1.grid.gap;
   const widthPx = cell.colSpan * metrics.cellW + (cell.colSpan - 1) * d1.grid.gap;
+  // Small tiles degrade gracefully so the size is always fully visible:
+  // short tiles become one line (name + size), medium tiles drop the chips.
+  const short = heightPx < d1.tile.shortBelow;
+  const showChips = !short && heightPx >= d1.tile.chipsFrom && widthPx >= d1.tile.chipsMinWidth;
+  const fittedSizeFont = Math.min(sizeFont, Math.max(d1.tile.sizeS, (heightPx - (showChips ? 112 : 78)) * 0.9));
   const share = Math.round((node.size / Math.max(1, parentSize)) * 100);
   // Category tiles count in their own unit (folders, models, apps); deeper tiles count items.
   const unitKey = node.depth === 1 ? UNIT[node.category] : "unit.items";
@@ -109,7 +114,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
       }
     >
       <span className="tile-glow" aria-hidden />
-      <span className="tile-head">
+      <span className={`tile-head ${short ? "is-short" : ""}`}>
         {/* Narrow tiles drop the badge so the name stays readable. */}
         {widthPx >= 120 && (
           <span className="tile-badge">
@@ -117,14 +122,22 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
           </span>
         )}
         <span className="tile-name">{node.name}</span>
-        {meta && <span className="tile-meta">{meta}</span>}
+        {short ? (
+          <span className="tile-size-inline">
+            {size.value} {size.unit}
+          </span>
+        ) : (
+          meta && widthPx >= d1.tile.chipsMinWidth && <span className="tile-meta">{meta}</span>
+        )}
       </span>
-      <span className="tile-size">
-        <span className="tile-size-num" style={{ fontSize: sizeFont }}>
-          {size.value}
+      {!short && (
+        <span className="tile-size">
+          <span className="tile-size-num" style={{ fontSize: fittedSizeFont }}>
+            {size.value}
+          </span>
+          <span className="tile-size-unit">{size.unit}</span>
         </span>
-        <span className="tile-size-unit">{size.unit}</span>
-      </span>
+      )}
       {large && (
         <span className="tile-rows">
           {rows.map((k) => (
@@ -142,19 +155,24 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
           )}
         </span>
       )}
-      <span className="tile-spacer" />
-      <span className="tile-foot">
-        <span className="tile-chips">
-          {insights.map((i) => (
-            <span key={i.text} className={`chip chip-${i.tone}`}>
-              {i.text}
+      {!short && <span className="tile-spacer" />}
+      {!short && (
+        <span className="tile-foot">
+          <span className="tile-chips">
+            {showChips &&
+              insights.map((i) => (
+                <span key={i.text} className={`chip chip-${i.tone}`}>
+                  {i.text}
+                </span>
+              ))}
+          </span>
+          {widthPx >= d1.tile.chipsMinWidth && (
+            <span className="tile-open" aria-hidden>
+              {drillable ? t("home.open") : t("home.details")}
             </span>
-          ))}
+          )}
         </span>
-        <span className="tile-open" aria-hidden>
-          {drillable ? t("home.open") : t("home.details")}
-        </span>
-      </span>
+      )}
       {selected && (
         <span className="tile-check" aria-hidden>
           <Icon name="check" tone="white" size={16} />

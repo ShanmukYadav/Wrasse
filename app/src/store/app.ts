@@ -135,14 +135,20 @@ export const useApp = create<State & Actions>((set, get) => {
       set({ focus: throughSingles(get().disk, id), selected: null, detailOpen: false });
     },
     zoomOut: () => {
-      const { disk, focus } = get();
+      const { disk, focus, viewMode } = get();
+      // Back from the list view returns to the tiles of the same folder.
+      if (viewMode === "list") return set({ viewMode: "map", selected: null, detailOpen: false });
       // Skip back over single-child folders too, so going up always changes the view.
       let parent = disk.nodes[focus].parent;
       while (parent >= 0 && disk.nodes[parent].children.length === 1 && disk.nodes[parent].parent >= 0) parent = disk.nodes[parent].parent;
       if (parent >= 0) set({ focus: parent, selected: null, detailOpen: false });
     },
 
-    setLens: (lens) => set({ lens, plan: null }),
+    setLens: (lens) =>
+      // "All" also takes you back home.
+      lens === "all"
+        ? set((s) => ({ lens, plan: null, focus: s.disk.root, viewMode: "map", selected: null, detailOpen: false }))
+        : set({ lens, plan: null }),
 
     select: (id, open = true) => set({ selected: id, detailOpen: id !== null && open }),
     closeDetail: () => set({ detailOpen: false, selected: null }),

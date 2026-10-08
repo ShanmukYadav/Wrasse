@@ -7,7 +7,6 @@ import { formatBytes } from "../lib/format";
 import { useScheme } from "../lib/prefs";
 import { duration, ease } from "../motion/tokens";
 import { lensMatches } from "../api/types";
-import { leavesUnder } from "../mock/tree";
 import { useApp } from "../store/app";
 import { SafetyLabel } from "./Safety";
 import { Icon } from "../design/icons/Icon";
@@ -47,7 +46,8 @@ function List() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const rows = useMemo(() => {
-    const ids = leavesUnder(disk, focus);
+    // The items of the current folder: the same things its tiles show, including those under "+N more".
+    const ids = disk.nodes[focus].children.filter((id) => disk.nodes[id].size > 0 && disk.nodes[id].kind !== "ghost");
     const val = (id: number) => {
       const n = disk.nodes[id];
       switch (sort.key) {
@@ -142,7 +142,6 @@ function List() {
                   {planRank.has(id) && <span className="rank">{planRank.get(id)}</span>}
                   <Icon name={iconFor(n)} tone={toneFor(n)} size={20} />
                   <span className="truncate list-name">{n.name}</span>
-                  {n.parent >= 0 && <span className="truncate text-faint">{disk.nodes[n.parent].name}</span>}
                 </span>
                 <span className="list-col list-col-category text-muted">{t(`category.${n.category}`)}</span>
                 <span className="list-col list-col-size tabular">{f.value} {f.unit}</span>

@@ -161,6 +161,10 @@ export const d1 = {
     sizeM: 32,
     sizeS: 24,
     selectionWidth: 2.5,
+    shortBelow: 100, // px tile height: below this, one line (name + size)
+    chipsFrom: 150, // px tile height needed to show insight chips
+    chipsMinWidth: 150, // px tile width needed for chips, meta and "Open →"
+    inlineSize: 15,
   },
   row: { height: 38, radius: 10, padX: 10, gap: 10, bg: "rgba(255, 255, 255, 0.72)", bgDark: "rgba(255, 255, 255, 0.06)", fontSize: 13, iconSize: 16, barW: 54, barH: 5, barRadius: 3, sizeW: 58, stackGap: 6 },
   chip: { fontSize: 12, padding: "5px 10px", gap: 6 },

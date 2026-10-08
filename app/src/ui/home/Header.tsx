@@ -40,7 +40,8 @@ function Location() {
   const disk = useApp((s) => s.disk);
   const focus = useApp((s) => s.focus);
   const { setFocus, zoomOut } = useApp.getState();
-  const atRoot = focus === disk.root;
+  const listOpen = useApp((s) => s.viewMode === "list");
+  const atRoot = focus === disk.root && !listOpen;
   const trail = [...ancestors(disk, focus), focus];
   return (
     <nav className="location" aria-label={t("breadcrumb.label")}>
