@@ -1,6 +1,7 @@
 //! Thin Tauri wrapper around wrasse-core. All logic lives in the core crate.
 
 mod glass;
+mod scanning;
 
 use serde::Serialize;
 use tauri::Manager;
@@ -17,6 +18,8 @@ struct AppInfo {
     dev: bool,
     /// `WRASSE_BENCH=1` asks the UI to run its fps benchmark after the first scan.
     bench: bool,
+    /// Phase 1 only reads: cleanup actions are not available yet.
+    read_only: bool,
 }
 
 #[tauri::command]
@@ -29,6 +32,7 @@ fn app_info() -> AppInfo {
         units: platform.units(),
         dev: cfg!(debug_assertions),
         bench: std::env::var("WRASSE_BENCH").is_ok_and(|v| v == "1"),
+        read_only: true,
     }
 }
 
@@ -66,6 +70,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .manage(scanning::ScanState::default())
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 glass::install(&window);
@@ -77,7 +82,13 @@ pub fn run() {
             system_volume,
             glass_support,
             glass_regions,
-            dev_log
+            dev_log,
+            scanning::scan,
+            scanning::cancel_scan,
+            scanning::pause_scan,
+            scanning::cached_scan,
+            scanning::full_disk_access,
+            scanning::open_full_disk_access_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running Wrasse");

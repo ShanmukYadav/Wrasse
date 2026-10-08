@@ -29,3 +29,7 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# The scanner runs optimized even in `tauri dev`, so dev scans take seconds, not minutes.
+[profile.dev.package.wrasse-core]
+opt-level = 3
