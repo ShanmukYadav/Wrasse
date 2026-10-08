@@ -63,6 +63,13 @@ export const en = {
   "plan.short": "Can't reach the target without recently used items.",
   "plan.addAll": "Add {count} to tray|Add all {count} to tray",
   "plan.clear": "Clear",
+  "plan.in": "in {parent}",
+  "plan.why.duplicate": "Duplicate of the {name} copy",
+  "plan.why.rebuildable": "Rebuildable · comes back when needed",
+  "plan.why.junk": "Junk · safe to remove",
+  "plan.why.unused": "Not opened in {count} days",
+  "plan.why.safe": "Safe to remove",
+  "plan.why.large": "Large and rarely used · your call",
 
   "header.free": "free",
   "header.inTray": "in tray",

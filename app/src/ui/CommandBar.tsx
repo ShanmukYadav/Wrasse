@@ -6,6 +6,9 @@ import { t } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
 import { useApp, type Plan } from "../store/app";
 import { Bytes } from "../components/Bytes";
+import type { Disk, DiskNode } from "../api";
+import { iconFor } from "../design/icons/semantic";
+import { formatBytes } from "../lib/format";
 
 export function CommandBar() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -143,6 +146,9 @@ export function CommandBar() {
 function PlanMeter({ plan }: { plan: Plan }) {
   const addToTray = useApp((s) => s.addToTray);
   const clearPlan = useApp((s) => s.clearPlan);
+  const locate = useApp((s) => s.locate);
+  const disk = useApp((s) => s.disk);
+  const units = useApp((s) => s.info?.units ?? "decimal");
   const fraction = Math.min(1, plan.total / plan.target);
   const short = plan.total < plan.target;
   return (
@@ -165,6 +171,30 @@ function PlanMeter({ plan }: { plan: Plan }) {
         <motion.div className="meter-fill" initial={{ scaleX: 0 }} animate={{ scaleX: fraction }} transition={spring.gentle} />
       </div>
       {short && <p className="text-caption text-your-call">{t("plan.short")}</p>}
+      {/* Every candidate, ranked, with why it was picked. Clicking one shows it on the map. */}
+      <ol className="plan-list">
+        {plan.ids.map((id, i) => {
+          const n = disk.nodes[id];
+          const f = formatBytes(n.size, units);
+          return (
+            <li key={id}>
+              <button type="button" className="plan-item focus-ring" onClick={() => locate(id)}>
+                <span className="plan-rank tabular">{i + 1}</span>
+                <Icon name={iconFor(n)} tone={n.category} size={20} />
+                <span className="plan-text">
+                  <span className="plan-name">
+                    {n.name} <span className="plan-where">{t("plan.in", { parent: disk.nodes[n.parent].name })}</span>
+                  </span>
+                  <span className="plan-why">{planReason(disk, n)}</span>
+                </span>
+                <span className="plan-size tabular">
+                  {f.value} {f.unit}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
       <div className="flex gap-2">
         <button type="button" className="btn btn-primary focus-ring" onClick={() => addToTray(plan.ids)} disabled={!plan.ids.length}>
           {t("plan.addAll", { count: plan.ids.length })}
@@ -175,4 +205,19 @@ function PlanMeter({ plan }: { plan: Plan }) {
       </div>
     </motion.div>
   );
+}
+
+/** Why the planner picked an item, in one short line. */
+export function planReason(disk: Disk, n: DiskNode): string {
+  // A file inside a duplicated folder (one shard of a duplicate model) is a duplicate too.
+  for (let d: DiskNode | undefined = n; d && d.parent >= 0; d = disk.nodes[d.parent]) {
+    if (d.duplicateOf === undefined) continue;
+    const o = disk.nodes[d.duplicateOf];
+    return t("plan.why.duplicate", { name: o.name === d.name ? disk.nodes[o.parent].name : o.name });
+  }
+  if (n.rebuildable) return t("plan.why.rebuildable");
+  if (n.category === "junk") return t("plan.why.junk");
+  if (n.lastOpenedDays >= 180) return t("plan.why.unused", { count: n.lastOpenedDays });
+  if (n.safety === "safe") return t("plan.why.safe");
+  return t("plan.why.large");
 }

@@ -270,6 +270,63 @@ button {
   gap: 10px;
   padding: 14px;
 }
+.plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0 -6px;
+}
+.plan-item {
+  display: flex;
+  align-items: center;
+  gap: var(--d1-row-gap);
+  width: 100%;
+  padding: 8px 6px;
+  border-radius: var(--d1-row-radius);
+  text-align: left;
+  transition: background-color var(--d-base) cubic-bezier(0.65, 0, 0.35, 1);
+}
+.plan-item:hover {
+  background: var(--d1-row-surface);
+}
+.plan-rank {
+  width: 18px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  text-align: center;
+  flex: none;
+}
+.plan-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.plan-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plan-where {
+  font-weight: 400;
+  color: var(--c-text-muted);
+}
+.plan-why {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+.plan-size {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text);
+  flex: none;
+}
 .meter-track {
   height: 8px;
   border-radius: var(--r-pill);
