@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+/* Theme tokens. Light + dark follow the system (PLAN.md §7.5). */
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --sidebar-bg: rgba(246, 246, 248, 0.55);
+  --sidebar-solid: #f3f3f5;
+  --text: #1d1d1f;
+  --text-muted: #6e6e73;
+  --border: rgba(0, 0, 0, 0.1);
+  --pill: rgba(0, 0, 0, 0.07);
+  --accent: #0d9488;
+  --accent-soft: rgba(13, 148, 136, 0.12);
+  --safe: #16a34a;
+  --your-call: #d97706;
+  --keep: #8e8e93;
+  --focus: #2563eb;
+  --radius: 12px;
+  --radius-sm: 7px;
+  --titlebar: 44px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1c1e;
+    --sidebar-bg: rgba(30, 30, 32, 0.45);
+    --sidebar-solid: #232326;
+    --text: #f5f5f7;
+    --text-muted: #a1a1a6;
+    --border: rgba(255, 255, 255, 0.12);
+    --pill: rgba(255, 255, 255, 0.1);
+    --accent: #2dd4bf;
+    --accent-soft: rgba(45, 212, 191, 0.14);
+    --focus: #60a5fa;
+  }
+}
+
+/* Windows 11: 8px radius; native caption buttons, so no traffic-light inset. */
+:root[data-platform="windows"] {
+  --radius: 8px;
+  --radius-sm: 5px;
+  --titlebar: 12px;
+  --sidebar-bg: var(--sidebar-solid);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  /* Transparent so the window's vibrancy/Mica shows behind the sidebar. */
+  background: transparent;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+.sidebar {
+  background: var(--sidebar-bg);
+  backdrop-filter: saturate(1.2);
+}
+
+.titlebar-space {
+  height: var(--titlebar);
+}
+
+.content {
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+}
+
+.focus-ring:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
