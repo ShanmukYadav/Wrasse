@@ -11,10 +11,12 @@ export const spring = {
 } as const;
 export const stagger = 0.035;
 
-// Slow ambient loops (scan button glow rings, breathing glow).
-export const ambient = {
-  ringDuration: 4.2,
-  ringScale: 1.55,
-  ringCount: 3,
-  breathe: 3.6,
+// Reef Map timings (seconds).
+export const mapMotion = {
+  sonar: 2.5, // radial scan sweep
+  sonarFeather: 90, // px: width of the band where blocks fade and scale in
+  pulse: 1.5, // "where is" highlight
+  candidateStagger: 0.045, // "free N GB" candidates light up in ranked order
+  flight: 0.7, // block flying into the quarantine tray
+  wheelThreshold: 60, // accumulated wheel delta that triggers one zoom step
 } as const;

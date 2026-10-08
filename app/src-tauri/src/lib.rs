@@ -1,5 +1,7 @@
 //! Thin Tauri wrapper around wrasse-core. All logic lives in the core crate.
 
+mod glass;
+
 use serde::Serialize;
 use tauri::Manager;
 use wrasse_core::format::UnitSystem;
@@ -13,6 +15,8 @@ struct AppInfo {
     file_manager: &'static str,
     units: UnitSystem,
     dev: bool,
+    /// `WRASSE_BENCH=1` asks the UI to run its fps benchmark after the first scan.
+    bench: bool,
 }
 
 #[tauri::command]
@@ -24,12 +28,31 @@ fn app_info() -> AppInfo {
         file_manager: platform.file_manager(),
         units: platform.units(),
         dev: cfg!(debug_assertions),
+        bench: std::env::var("WRASSE_BENCH").is_ok_and(|v| v == "1"),
     }
 }
 
 #[tauri::command]
 fn system_volume() -> Option<VolumeSpace> {
     platform::system_volume()
+}
+
+#[tauri::command]
+fn glass_support() -> glass::Support {
+    glass::support()
+}
+
+#[tauri::command]
+fn glass_regions(window: tauri::WebviewWindow, regions: Vec<glass::Region>) {
+    glass::set_regions(&window, regions);
+}
+
+/// Dev builds only: lets the UI print benchmark results in the terminal running `tauri dev`.
+#[tauri::command]
+fn dev_log(message: String) {
+    if cfg!(debug_assertions) {
+        println!("{message}");
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -43,7 +66,19 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
-        .invoke_handler(tauri::generate_handler![app_info, system_volume])
+        .setup(|app| {
+            if let Some(window) = app.get_webview_window("main") {
+                glass::install(&window);
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            app_info,
+            system_volume,
+            glass_support,
+            glass_regions,
+            dev_log
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Wrasse");
 }

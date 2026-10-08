@@ -7,21 +7,39 @@ export type AppInfo = {
   fileManager: string;
   units: UnitSystem;
   dev: boolean;
+  bench: boolean;
 };
 
-export type VolumeSpace = { total: number; available: number };
+/** What the window can render natively behind transparent regions of the webview. */
+export type GlassSupport = { kind: "liquid" | "vibrancy" | "none" };
 
-const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+export type GlassRegion = { id: string; x: number; y: number; w: number; h: number; radius: number; anchor: "top" | "bottom" };
+
+export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 // Outside Tauri (plain Vite, Playwright) the backend is mocked.
 export async function getAppInfo(): Promise<AppInfo> {
   if (!inTauri) {
-    return { version: "0.0.0", platform: "macOS", fileManager: "Finder", units: "decimal", dev: true };
+    return { version: "0.0.0", platform: "macOS", fileManager: "Finder", units: "decimal", dev: true, bench: false };
   }
   return invoke<AppInfo>("app_info");
 }
 
-export async function getSystemVolume(): Promise<VolumeSpace | null> {
-  if (!inTauri) return { total: 494_384_795_648, available: 396_264_345_600 };
-  return invoke<VolumeSpace | null>("system_volume");
+export async function getGlassSupport(): Promise<GlassSupport> {
+  if (!inTauri) return { kind: "none" };
+  return invoke<GlassSupport>("glass_support");
+}
+
+export async function setGlassRegions(regions: GlassRegion[]): Promise<void> {
+  if (!inTauri) return;
+  await invoke("glass_regions", { regions });
+}
+
+/** Dev only: prints a line in the terminal running `tauri dev` (used by the fps benchmark). */
+export async function devLog(message: string): Promise<void> {
+  if (!inTauri) {
+    console.info(message);
+    return;
+  }
+  await invoke("dev_log", { message });
 }

@@ -1,54 +1,78 @@
 import { MotionConfig } from "motion/react";
 import { useEffect } from "react";
-import { Backdrop } from "./components/Backdrop";
 import { DevBadge } from "./components/DevBadge";
-import { ScreenHost } from "./components/ScreenHost";
-import { Sidebar } from "./components/Sidebar";
-import { applyTokens, onSchemeChange } from "./design/apply";
-import { getAppInfo, getSystemVolume } from "./lib/backend";
-import { useApp, type MotionPreference } from "./store/app";
-
-// "system" follows prefers-reduced-motion; reduced motion turns movement into opacity fades.
-const motionSetting: Record<MotionPreference, "user" | "always" | "never"> = {
-  system: "user",
-  reduce: "always",
-  full: "never",
-};
+import { applyTokens, onSystemSchemeChange } from "./design/apply";
+import { syncGlass } from "./glass/regions";
+import { getAppInfo, getGlassSupport } from "./lib/backend";
+import { useReducedMotion, useScheme } from "./lib/prefs";
+import { runBenchmark } from "./map/bench";
+import { MapView } from "./map/MapView";
+import { useApp } from "./store/app";
+import { CommandBar } from "./ui/CommandBar";
+import { DetailPanel } from "./ui/DetailPanel";
+import { Flyers } from "./ui/Flyers";
+import { FpsHud } from "./ui/FpsHud";
+import { HeaderInfo } from "./ui/HeaderInfo";
+import { IconCluster } from "./ui/IconCluster";
+import { LensBar } from "./ui/LensBar";
+import { ListView } from "./ui/ListView";
+import { Overlays } from "./ui/Overlays";
+import { QuarantineTray } from "./ui/QuarantineTray";
+import { Toast } from "./ui/Toast";
+import { TopLeft } from "./ui/TopLeft";
 
 export function App() {
-  const motion = useApp((s) => s.motion);
-  const scheme = useApp((s) => s.scheme);
-  const info = useApp((s) => s.info);
-  const { setInfo, setVolume, setScheme, setScreen } = useApp.getState();
+  const scheme = useScheme();
+  const reduced = useReducedMotion();
+  const platform = useApp((s) => (s.info?.platform === "Windows" ? "windows" : "macos"));
+  const glass = useApp((s) => s.glass);
+  const nativeGlass = useApp((s) => s.nativeGlass);
+  const scan = useApp((s) => s.scan);
+  const bench = useApp((s) => s.info?.bench ?? false);
 
   useEffect(() => {
+    const { setInfo, setSystemScheme, setPrefs } = useApp.getState();
     getAppInfo().then(setInfo);
-    getSystemVolume().then(setVolume);
-    return onSchemeChange(setScheme);
-  }, [setInfo, setVolume, setScheme]);
+    getGlassSupport().then((g) => setPrefs({ nativeGlass: g.kind !== "none" }));
+    return onSystemSchemeChange(setSystemScheme);
+  }, []);
 
-  const platform = info?.platform === "Windows" ? "windows" : "macos";
   useEffect(() => applyTokens(scheme, platform), [scheme, platform]);
-
-  // ⌘, / Ctrl+, opens Settings.
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
-        e.preventDefault();
-        setScreen("settings");
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [setScreen]);
+    document.documentElement.dataset.glass = nativeGlass && glass === "native" ? "native" : "css";
+    syncGlass();
+  }, [glass, nativeGlass]);
+
+  // WRASSE_BENCH=1 runs the fps benchmark once the first scan finishes.
+  useEffect(() => {
+    if (bench && scan === "done") void runBenchmark();
+  }, [bench, scan]);
+
+  const glassClass = nativeGlass && glass === "native" ? "glass-native" : "glass-css";
 
   return (
-    <MotionConfig reducedMotion={motionSetting[motion]}>
-      <Backdrop />
-      <div className="relative flex h-screen w-screen">
-        <Sidebar />
-        <ScreenHost />
-      </div>
+    <MotionConfig reducedMotion={reduced ? "always" : "never"}>
+      <div className="app-backdrop" aria-hidden />
+      <div data-tauri-drag-region className="drag-strip" />
+      <MapView />
+      <ListView />
+      <header className="chrome-top">
+        <TopLeft />
+        <CommandBar glassClass={glassClass} />
+        <div className="top-right">
+          <IconCluster />
+          <HeaderInfo />
+        </div>
+      </header>
+      <DetailPanel />
+      <footer className="chrome-bottom">
+        <LensBar glassClass={glassClass} />
+      </footer>
+      <QuarantineTray />
+      <Flyers />
+      <Toast />
+      <Overlays />
+      <FpsHud />
       <DevBadge />
     </MotionConfig>
   );
