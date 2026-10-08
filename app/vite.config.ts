@@ -9,7 +9,11 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
-    watch: { ignored: ["**/src-tauri/**"] },
+    // Only src/ should trigger updates. Toolchain, caches, build output and the Rust side change
+    // on their own and must never reload the page.
+    watch: {
+      ignored: ["**/src-tauri/**", "**/dist/**", "**/target/**", "**/.toolchain/**", "**/.npm-cache/**", "**/.DS_Store", "**/*.log"],
+    },
   },
   build: {
     target: "es2022",

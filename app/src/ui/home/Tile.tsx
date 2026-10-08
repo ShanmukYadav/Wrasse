@@ -9,6 +9,7 @@ import { formatBytes, type UnitSystem } from "../../lib/format";
 import { duration, ease, spring } from "../../motion/tokens";
 import type { Cell } from "./gridLayout";
 import { MiddleEllipsis } from "./MiddleEllipsis";
+import { lensMatch } from "./nodes";
 
 export type TileMetrics = { cellW: number; cellH: number };
 
@@ -30,10 +31,6 @@ type Props = {
 };
 
 const UNIT: Partial<Record<DiskNode["category"], string>> = { files: "unit.folders", aiModels: "unit.models", apps: "unit.apps" };
-
-export function lensMatch(n: DiskNode, lens: LensId): boolean {
-  return lens === "all" || (n.matchBytes[lens] ?? 0) > 0;
-}
 
 // One D1 tile: badge + name + meta, big size, top items as rows, insight chips.
 export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, lens, selected, deleting, pulseKey, reveal, drillable = node.children.length > 0, onOpen }: Props) {

@@ -1,6 +1,6 @@
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { Disk, DiskNode } from "../../api";
+import type { DiskNode } from "../../api";
 import { categories, d1 } from "../../design/tokens";
 import { t } from "../../i18n";
 import { formatBytes } from "../../lib/format";
@@ -11,12 +11,8 @@ import { GhostTile } from "./GhostTile";
 import { gridLayout, type Cell } from "./gridLayout";
 import { Sonar } from "./Sonar";
 import { Icon } from "../../design/icons/Icon";
+import { isDrillable } from "./nodes";
 import { Tile, type TileMetrics } from "./Tile";
-
-/** Folders and apps you can step into; models and files are single items (select, don't drill). */
-export function isDrillable(n: DiskNode): boolean {
-  return (n.kind === "dir" || n.kind === "volume" || n.kind === "app") && n.children.length > 0;
-}
 
 const MORE_ID = -2;
 
@@ -216,4 +212,3 @@ function MoreTile({ cell, focus, count, size, onOpen, delay }: { cell: Cell; foc
   );
 }
 
-export type { Disk };

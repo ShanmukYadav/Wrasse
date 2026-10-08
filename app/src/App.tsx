@@ -1,10 +1,9 @@
 import { MotionConfig } from "motion/react";
 import { useEffect } from "react";
-import { api } from "./api";
 import { DevBadge } from "./components/DevBadge";
 import { applyTokens, onSystemSchemeChange } from "./design/apply";
 import { useReducedMotion, useScheme } from "./lib/prefs";
-import { useApp } from "./store/app";
+import { boot, useApp } from "./store/app";
 import { Caustics } from "./ui/Caustics";
 import { DesignPage } from "./ui/DesignPage";
 import { DetailPanel } from "./ui/DetailPanel";
@@ -24,10 +23,8 @@ export function App() {
   const platform = useApp((s) => (s.info?.platform === "Windows" ? "windows" : "macos"));
 
   useEffect(() => {
-    const { setInfo, setSystemScheme, scanDisk } = useApp.getState();
-    api.appInfo().then(setInfo);
-    void scanDisk();
-    return onSystemSchemeChange(setSystemScheme);
+    boot(); // once per page load, however often this effect runs
+    return onSystemSchemeChange(useApp.getState().setSystemScheme);
   }, []);
 
   useEffect(() => applyTokens(scheme, platform), [scheme, platform]);

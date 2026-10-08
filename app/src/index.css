@@ -671,12 +671,17 @@ button {
   margin: -80vmax 0 0 -80vmax;
   border-radius: 50%;
   border: 2px solid;
+  animation: sonar-sweep var(--sonar-dur) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .sonar-mark {
   position: absolute;
   left: 50%;
   top: 50%;
   margin: -28px 0 0 -28px;
+  animation: sonar-mark var(--sonar-dur) cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+.sonar-mark.is-fade {
+  animation-name: sonar-fade;
 }
 .sonar-bubble {
   position: absolute;
@@ -684,6 +689,26 @@ button {
   height: 6px;
   border-radius: 50%;
   border: 1px solid;
+  animation: sonar-bubble var(--bubble-dur) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+/* Each plays once (no infinite loops); transform and opacity only. */
+@keyframes sonar-sweep {
+  from { transform: scale(0.05); opacity: 0.9; }
+  to { transform: scale(1); opacity: 0; }
+}
+@keyframes sonar-mark {
+  0% { transform: scale(0.9); opacity: 0; }
+  20% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.04); opacity: 0; }
+}
+@keyframes sonar-fade {
+  0%, 100% { opacity: 0; }
+  30%, 70% { opacity: 1; }
+}
+@keyframes sonar-bubble {
+  0% { transform: translateY(0); opacity: 0; }
+  50% { opacity: 0.8; }
+  100% { transform: translateY(-40px); opacity: 0; }
 }
 
 /* ---- Lens bar -------------------------------------------------------------------------- */

@@ -314,6 +314,29 @@ export const useApp = create<State & Actions>((set, get) => {
   };
 });
 
+// Hot updates to this file keep the current session (disk, focus, tray) instead of resetting
+// to an empty store: the new store takes the previous one's data, with the new actions.
+if (import.meta.hot) {
+  const page = window as { __wrasseStore?: typeof useApp };
+  const prev = page.__wrasseStore;
+  if (prev && prev !== useApp) {
+    const data = Object.fromEntries(Object.entries(prev.getState()).filter(([, v]) => typeof v !== "function"));
+    useApp.setState(data as Partial<State>);
+  }
+  page.__wrasseStore = useApp;
+}
+
+/** Loads app info and runs the first scan, exactly once per page load: not again on StrictMode's
+ *  double mount, nor when a hot update re-runs App's effects or re-evaluates this file. */
+export function boot() {
+  const page = window as { __wrasseBooted?: boolean };
+  if (page.__wrasseBooted) return;
+  page.__wrasseBooted = true;
+  const { setInfo, scanDisk } = useApp.getState();
+  void api.appInfo().then(setInfo);
+  void scanDisk();
+}
+
 /** Drops tray-bound candidates from the plan; the plan ends once nothing is left. */
 function remainingPlan(plan: Plan | null, removed: number[]): Plan | null {
   if (!plan) return null;
