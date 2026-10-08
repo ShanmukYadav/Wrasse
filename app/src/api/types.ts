@@ -61,6 +61,23 @@ export function lensMatches(node: DiskNode, lens: LensId): boolean {
   return lens === "all" || (node.deep & LENS_BIT[lens]) !== 0;
 }
 
+/** False once a node has been removed from its parent (quarantined or deleted); it keeps its parent pointer for restore. */
+export function attached(disk: Disk, id: number): boolean {
+  const n = disk.nodes[id];
+  return n.parent < 0 || disk.nodes[n.parent].children.includes(id);
+}
+
+/** Progress while a scan runs. Stage B emits these at most 10 times a second. */
+export type ScanProgress = {
+  phase: "walking" | "done" | "cancelled";
+  /** Files and folders visited so far. */
+  items: number;
+  /** Bytes on disk counted so far. */
+  bytes: number;
+  /** The folder being read right now, for the status line. */
+  current: string;
+};
+
 export function ancestors(disk: Disk, id: number): number[] {
   const out: number[] = [];
   for (let n = disk.nodes[id]; n.parent >= 0; n = disk.nodes[n.parent]) out.unshift(n.parent);

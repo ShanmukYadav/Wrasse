@@ -1,10 +1,9 @@
 import { create } from "zustand";
-import { api, categoryForLens, emptyDisk, GB, lensForFocus, throughSingles, type Disk } from "../api";
+import { api, attached, categoryForLens, emptyDisk, GB, lensForFocus, throughSingles, type Disk } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
 import type { AppInfo } from "../lib/backend";
-import { attached, detach, reattach, zeroOut } from "../mock/tree";
 import { mapMotion } from "../motion/tokens";
 
 export type Overlay = "startup" | "settings" | "audit" | "history" | "design" | null;
@@ -193,19 +192,20 @@ export const useApp = create<State & Actions>((set, get) => {
         const from = whole ? rect : { x: rect.x + rect.w / 2 - 22, y: rect.y + rect.h / 2 - 22, w: 44, h: 44 };
         flights.push({ key: ++flightKey, id: n.id, from, color: categories[scheme()][disk.nodes[tile].category].accent, delay: flights.length * 0.05 });
       }
-      detach(disk, items.map((n) => n.id));
       const trayItems = items.map((n) => ({ id: n.id, name: n.name, size: n.size }));
       set((s) => ({
         tray: [...s.tray, ...trayItems],
         batches: [{ id: ++batchId, at: Date.now(), items: trayItems, state: "inTray" }, ...s.batches],
         flights: [...s.flights, ...flights],
-        diskVersion: s.diskVersion + 1,
         selected: null,
         detailOpen: false,
         plan: remainingPlan(s.plan, items.map((n) => n.id)),
       }));
       for (const n of items) log(t("audit.quarantined"), n.path, n.size);
-      ascendIfEmpty();
+      void api.quarantine(disk, items.map((n) => n.id)).then((d) => {
+        set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 }));
+        ascendIfEmpty();
+      });
     },
 
     deleteNow: (ids) => {
@@ -215,9 +215,10 @@ export const useApp = create<State & Actions>((set, get) => {
       // Fade and collapse first, then remove (no flight, so the difference is visible).
       set({ deleting: items.map((n) => n.id), selected: null, detailOpen: false });
       setTimeout(() => {
-        detach(disk, items.map((n) => n.id));
-        set((s) => ({ deleting: [], diskVersion: s.diskVersion + 1 }));
-        ascendIfEmpty();
+        void api.deleteNow(disk, items.map((n) => n.id)).then((d) => {
+          set((s) => ({ disk: d, deleting: [], diskVersion: s.diskVersion + 1 }));
+          ascendIfEmpty();
+        });
       }, 260);
       for (const n of items) log(t("audit.deleted"), n.path, n.size);
     },
@@ -226,6 +227,7 @@ export const useApp = create<State & Actions>((set, get) => {
       const { tray } = get();
       if (!tray.length) return;
       const total = tray.reduce((s, i) => s + i.size, 0);
+      void api.emptyTray(tray.map((i) => i.id));
       set((s) => ({ tray: [], batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "emptied" } : b)) }));
       log(t("audit.emptied"), t("tray.items", { count: tray.length }), total);
       get().notify(t("tray.emptiedToast"));
@@ -234,12 +236,8 @@ export const useApp = create<State & Actions>((set, get) => {
     restoreTray: () => {
       const { tray, disk } = get();
       if (!tray.length) return;
-      reattach(disk, tray.map((i) => i.id));
-      set((s) => ({
-        tray: [],
-        diskVersion: s.diskVersion + 1,
-        batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "restored" } : b)),
-      }));
+      set((s) => ({ tray: [], batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "restored" } : b)) }));
+      void api.restore(disk, tray.map((i) => i.id)).then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })));
       log(t("audit.restored"), t("tray.items", { count: tray.length }), tray.reduce((s, i) => s + i.size, 0));
     },
 
@@ -248,10 +246,12 @@ export const useApp = create<State & Actions>((set, get) => {
       const ghost = disk.nodes[disk.ghostId];
       if (!ghost || ghost.size === 0) return;
       const size = ghost.size;
-      zeroOut(disk, disk.ghostId);
-      set((s) => ({ diskVersion: s.diskVersion + 1, selected: null, detailOpen: false }));
+      set({ selected: null, detailOpen: false });
       log(t("audit.snapshotsThinned"), "/", size);
-      ascendIfEmpty();
+      void api.thinSnapshots(disk).then((d) => {
+        set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 }));
+        ascendIfEmpty();
+      });
     },
 
     planFree: (bytes) => {
@@ -300,10 +300,8 @@ export const useApp = create<State & Actions>((set, get) => {
     openUninstall: (appId) => set({ uninstall: appId, detailOpen: false }),
     closeUninstall: () => set({ uninstall: null }),
     quitApp: (appId) => {
-      // Mock: Stage B asks the app to quit and waits for it.
-      get().disk.nodes[appId].running = false;
-      set((s) => ({ diskVersion: s.diskVersion + 1 }));
       log(t("audit.quit"), get().disk.nodes[appId].name, 0);
+      void api.quitApp(get().disk, appId).then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })));
     },
     confirmUninstall: (appId, ids) => {
       const { disk } = get();

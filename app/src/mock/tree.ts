@@ -1,5 +1,5 @@
 // Mock tree mutations for the prototype: detach (quarantine/delete) and reattach (restore).
-import { LENS_IDS, type Disk } from "../api/types";
+import { attached, LENS_IDS, type Disk } from "../api/types";
 
 /** Adds (sign 1) or removes (sign -1) a node's bytes and lens totals from all its ancestors. */
 function updateAncestors(disk: Disk, id: number, sign: 1 | -1) {
@@ -13,11 +13,6 @@ function updateAncestors(disk: Disk, id: number, sign: 1 | -1) {
     }
     n.deep = n.children.reduce((bits, c) => bits | disk.nodes[c].deep, n.lenses);
   }
-}
-
-export function attached(disk: Disk, id: number): boolean {
-  const n = disk.nodes[id];
-  return n.parent < 0 || disk.nodes[n.parent].children.includes(id);
 }
 
 /** Removes nodes from their parents; nodes keep their parent pointer so they can be restored. */
@@ -49,15 +44,3 @@ export function zeroOut(disk: Disk, id: number) {
   n.size = 0;
 }
 
-/** Leaves under a node, for the list view. */
-export function leavesUnder(disk: Disk, id: number): number[] {
-  const out: number[] = [];
-  const stack = [id];
-  while (stack.length) {
-    const n = disk.nodes[stack.pop()!];
-    if (n.children.length === 0) {
-      if (n.id !== id && n.size > 0) out.push(n.id);
-    } else stack.push(...n.children);
-  }
-  return out;
-}

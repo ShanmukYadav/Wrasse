@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState, type CSSProperties } from "react";
-import { attached } from "../mock/tree";
 import { Icon } from "../design/icons/Icon";
+import { attached } from "../api";
 import { iconFor } from "../design/icons/semantic";
 import { categories } from "../design/tokens";
 import { t } from "../i18n";

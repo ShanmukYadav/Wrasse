@@ -1,8 +1,12 @@
 import type { WrasseApi } from "../api";
-import { GB, type Disk, type DiskNode, type Insight } from "../api/types";
+import { GB, type Disk, type DiskNode, type Insight, type ScanProgress } from "../api/types";
 import { formatBytes } from "../lib/format";
 import { t } from "../i18n";
 import { generateDisk } from "./disk";
+import { detach, reattach, zeroOut } from "./tree";
+
+const progressListeners = new Set<(p: ScanProgress) => void>();
+const emit = (p: ScanProgress) => progressListeners.forEach((l) => l(p));
 
 const isWindows = typeof navigator !== "undefined" && navigator.userAgent.includes("Windows");
 // Chips round to whole units at 10 and above ("31 GB rebuildable", "8.4 GB old videos").
@@ -72,7 +76,36 @@ export const mockApi: WrasseApi = {
     };
   },
   async scan() {
-    return generateDisk();
+    emit({ phase: "walking", items: 0, bytes: 0, current: "/" });
+    const disk = generateDisk();
+    emit({ phase: "done", items: disk.nodes.length, bytes: disk.nodes[disk.root].size, current: "" });
+    return disk;
+  },
+  onScanProgress(listener) {
+    progressListeners.add(listener);
+    return () => progressListeners.delete(listener);
   },
   insights,
+  // The mock edits the tree in place and hands it back; nothing on disk is touched.
+  async quarantine(disk, ids) {
+    detach(disk, ids);
+    return disk;
+  },
+  async restore(disk, ids) {
+    reattach(disk, ids);
+    return disk;
+  },
+  async emptyTray() {},
+  async deleteNow(disk, ids) {
+    detach(disk, ids);
+    return disk;
+  },
+  async thinSnapshots(disk) {
+    zeroOut(disk, disk.ghostId);
+    return disk;
+  },
+  async quitApp(disk, appId) {
+    disk.nodes[appId].running = false;
+    return disk;
+  },
 };
