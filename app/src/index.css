@@ -665,7 +665,9 @@ button {
 }
 .lens-indicator {
   position: absolute;
-  inset: 0;
+  left: 0;
+  top: var(--d1-lens-pad);
+  height: var(--d1-lens-pill-height);
   border-radius: var(--d1-lens-pill-radius);
   background: var(--c-navy);
 }
