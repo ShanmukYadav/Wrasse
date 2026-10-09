@@ -34,4 +34,5 @@ scripts/check-forbidden-apis.sh
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
 ./dev.sh cargo test --workspace
 (cd app && ../dev.sh npm run build)
+scripts/check-idle-memory.sh   # macOS, with Wrasse quit: idle memory under the PLAN.md §8 budget
 ```
