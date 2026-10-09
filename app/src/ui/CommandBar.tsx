@@ -144,13 +144,19 @@ export function CommandBar() {
 
 // Takes the plan as a prop so it keeps rendering while it animates out after the plan ends.
 function PlanMeter({ plan }: { plan: Plan }) {
-  const addToTray = useApp((s) => s.addToTray);
+  const { requestDelete, togglePlanItem, setPlanAll } = useApp.getState();
   const clearPlan = useApp((s) => s.clearPlan);
   const locate = useApp((s) => s.locate);
   const disk = useApp((s) => s.disk);
   const units = useApp((s) => s.info?.units ?? "decimal");
-  const fraction = Math.min(1, plan.total / plan.target);
-  const short = plan.total < plan.target;
+  // Every candidate starts ticked; the meter and the button follow what's still ticked.
+  const picked = plan.ids.filter((id) => !plan.off.includes(id));
+  const pickedBytes = picked.reduce((s, id) => s + (disk.nodes[id]?.size ?? 0), 0);
+  const fraction = Math.min(1, pickedBytes / plan.target);
+  // Short because nothing more is available, or because the user unticked some.
+  const short = plan.total < plan.target ? "plan.short" : pickedBytes < plan.target ? "plan.shortPicked" : null;
+  const allOn = picked.length === plan.ids.length;
+  const pf = formatBytes(pickedBytes, units);
   return (
     <motion.div
       className="plan-meter"
@@ -164,20 +170,24 @@ function PlanMeter({ plan }: { plan: Plan }) {
           {t("plan.title")} <Bytes value={plan.target} className="text-strong" />
         </span>
         <span className="text-caption text-muted tabular">
-          <Bytes value={plan.total} /> · {t("plan.candidates", { count: plan.ids.length })}
+          <Bytes value={pickedBytes} /> · {t("plan.picked", { picked: picked.length, count: plan.ids.length })}
         </span>
       </div>
       <div className="meter-track">
         <motion.div className="meter-fill" initial={{ scaleX: 0 }} animate={{ scaleX: fraction }} transition={spring.gentle} />
       </div>
-      {short && <p className="text-caption text-your-call">{t("plan.short")}</p>}
+      {short && <p className="text-caption text-your-call">{t(short)}</p>}
       {/* Every candidate, ranked, with why it was picked. Clicking one shows it on the map. */}
       <ol className="plan-list">
         {plan.ids.map((id, i) => {
           const n = disk.nodes[id];
           const f = formatBytes(n.size, units);
+          const on = !plan.off.includes(id);
           return (
-            <li key={id}>
+            <li key={id} className={`plan-row ${on ? "" : "is-off"}`}>
+              <button type="button" role="checkbox" aria-checked={on} aria-label={t("select.tick", { name: n.name })} className={`plan-tick focus-ring ${on ? "is-on" : ""}`} onClick={() => togglePlanItem(id)}>
+                {on && <Icon name="check" tone="white" size={16} />}
+              </button>
               <button type="button" className="plan-item focus-ring" onClick={() => locate(id)}>
                 <span className="plan-rank tabular">{i + 1}</span>
                 <Icon name={iconFor(n)} tone={n.category} size={20} />
@@ -195,10 +205,14 @@ function PlanMeter({ plan }: { plan: Plan }) {
           );
         })}
       </ol>
-      <div className="flex gap-2">
-        <button type="button" className="btn btn-primary focus-ring" onClick={() => addToTray(plan.ids)} disabled={!plan.ids.length}>
-          {t("plan.addAll", { count: plan.ids.length })}
+      <div className="flex items-center gap-2">
+        <button type="button" className="btn btn-primary focus-ring" onClick={() => requestDelete(picked)} disabled={!picked.length}>
+          <Icon name="trash" size={16} /> {t("plan.deletePicked", { count: picked.length, size: `${pf.value} ${pf.unit}` })}
         </button>
+        <button type="button" className="link focus-ring" onClick={() => setPlanAll(!allOn)}>
+          {allOn ? t("plan.selectNone") : t("plan.selectAll")}
+        </button>
+        <span className="flex-1" />
         <button type="button" className="btn focus-ring" onClick={clearPlan}>
           {t("plan.clear")}
         </button>

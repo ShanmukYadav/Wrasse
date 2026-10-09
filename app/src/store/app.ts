@@ -14,7 +14,8 @@ export type Rect = { x: number; y: number; w: number; h: number };
 export type TrayItem = { id: number; name: string; size: number };
 export type AuditEntry = { at: number; action: string; target: string; size: number };
 export type Batch = { id: number; at: number; items: TrayItem[]; state: "inTray" | "emptied" | "restored" };
-export type Plan = { target: number; ids: number[]; total: number };
+/** A Free Up Space plan: ranked candidates; `off` are the ones the user unticked. */
+export type Plan = { target: number; ids: number[]; total: number; off: number[] };
 export type Flight = { key: number; id: number; from: Rect; color: string; delay: number };
 
 type State = {
@@ -75,6 +76,8 @@ type Actions = {
   freeGhost: () => void;
   planFree: (bytes: number) => void;
   clearPlan: () => void;
+  togglePlanItem: (id: number) => void;
+  setPlanAll: (on: boolean) => void;
   locate: (id: number) => void;
   startScan: () => void;
   scanDisk: () => Promise<void>;
@@ -324,9 +327,12 @@ export const useApp = create<State & Actions>((set, get) => {
         ids.push(n.id);
         total += n.size;
       }
-      set({ plan: { target: bytes, ids, total }, lens: "all" });
+      set({ plan: { target: bytes, ids, total, off: [] }, lens: "all" });
     },
     clearPlan: () => set({ plan: null }),
+    togglePlanItem: (id) =>
+      set((s) => (s.plan ? { plan: { ...s.plan, off: s.plan.off.includes(id) ? s.plan.off.filter((o) => o !== id) : [...s.plan.off, id] } } : {})),
+    setPlanAll: (on) => set((s) => (s.plan ? { plan: { ...s.plan, off: on ? [] : [...s.plan.ids] } } : {})),
 
     locate: (id) => {
       const { disk } = get();
@@ -431,7 +437,7 @@ export function boot() {
 function remainingPlan(plan: Plan | null, removed: number[]): Plan | null {
   if (!plan) return null;
   const ids = plan.ids.filter((id) => !removed.includes(id));
-  return ids.length ? { ...plan, ids } : null;
+  return ids.length ? { ...plan, ids, off: plan.off.filter((id) => ids.includes(id)) } : null;
 }
 
 export function unusedFactor(days: number): number {
