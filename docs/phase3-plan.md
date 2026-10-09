@@ -1,7 +1,8 @@
 # Phase 3 plan (macOS): Apps, Free Up Space, Large/Old/Duplicate files
 
-Status: **plan only, waiting for "start".** Phase 2 isn't approved yet; no Phase 3 code is written
-until it is. Windows stays deferred (PLAN.md status note); everything new in `wrasse-core` stays
+Status: **in progress.** Phase 2 (macOS) was approved on 2026-10-09 after the manual tray test
+(~/WrasseTest moved to the tray and restored, all 8 files byte-identical by SHA-256). The user took
+the recommendation for all 11 decisions in §8. Windows stays deferred (PLAN.md status note); everything new in `wrasse-core` stays
 platform-neutral, with macOS specifics in `platform/macos/`.
 
 Facts checked on this Mac (2026-10-09): /Applications has 8 apps, 5 root-owned and 3 user-owned;
