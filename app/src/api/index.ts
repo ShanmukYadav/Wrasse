@@ -4,7 +4,7 @@
 import { inTauri, type AppInfo } from "../lib/backend";
 import { mockApi } from "../mock/api";
 import { tauriApi } from "./tauri";
-import type { Disk, Insight, ScanProgress } from "./types";
+import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -28,15 +28,27 @@ export interface WrasseApi {
   /** Insight chips for a tile (attention, safe, AI, protected). */
   insights(disk: Disk, id: number): Insight[];
 
-  // Every action below takes the UI's current tree and resolves to the updated tree.
-  /** Moves items to the quarantine tray (recoverable). */
-  quarantine(disk: Disk, ids: number[]): Promise<Disk>;
-  /** Puts quarantined items back where they were. */
-  restore(disk: Disk, ids: number[]): Promise<Disk>;
-  /** Permanently removes the quarantined items (the tray's "Empty now"). */
-  emptyTray(ids: number[]): Promise<void>;
-  /** Permanently deletes safe items right away, skipping the tray. */
-  deleteNow(disk: Disk, ids: number[]): Promise<Disk>;
+  // Removal goes through the core's safety layer (Phase 2). Results say what was done and what
+  // was skipped and why; in dry-run nothing changes and `dryRun` is true.
+  /** What removing these would do (bytes, iCloud-synced items, skips), touching nothing. */
+  preview(disk: Disk, ids: number[], opts: RemoveOptions): Promise<RemovePreview>;
+  /** Moves items to the tray, or with `deleteNow` deletes Safe items for good. */
+  remove(disk: Disk, ids: number[], opts: RemoveOptions): Promise<RemoveOutcome>;
+  /** Removes junk-rule items by path (System Junk). The tree is refreshed by a rescan after. */
+  removeJunk(items: JunkMatch[]): Promise<{ done: number; bytes: number; skipped: number; dryRun: boolean }>;
+  /** Puts tray items back. `rescan` means the tree should be refreshed with a scan. */
+  restore(disk: Disk, items: TrayItem[]): Promise<{ disk: Disk; rescan: boolean }>;
+  /** Deletes tray items for good (the tray's "Empty now"). Not undoable. */
+  emptyTray(items: TrayItem[]): Promise<{ bytes: number; dryRun: boolean }>;
+  /** Empties the Trash through the OS. Not undoable. */
+  emptyTrash(disk: Disk, trashId: number): Promise<RemoveOutcome>;
+  /** Dry-run state and what's in the tray (it survives restarts). */
+  cleanupStatus(): Promise<CleanupStatus>;
+  setDryRun(on: boolean): Promise<void>;
+  /** What the junk rules find right now. */
+  junk(): Promise<JunkReport>;
+  /** Adds or removes a "Never touch" path; resolves to the whole list. */
+  neverTouch(path: string, on: boolean): Promise<string[]>;
   /** Thins local Time Machine snapshots, freeing the "held by snapshots" space. */
   thinSnapshots(disk: Disk): Promise<Disk>;
   /** Asks a running app to quit (before uninstalling it). */
@@ -58,3 +70,4 @@ export const api: WrasseApi = mockMode() ? mockApi : tauriApi;
 
 export * from "./types";
 export * from "./caution";
+export * from "./tree";

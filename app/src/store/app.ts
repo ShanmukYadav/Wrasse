@@ -1,17 +1,17 @@
 import { create } from "zustand";
-import { type DiskNode, api, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { type DiskNode, type TrayItem, api, handPickOnly, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
 import type { AppInfo } from "../lib/backend";
+import { formatBytes } from "../lib/format";
 import { mapMotion } from "../motion/tokens";
 
-export type Overlay = "onboarding" | "startup" | "settings" | "audit" | "history" | "design" | null;
+export type Overlay = "onboarding" | "junk" | "startup" | "settings" | "audit" | "history" | "design" | null;
 export type ThemePref = "system" | "dark" | "light";
 export type MotionPref = "system" | "reduce" | "full";
 
 export type Rect = { x: number; y: number; w: number; h: number };
-export type TrayItem = { id: number; name: string; size: number };
 export type AuditEntry = { at: number; action: string; target: string; size: number };
 export type Batch = { id: number; at: number; items: TrayItem[]; state: "inTray" | "emptied" | "restored" };
 /** A Free Up Space plan: ranked candidates; `off` are the ones the user unticked. */
@@ -26,7 +26,17 @@ export type DeletedEntry = {
   what: "app" | "appData" | "model" | "dev" | "cache" | "folder" | "file" | "snapshots";
   at: number;
   status: "inTray" | "restored" | "deleted";
+  /** The tray entry, while it can be restored. */
+  entry?: string;
 };
+
+export type ConfirmKind =
+  /** OS folders, protected data, iCloud-synced items: needs "I understand". */
+  | "caution"
+  /** Delete for good, Empty tray, Empty Trash: "Not undoable". */
+  | "deleteNow"
+  | "emptyTray"
+  | "emptyTrash";
 
 export type Plan = { target: number; ids: number[]; total: number; off: number[] };
 export type Flight = { key: number; id: number; from: Rect; color: string; delay: number };
@@ -66,8 +76,10 @@ type State = {
   deleted: DeletedEntry[];
   /** Tiles ticked for a bulk action. */
   checked: number[];
-  /** Items waiting on the delete caution sheet. */
-  confirmDelete: number[] | null;
+  /** A removal waiting for confirmation (caution, or "Not undoable"). */
+  confirmDelete: { ids: number[]; kind: ConfirmKind; handPicked: boolean } | null;
+  /** Dry-run: actions only report what they would do (dev builds start in it every launch). */
+  dryRun: boolean;
 };
 
 type Actions = {
@@ -78,11 +90,14 @@ type Actions = {
   setLens: (lens: LensId) => void;
   select: (id: number | null, open?: boolean) => void;
   closeDetail: () => void;
-  addToTray: (ids: number[], confirmed?: boolean) => void;
+  addToTray: (ids: number[], confirmed?: boolean, handPicked?: boolean) => void;
   toggleCheck: (id: number) => void;
   clearChecks: () => void;
   /** Delete (to the tray): goes straight through, or asks first for OS folders and protected data. */
-  requestDelete: (ids: number[]) => void;
+  requestDelete: (ids: number[], handPicked?: boolean) => void;
+  requestDeleteNow: (ids: number[]) => void;
+  requestEmptyTray: () => void;
+  setDryRun: (on: boolean) => void;
   confirmDeleteRequest: () => void;
   cancelDelete: () => void;
   deleteNow: (ids: number[]) => void;
@@ -152,10 +167,100 @@ export const useApp = create<State & Actions>((set, get) => {
     return true;
   }
 
+  const failed = (e: unknown) => {
+    get().notify(e instanceof Error ? e.message : String(e));
+    return null;
+  };
+  const fmtBytes = (b: number) => {
+    const f = formatBytes(b, get().info?.units ?? "decimal");
+    return `${f.value} ${f.unit}`;
+  };
+  function reportSkipped(count: number) {
+    if (count) get().notify(t("delete.skippedToast", { count }));
+  }
+
+  /** Delete (to the tray): the core decides; only what it actually moved flies to the tray. */
+  async function moveToTray(ids: number[], confirmed: boolean, handPicked: boolean) {
+    const { disk, focus } = get();
+    // Keep items only move after the user confirmed the caution sheet; blocked ones never.
+    const items = ids.map((id) => disk.nodes[id]).filter((n) => n && deletable(disk, n.id) && (confirmed || n.safety !== "keep"));
+    if (!items.length) return;
+    const result = await api.remove(disk, items.map((n) => n.id), { handPicked }).catch(failed);
+    if (!result) return;
+    if (result.dryRun) {
+      set({ selected: null, detailOpen: false });
+      return get().notify(t("dryRun.trayToast", { count: result.done.length, size: fmtBytes(result.bytes) }));
+    }
+    const entries = new Map(result.done.map((d) => [d.id, d.entry]));
+    const moved = items.filter((n) => entries.has(n.id));
+    // One flight per tile involved (many files can share a tile).
+    const flights: Flight[] = [];
+    const seen = new Set<number>();
+    for (const n of moved) {
+      const tile = visibleTileOf(disk, focus, n.id);
+      if (tile === null || seen.has(tile) || flights.length >= 12) continue;
+      seen.add(tile);
+      const rect = tileRect(tile);
+      if (!rect) continue;
+      const whole = tile === n.id;
+      const from = whole ? rect : { x: rect.x + rect.w / 2 - 22, y: rect.y + rect.h / 2 - 22, w: 44, h: 44 };
+      flights.push({ key: ++flightKey, id: n.id, from, color: categories[scheme()][disk.nodes[tile].category].accent, delay: flights.length * 0.05 });
+    }
+    const trayItems: TrayItem[] = moved.map((n) => ({ id: n.id, name: n.name, size: n.size, entry: entries.get(n.id), path: n.path }));
+    set((s) => ({
+      disk: result.disk,
+      diskVersion: s.diskVersion + 1,
+      tray: [...s.tray, ...trayItems],
+      batches: moved.length ? [{ id: ++batchId, at: Date.now(), items: trayItems, state: "inTray" as const }, ...s.batches] : s.batches,
+      flights: [...s.flights, ...flights],
+      selected: null,
+      detailOpen: false,
+      checked: s.checked.filter((c) => !moved.some((n) => n.id === c)),
+      plan: remainingPlan(s.plan, moved.map((n) => n.id)),
+    }));
+    for (const n of moved) log(t("audit.quarantined"), n.path, n.size);
+    record(moved, "inTray", entries);
+    if (moved.length) get().notify(t("delete.toast"));
+    reportSkipped(result.skipped.length);
+    ascendIfEmpty();
+  }
+
+  async function restoreItems(items: TrayItem[]) {
+    if (!items.length) return;
+    const result = await api.restore(get().disk, items).catch(failed);
+    if (!result) return;
+    const ids = new Set(items.map((i) => i.entry ?? String(i.id)));
+    set((s) => ({
+      disk: result.disk,
+      diskVersion: s.diskVersion + 1,
+      tray: s.tray.filter((i) => !ids.has(i.entry ?? String(i.id))),
+      batches: s.tray.length === items.length ? s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "restored" } : b)) : s.batches,
+      deleted: s.deleted.map((d) => (d.status === "inTray" && items.some((i) => i.id === d.id || (i.entry && i.entry === d.entry)) ? { ...d, status: "restored" } : d)),
+    }));
+    log(t("audit.restored"), t("tray.items", { count: items.length }), items.reduce((s, i) => s + i.size, 0));
+    // Items from before a relaunch aren't in this tree: a quick (incremental) rescan shows them.
+    if (result.rescan) void get().scanDisk();
+  }
+
+  async function emptyTrash(id: number) {
+    const { disk } = get();
+    const n = disk.nodes[id];
+    const result = await api.emptyTrash(disk, id).catch(failed);
+    if (!result) return;
+    if (result.dryRun) return get().notify(t("dryRun.trashToast", { size: fmtBytes(result.bytes) }));
+    set((s) => ({ disk: result.disk, diskVersion: s.diskVersion + 1, selected: null, detailOpen: false }));
+    if (n) {
+      log(t("audit.deleted"), n.path, result.bytes);
+      record([n], "deleted");
+    }
+    get().notify(t("trash.emptiedToast", { size: fmtBytes(result.bytes) }));
+    ascendIfEmpty();
+  }
+
   /** Adds deleted items to History. */
-  function record(items: DiskNode[], status: DeletedEntry["status"]) {
+  function record(items: DiskNode[], status: DeletedEntry["status"], trayEntries?: Map<number, string | undefined>) {
     const at = Date.now();
-    const entries = items.map((n) => ({ id: n.id, name: n.name, path: n.path, size: n.size, category: n.category, what: whatItWas(n), at, status }));
+    const entries = items.map((n) => ({ id: n.id, name: n.name, path: n.path, size: n.size, category: n.category, what: whatItWas(n), at, status, entry: trayEntries?.get(n.id) }));
     set((s) => ({ deleted: [...entries, ...s.deleted].slice(0, 500) }));
   }
 
@@ -198,6 +303,7 @@ export const useApp = create<State & Actions>((set, get) => {
     checked: [],
     confirmDelete: null,
     deleted: [],
+    dryRun: false,
 
     setInfo: (info) => set({ info }),
     setSystemScheme: (systemScheme) => set({ systemScheme }),
@@ -232,119 +338,82 @@ export const useApp = create<State & Actions>((set, get) => {
     select: (id, open = true) => set({ selected: id, detailOpen: id !== null && open }),
     closeDetail: () => set({ detailOpen: false, selected: null }),
 
-    addToTray: (ids, confirmed = false) => {
-      if (readOnly()) return;
-      const { disk, focus } = get();
-      // Keep items only move after the user confirmed the caution sheet; blocked ones never.
-      const items = ids
-        .map((id) => disk.nodes[id])
-        .filter((n) => n && deletable(disk, n.id) && (confirmed || n.safety !== "keep"));
-      if (!items.length) return;
-      // One flight per tile involved (many files can share a tile).
-      const flights: Flight[] = [];
-      const seen = new Set<number>();
-      for (const n of items) {
-        const tile = visibleTileOf(disk, focus, n.id);
-        if (tile === null || seen.has(tile) || flights.length >= 12) continue;
-        seen.add(tile);
-        const rect = tileRect(tile);
-        if (!rect) continue;
-        const whole = tile === n.id;
-        const from = whole ? rect : { x: rect.x + rect.w / 2 - 22, y: rect.y + rect.h / 2 - 22, w: 44, h: 44 };
-        flights.push({ key: ++flightKey, id: n.id, from, color: categories[scheme()][disk.nodes[tile].category].accent, delay: flights.length * 0.05 });
-      }
-      const trayItems = items.map((n) => ({ id: n.id, name: n.name, size: n.size }));
-      set((s) => ({
-        tray: [...s.tray, ...trayItems],
-        batches: [{ id: ++batchId, at: Date.now(), items: trayItems, state: "inTray" }, ...s.batches],
-        flights: [...s.flights, ...flights],
-        selected: null,
-        detailOpen: false,
-        checked: s.checked.filter((c) => !items.some((n) => n.id === c)),
-        plan: remainingPlan(s.plan, items.map((n) => n.id)),
-      }));
-      for (const n of items) log(t("audit.quarantined"), n.path, n.size);
-      record(items, "inTray");
-      void api.quarantine(disk, items.map((n) => n.id)).then((d) => {
-        set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 }));
-        ascendIfEmpty();
-      });
-    },
+    addToTray: (ids, confirmed = false, handPicked = true) => void moveToTray(ids, confirmed, handPicked),
 
     toggleCheck: (id) => set((s) => ({ checked: s.checked.includes(id) ? s.checked.filter((c) => c !== id) : [...s.checked, id] })),
     clearChecks: () => set({ checked: [] }),
-    requestDelete: (ids) => {
+    requestDelete: (ids, handPicked = true) => {
       const { disk } = get();
+      // The Trash is emptied through the OS, and that's not undoable: always confirm.
+      const trash = ids.find((id) => disk.nodes[id]?.delegate);
+      if (trash !== undefined) return set({ confirmDelete: { ids: [trash], kind: "emptyTrash", handPicked }, detailOpen: false });
       const ok = ids.filter((id) => deletable(disk, id));
       if (!ok.length) return get().notify(ids.some((id) => cautionFor(disk, id).kind === "category") ? t("delete.categoryToast") : t("delete.blockedToast"));
-      if (strongest(disk, ok) === "none") {
-        get().addToTray(ok);
-        if (!get().info?.readOnly) get().notify(t("delete.toast"));
-        return;
-      }
-      set({ confirmDelete: ok, detailOpen: false });
+      if (strongest(disk, ok) === "none") return get().addToTray(ok, false, handPicked);
+      set({ confirmDelete: { ids: ok, kind: "caution", handPicked }, detailOpen: false });
+    },
+    requestDeleteNow: (ids) => set({ confirmDelete: { ids, kind: "deleteNow", handPicked: true }, detailOpen: false }),
+    requestEmptyTray: () => {
+      if (get().tray.length) set({ confirmDelete: { ids: [], kind: "emptyTray", handPicked: true } });
     },
     confirmDeleteRequest: () => {
-      const ids = get().confirmDelete ?? [];
+      const c = get().confirmDelete;
       set({ confirmDelete: null });
-      get().addToTray(ids, true);
-      if (!get().info?.readOnly) get().notify(t("delete.toast"));
+      if (!c) return;
+      if (c.kind === "caution") get().addToTray(c.ids, true, c.handPicked);
+      else if (c.kind === "deleteNow") get().deleteNow(c.ids);
+      else if (c.kind === "emptyTray") get().emptyTray();
+      else if (c.kind === "emptyTrash") void emptyTrash(c.ids[0]);
     },
     cancelDelete: () => set({ confirmDelete: null }),
+    setDryRun: (on) => {
+      set({ dryRun: on });
+      void api.setDryRun(on);
+    },
 
     deleteNow: (ids) => {
-      if (readOnly()) return;
-      const { disk } = get();
-      const items = ids.map((id) => disk.nodes[id]).filter((n) => n && n.safety === "safe" && n.parent >= 0);
-      if (!items.length) return;
-      // Fade and collapse first, then remove (no flight, so the difference is visible).
-      set({ deleting: items.map((n) => n.id), selected: null, detailOpen: false });
-      setTimeout(() => {
-        void api.deleteNow(disk, items.map((n) => n.id)).then((d) => {
-          set((s) => ({ disk: d, deleting: [], diskVersion: s.diskVersion + 1 }));
+      void (async () => {
+        const { disk } = get();
+        const items = ids.map((id) => disk.nodes[id]).filter((n) => n && n.safety === "safe" && deletable(disk, n.id));
+        if (!items.length) return get().notify(t("delete.notSafeToast"));
+        const result = await api.remove(disk, items.map((n) => n.id), { handPicked: true, deleteNow: true }).catch(failed);
+        if (!result) return;
+        if (result.dryRun) return get().notify(t("dryRun.deleteToast", { count: result.done.length, size: fmtBytes(result.bytes) }));
+        const done = new Set(result.done.map((d) => d.id));
+        const gone = items.filter((n) => done.has(n.id));
+        // Fade and collapse (no flight: nothing goes to the tray).
+        set({ deleting: gone.map((n) => n.id), selected: null, detailOpen: false });
+        setTimeout(() => {
+          set((s) => ({ disk: result.disk, deleting: [], diskVersion: s.diskVersion + 1 }));
           ascendIfEmpty();
-        });
-      }, 260);
-      for (const n of items) log(t("audit.deleted"), n.path, n.size);
-      record(items, "deleted");
+        }, 260);
+        for (const n of gone) log(t("audit.deleted"), n.path, n.size);
+        record(gone, "deleted");
+        reportSkipped(result.skipped.length);
+      })();
     },
 
     emptyTray: () => {
-      const { tray } = get();
-      if (!tray.length) return;
-      const total = tray.reduce((s, i) => s + i.size, 0);
-      void api.emptyTray(tray.map((i) => i.id));
-      set((s) => ({
-        tray: [],
-        batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "emptied" } : b)),
-        deleted: s.deleted.map((d) => (d.status === "inTray" ? { ...d, status: "deleted" } : d)),
-      }));
-      log(t("audit.emptied"), t("tray.items", { count: tray.length }), total);
-      get().notify(t("tray.emptiedToast"));
+      void (async () => {
+        const { tray } = get();
+        if (!tray.length) return;
+        const result = await api.emptyTray(tray).catch(failed);
+        if (!result) return;
+        if (result.dryRun) return get().notify(t("dryRun.emptyTrayToast", { size: fmtBytes(result.bytes) }));
+        set((s) => ({
+          tray: [],
+          batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "emptied" } : b)),
+          deleted: s.deleted.map((d) => (d.status === "inTray" ? { ...d, status: "deleted" } : d)),
+        }));
+        log(t("audit.emptied"), t("tray.items", { count: tray.length }), result.bytes);
+        get().notify(t("tray.emptiedToast"));
+      })();
     },
 
-    restoreTray: () => {
-      const { tray, disk } = get();
-      if (!tray.length) return;
-      set((s) => ({
-        tray: [],
-        batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "restored" } : b)),
-        deleted: s.deleted.map((d) => (d.status === "inTray" ? { ...d, status: "restored" } : d)),
-      }));
-      void api.restore(disk, tray.map((i) => i.id)).then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })));
-      log(t("audit.restored"), t("tray.items", { count: tray.length }), tray.reduce((s, i) => s + i.size, 0));
-    },
-
+    restoreTray: () => void restoreItems(get().tray),
     restoreItem: (id) => {
-      const { tray, disk } = get();
-      const item = tray.find((i) => i.id === id);
-      if (!item) return;
-      set((s) => ({
-        tray: s.tray.filter((i) => i.id !== id),
-        deleted: s.deleted.map((d) => (d.id === id && d.status === "inTray" ? { ...d, status: "restored" } : d)),
-      }));
-      void api.restore(disk, [id]).then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })));
-      log(t("audit.restored"), item.name, item.size);
+      const item = get().tray.find((i) => i.id === id || i.entry === String(id));
+      if (item) void restoreItems([item]);
     },
 
     freeGhost: () => {
@@ -365,7 +434,8 @@ export const useApp = create<State & Actions>((set, get) => {
     planFree: (bytes) => {
       const { disk } = get();
       const ranked = disk.nodes
-        .filter((n) => n.children.length === 0 && n.size > 0 && n.safety !== "keep" && n.kind !== "ghost" && n.parent >= 0 && attached(disk, n.id))
+        // Never pre-select Documents, Desktop or iCloud Drive items, or anything that can't go.
+        .filter((n) => n.children.length === 0 && n.size > 0 && n.safety !== "keep" && n.kind !== "ghost" && n.parent >= 0 && attached(disk, n.id) && deletable(disk, n.id) && !handPickOnly(n))
         .map((n) => ({ n, score: n.size * unusedFactor(n.lastOpenedDays) * (n.safety === "safe" ? 1 : 0.7) }))
         .sort((a, b) => b.score - a.score);
       const ids: number[] = [];
@@ -400,7 +470,8 @@ export const useApp = create<State & Actions>((set, get) => {
       const off = api.onScanProgress((p) => set({ scanProgress: p }));
       try {
         const disk = await api.scan();
-        set((s) => ({ disk, focus: disk.root, tray: [], plan: null, diskVersion: s.diskVersion + 1, scanKey: s.scanKey + 1 }));
+        // The mock regenerates its tree, so its tray resets; the real tray lives in the core.
+        set((s) => ({ disk, focus: disk.root, tray: mockMode() ? [] : s.tray, plan: null, diskVersion: s.diskVersion + 1, scanKey: s.scanKey + 1 }));
         if (disk.summary?.cancelled) get().notify(t("scan.cancelledToast"));
       } catch {
         get().notify(t("scan.failedToast"));
@@ -433,7 +504,10 @@ export const useApp = create<State & Actions>((set, get) => {
     quitApp: (appId) => {
       if (readOnly()) return;
       log(t("audit.quit"), get().disk.nodes[appId].name, 0);
-      void api.quitApp(get().disk, appId).then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })));
+      void api
+        .quitApp(get().disk, appId)
+        .then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })))
+        .catch(failed);
     },
     confirmUninstall: (appId, ids) => {
       if (readOnly()) return set({ uninstall: null });
@@ -468,6 +542,9 @@ export function boot() {
   void (async () => {
     const info = await api.appInfo();
     setInfo(info);
+    // The tray survives restarts (it lives in the core); dry-run starts on in dev builds.
+    const cleanup = await api.cleanupStatus().catch(() => null);
+    if (cleanup) useApp.setState({ dryRun: cleanup.dryRun, tray: cleanup.tray });
     const cached = await api.cachedScan().catch(() => null);
     if (cached) useApp.setState((s) => ({ disk: cached, focus: cached.root, scan: "done", diskVersion: s.diskVersion + 1 }));
     let onboarded = false;

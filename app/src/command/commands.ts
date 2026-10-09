@@ -79,6 +79,7 @@ const OVERLAYS: [Exclude<Overlay, null | "design" | "onboarding">, string[]][] =
   ["settings", ["settings", "preferences"]],
   ["audit", ["audit log", "log", "history of actions"]],
   ["history", ["history", "deleted", "deleted items", "what did i delete", "quarantine history", "restore history"]],
+  ["junk", ["system junk", "junk", "clean junk", "caches", "clean up"]],
 ];
 
 export function suggest(raw: string): Suggestion[] {
@@ -111,7 +112,7 @@ export function suggest(raw: string): Suggestion[] {
     ["map", ["map view", "map"], () => app.setViewMode("map")],
     ["out", ["zoom out", "back", "up"], () => app.zoomOut()],
     ["home", ["home", "whole disk", "top"], () => app.setFocus(app.disk.root)],
-    ["empty", ["empty tray", "empty quarantine"], () => app.emptyTray()],
+    ["empty", ["empty tray", "empty quarantine"], () => app.requestEmptyTray()],
     ["restore", ["restore tray", "undo"], () => app.restoreTray()],
     ["design", ["design system", "design"], () => app.setOverlay("design")],
     ["permissions", ["permissions", "full disk access", "welcome", "onboarding"], () => app.setOverlay("onboarding")],

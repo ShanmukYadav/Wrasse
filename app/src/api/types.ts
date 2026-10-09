@@ -47,6 +47,81 @@ export type DiskNode = {
   leftover?: "caches" | "support" | "containers" | "logs" | "preferences" | "savedState";
   /** Extra label from the scanner: "In iCloud only", "Couldn't read", "Shares space with clones". */
   note?: string;
+  /** The junk rule covering this item; `why` then holds its explanation ("Why is this safe?"). */
+  ruleId?: string;
+  ruleRoot?: string;
+  /** Cleaned through the OS (the Trash) rather than item by item. */
+  delegate?: boolean;
+};
+
+/** Why the safety layer left an item alone. */
+export type SkipReason =
+  | "protected"
+  | "handPickOnly"
+  | "excluded"
+  | "otherVolume"
+  | "otherUser"
+  | "inCloudOnly"
+  | "outsideRoot"
+  | "notFound"
+  | "changed"
+  | "inUse"
+  | "notSafeForDeleteNow"
+  | "failed";
+
+export type RemoveOptions = {
+  /** The user picked these themselves (required for Documents, Desktop and iCloud Drive). */
+  handPicked: boolean;
+  /** Delete for good instead of moving to the tray (Safe items only; not undoable). */
+  deleteNow?: boolean;
+};
+
+export type RemoveOutcome = {
+  disk: Disk;
+  /** Removed (or, in dry-run, would be), with the tray entry for restore. */
+  done: { id: number; entry?: string }[];
+  skipped: { id: number; reason: SkipReason }[];
+  dryRun: boolean;
+  bytes: number;
+};
+
+export type RemovePreview = {
+  bytes: number;
+  undoable: boolean;
+  /** Items iCloud syncs: removing them removes them on the user's other devices too. */
+  synced: number[];
+  skipped: { id: number; reason: SkipReason }[];
+};
+
+/** Something in the tray. `id` is the node it came from (-1 after a relaunch). */
+export type TrayItem = { id: number; name: string; size: number; entry?: string; path?: string };
+
+export type CleanupStatus = {
+  /** Nothing is moved or deleted; actions report what they would do. */
+  dryRun: boolean;
+  dev: boolean;
+  tray: TrayItem[];
+};
+
+export type JunkMatch = {
+  ruleId: string;
+  ruleName: string;
+  category: string;
+  path: string;
+  root: string;
+  safety: "safe" | "yourCall";
+  explanation: string;
+  regenerates: boolean;
+  custom: boolean;
+  bytes: number;
+  delegate: string | null;
+};
+
+export type JunkReport = {
+  matches: JunkMatch[];
+  /** Rules waiting for their app to close. */
+  held: { ruleId: string; ruleName: string; app: string }[];
+  errors: { id: string; why: string }[];
 };
 
 /** Totals from a real scan (absent in mock data). */

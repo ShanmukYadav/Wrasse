@@ -48,6 +48,16 @@ pub fn scan_volume(control: &ScanControl, cache_dir: Option<&Path>) -> io::Resul
         hf_models: &crate::scan::hf::hf_models,
     };
     let mut disk = breakdown::build(&input);
+    if let (Some(home), Some(dir)) = (platform::home_dir(), cache_dir) {
+        let arena_size = |p: &Path| {
+            let arena = format!("{}{}", prefix.trim_end_matches('/'), p.display());
+            tree.find(&arena)
+                .map(|id| tree.node(id).size)
+                .unwrap_or_else(|| crate::quarantine::size_on_disk(p))
+        };
+        let report = junk_with(&home, dir, &arena_size);
+        annotate(&mut disk, &report.matches);
+    }
     disk.summary.incremental = changed.is_some();
     disk.summary.changed_folders = changed.unwrap_or(0) as u64;
     if let Some(dir) = cache_dir {
@@ -104,5 +114,63 @@ fn inside(root: &Path, path: PathBuf) -> PathBuf {
     match path.strip_prefix("/") {
         Ok(rel) if root != Path::new("/") => root.join(rel),
         _ => path,
+    }
+}
+
+/// What the junk rules find, for the System Junk screen.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JunkReport {
+    pub matches: Vec<crate::rules::Match>,
+    pub held: Vec<crate::rules::Held>,
+    pub errors: Vec<crate::rules::RuleError>,
+}
+
+/// Junk rules applied now, with sizes from the last saved scan where possible.
+pub fn junk(data_dir: &Path) -> Option<JunkReport> {
+    let home = platform::home_dir()?;
+    let (_, prefix) = platform::scan_root();
+    let saved = cache::load_tree(data_dir);
+    let size = |p: &Path| {
+        let arena = format!("{}{}", prefix.trim_end_matches('/'), p.display());
+        saved
+            .as_ref()
+            .and_then(|s| s.tree.find(&arena).map(|id| s.tree.node(id).size))
+            .unwrap_or_else(|| crate::quarantine::size_on_disk(p))
+    };
+    Some(junk_with(&home, data_dir, &size))
+}
+
+fn junk_with(home: &Path, data_dir: &Path, size: &dyn Fn(&Path) -> u64) -> JunkReport {
+    let protected = platform::protected_paths(home, data_dir);
+    let (rules, errors) = crate::rules::load_all(home, data_dir, &protected);
+    let running = platform::running_bundle_ids();
+    let (matches, held) = crate::rules::find(&rules, &running, size);
+    JunkReport {
+        matches,
+        held,
+        errors,
+    }
+}
+
+/// Gives scan items covered by a rule that rule's safety and explanation.
+fn annotate(disk: &mut UiDisk, matches: &[crate::rules::Match]) {
+    let by_path: HashMap<String, &crate::rules::Match> = matches
+        .iter()
+        .map(|m| (m.path.to_string_lossy().into_owned(), m))
+        .collect();
+    for n in &mut disk.nodes {
+        let Some(m) = by_path.get(&n.path) else {
+            continue;
+        };
+        n.rule_id = Some(m.rule_id.clone());
+        n.rule_root = Some(m.root.to_string_lossy().into_owned());
+        n.why = m.explanation.clone();
+        n.rebuildable = m.regenerates;
+        n.delegate = m.delegate.is_some();
+        n.safety = match m.safety {
+            crate::safety::Safety::Safe => breakdown::Safety::Safe,
+            crate::safety::Safety::YourCall => breakdown::Safety::YourCall,
+        };
     }
 }

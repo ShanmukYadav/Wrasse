@@ -2,9 +2,10 @@ import { Icon } from "../design/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Bytes } from "../components/Bytes";
+import { formatBytes } from "../lib/format";
 import { t, type MessageKey } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
-import type { DiskNode } from "../api";
+import { api, type DiskNode, type JunkMatch, type JunkReport } from "../api";
 import { useApp, type DeletedEntry, type Overlay } from "../store/app";
 import { iconFor } from "../design/icons/semantic";
 import { categories } from "../design/tokens";
@@ -36,7 +37,7 @@ export function Overlays() {
             role="dialog"
             aria-modal="true"
             aria-label={t(`overlay.${overlay}`)}
-            className={`overlay-panel glass-css ${overlay === "history" ? "is-wide" : ""}`}
+            className={`overlay-panel glass-css ${overlay === "history" || overlay === "junk" ? "is-wide" : ""}`}
             onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1, transition: spring.soft }}
@@ -67,6 +68,7 @@ function Panel({ overlay }: { overlay: Exclude<Overlay, null | "design" | "onboa
         {overlay === "settings" && <Settings />}
         {overlay === "audit" && <Audit />}
         {overlay === "history" && <History />}
+        {overlay === "junk" && <Junk />}
       </div>
     </div>
   );
@@ -132,6 +134,9 @@ function Settings() {
       </Setting>
       <Setting title={t("settings.motion")}>
         <Segmented label="motion" value={s.motion} onChange={(motion) => s.setPrefs({ motion })} options={[["system", "settings.system"], ["reduce", "settings.reduce"], ["full", "settings.full"]]} />
+      </Setting>
+      <Setting title={t("settings.dryRun")} note={t("settings.dryRunNote")}>
+        <Switch checked={s.dryRun} label={t("settings.dryRun")} onChange={(on) => s.setDryRun(on)} />
       </Setting>
     </div>
   );
@@ -235,6 +240,127 @@ function HistoryRow({ entry: e, node, scheme, onRestore }: { entry: DeletedEntry
           </button>
         )}
       </span>
+    </li>
+  );
+}
+
+/** System Junk: what the junk rules found, grouped by rule, each with "Why is this safe?". Safe
+ *  items start ticked, "your call" ones don't. Cleaning moves them to the tray (restorable). */
+function Junk() {
+  const [report, setReport] = useState<JunkReport | null>(null);
+  const [off, setOff] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const units = useApp((s) => s.info?.units ?? "decimal");
+  const dryRun = useApp((s) => s.dryRun);
+  const { notify, scanDisk, requestDelete, setOverlay } = useApp.getState();
+  const trashNode = useApp((s) => s.disk.nodes.find((n) => n.delegate && n.size > 0));
+  useEffect(() => {
+    void api.junk().then((r) => {
+      setReport(r);
+      setOff(new Set(r.matches.filter((m) => m.safety !== "safe").map((m) => m.path)));
+    });
+  }, []);
+  if (!report) return <p className="text-label text-muted">{t("junk.loading")}</p>;
+  const fmt = (b: number) => {
+    const f = formatBytes(b, units);
+    return `${f.value} ${f.unit}`;
+  };
+  const items = report.matches.filter((m) => !m.delegate);
+  const groups = [...new Set(items.map((m) => m.ruleId))].map((id) => items.filter((m) => m.ruleId === id));
+  const picked = items.filter((m) => !off.has(m.path));
+  const pickedBytes = picked.reduce((s, m) => s + m.bytes, 0);
+  const toggle = (paths: string[], on: boolean) =>
+    setOff((prev) => {
+      const next = new Set(prev);
+      for (const p of paths) {
+        if (on) next.delete(p);
+        else next.add(p);
+      }
+      return next;
+    });
+  async function clean() {
+    setBusy(true);
+    const r = await api.removeJunk(picked).catch((e) => {
+      notify(String(e));
+      return null;
+    });
+    setBusy(false);
+    if (!r) return;
+    if (r.dryRun) return notify(t("dryRun.trayToast", { count: r.done, size: fmt(r.bytes) }));
+    notify(t("junk.cleanedToast", { count: r.done, size: fmt(r.bytes) }));
+    setOverlay(null);
+    void scanDisk();
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {items.length === 0 && <p className="text-label text-muted">{t("junk.empty")}</p>}
+      {report.held.map((h) => (
+        <p key={h.ruleId} className="text-caption text-your-call">
+          {t("junk.held", { name: h.ruleName, app: h.app })}
+        </p>
+      ))}
+      <ul className="junk-groups">
+        {groups.map((g) => (
+          <JunkGroup key={g[0].ruleId} items={g} off={off} fmt={fmt} onToggle={toggle} />
+        ))}
+      </ul>
+      {trashNode && (
+        <div className="row">
+          <span className="text-label">{t("junk.trash", { size: fmt(trashNode.size) })}</span>
+          <button type="button" className="btn focus-ring" onClick={() => requestDelete([trashNode.id])}>
+            {t("confirm.emptyTrashTitle")}
+          </button>
+        </div>
+      )}
+      {items.length > 0 && (
+        <div className="flex items-center gap-3">
+          <button type="button" className="btn btn-primary focus-ring" disabled={!picked.length || busy} onClick={() => void clean()}>
+            <Icon name="tray" size={16} /> {t("junk.clean", { count: picked.length, size: fmt(pickedBytes) })}
+          </button>
+          <span className="text-caption text-muted">{dryRun ? t("confirm.dryRunNote") : t("caution.trayNote")}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JunkGroup({ items, off, fmt, onToggle }: { items: JunkMatch[]; off: Set<string>; fmt: (b: number) => string; onToggle: (paths: string[], on: boolean) => void }) {
+  const [open, setOpen] = useState(false);
+  const first = items[0];
+  const allOn = items.every((m) => !off.has(m.path));
+  const total = items.reduce((s, m) => s + m.bytes, 0);
+  return (
+    <li className="junk-group">
+      <div className="junk-head">
+        <button type="button" role="checkbox" aria-checked={allOn} aria-label={first.ruleName} className={`plan-tick focus-ring ${allOn ? "is-on" : ""}`} onClick={() => onToggle(items.map((m) => m.path), !allOn)}>
+          {allOn && <Icon name="check" tone="white" size={16} />}
+        </button>
+        <button type="button" className="junk-title focus-ring" onClick={() => setOpen(!open)} aria-expanded={open}>
+          <span className="text-label text-strong">{first.ruleName}</span>
+          <span className={`chip ${first.safety === "safe" ? "chip-green" : "chip-amber"}`}>{first.safety === "safe" ? t("safety.safe") : t("safety.yourCall")}</span>
+          {first.custom && <span className="chip chip-protected">{t("junk.custom")}</span>}
+          <span className="flex-1" />
+          <span className="text-caption text-muted">{t("junk.count", { count: items.length })}</span>
+          <span className="caution-size tabular">{fmt(total)}</span>
+          <Icon name={open ? "chevronDown" : "chevronRight"} size={16} />
+        </button>
+      </div>
+      <p className="text-caption text-muted junk-why">
+        <span className="text-strong">{t("detail.whySafe")}</span> {first.explanation} <span className="junk-rule">{t("detail.rule", { id: first.ruleId })}</span>
+      </p>
+      {open && (
+        <ul className="junk-items">
+          {items.map((m) => (
+            <li key={m.path} className="junk-item">
+              <button type="button" role="checkbox" aria-checked={!off.has(m.path)} aria-label={m.path} className={`plan-tick focus-ring ${!off.has(m.path) ? "is-on" : ""}`} onClick={() => onToggle([m.path], off.has(m.path))}>
+                {!off.has(m.path) && <Icon name="check" tone="white" size={16} />}
+              </button>
+              <MiddleEllipsis text={m.path} className="history-path" />
+              <span className="caution-size tabular">{fmt(m.bytes)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   );
 }

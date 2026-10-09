@@ -484,3 +484,18 @@ pub fn trash_dir(home: &Path) -> Option<PathBuf> {
         None
     }
 }
+
+/// Bundle ids of running apps (macOS), for rules that need their app closed.
+pub fn running_bundle_ids() -> Vec<String> {
+    let mut ids: Vec<String> = running_executables()
+        .iter()
+        .filter_map(|exe| {
+            let s = exe.to_string_lossy();
+            let end = s.find(".app/Contents/MacOS/")?;
+            bundle_id(Path::new(&s[..end + 4]))
+        })
+        .collect();
+    ids.sort();
+    ids.dedup();
+    ids
+}

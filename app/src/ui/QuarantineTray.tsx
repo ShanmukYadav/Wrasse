@@ -10,7 +10,7 @@ import { trayBytes, useApp } from "../store/app";
 export function QuarantineTray() {
   const tray = useApp((s) => s.tray);
   const flights = useApp((s) => s.flights.length);
-  const { emptyTray, restoreTray } = useApp.getState();
+  const { requestEmptyTray, restoreTray } = useApp.getState();
   const [scope, animate] = useAnimate();
   const prevFlights = useRef(flights);
 
@@ -58,7 +58,7 @@ export function QuarantineTray() {
             <motion.button type="button" className="btn focus-ring" onClick={restoreTray} {...pressable}>
               {t("tray.restore")}
             </motion.button>
-            <motion.button type="button" className="btn btn-primary focus-ring" onClick={emptyTray} {...pressable}>
+            <motion.button type="button" className="btn btn-primary focus-ring" onClick={requestEmptyTray} {...pressable}>
               {t("tray.emptyNow")}
             </motion.button>
           </motion.div>

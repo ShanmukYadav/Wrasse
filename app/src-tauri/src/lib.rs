@@ -1,5 +1,6 @@
 //! Thin Tauri wrapper around wrasse-core. All logic lives in the core crate.
 
+mod cleanup;
 mod glass;
 mod scanning;
 
@@ -34,7 +35,7 @@ fn app_info() -> AppInfo {
         units: platform.units(),
         dev: cfg!(debug_assertions),
         bench: std::env::var("WRASSE_BENCH").is_ok_and(|v| v == "1"),
-        read_only: true,
+        read_only: false,
         // Set only by test runs (dev or release benchmarks); users never see it.
         auto_scan: std::env::var("WRASSE_AUTOSCAN").is_ok_and(|v| v == "1"),
     }
@@ -75,7 +76,9 @@ pub fn run() {
             }
         }))
         .manage(scanning::ScanState::default())
+        .manage(cleanup::CleanupState::default())
         .setup(|app| {
+            cleanup::init(app.handle());
             if let Some(window) = app.get_webview_window("main") {
                 glass::install(&window);
             }
@@ -92,7 +95,18 @@ pub fn run() {
             scanning::pause_scan,
             scanning::cached_scan,
             scanning::full_disk_access,
-            scanning::open_full_disk_access_settings
+            scanning::open_full_disk_access_settings,
+            cleanup::cleanup_status,
+            cleanup::set_dry_run,
+            cleanup::preview_removal,
+            cleanup::remove_items,
+            cleanup::restore_items,
+            cleanup::purge_items,
+            cleanup::empty_trash,
+            cleanup::junk_report,
+            cleanup::never_touch,
+            cleanup::never_touch_list,
+            cleanup::audit_recent
         ])
         .run(tauri::generate_context!())
         .expect("error while running Wrasse");

@@ -60,7 +60,7 @@ function Detail({ id }: { id: number }) {
   const units = useApp((s) => s.info?.units ?? "decimal");
   const fileManager = useApp((s) => s.info?.fileManager ?? "Finder");
   const scheme = useScheme();
-  const { closeDetail, addToTray, deleteNow, freeGhost, notify, setFocus, openUninstall, requestDelete } = useApp.getState();
+  const { closeDetail, requestDeleteNow, freeGhost, notify, setFocus, openUninstall, requestDelete } = useApp.getState();
   const blocked = !deletable(disk, id);
   const n = disk.nodes[id];
   const ghost = n.kind === "ghost";
@@ -102,7 +102,15 @@ function Detail({ id }: { id: number }) {
         <dd>{t(`category.${n.category}`)}</dd>
       </dl>
 
-      <p className="detail-why">{explanation}</p>
+      {n.ruleId ? (
+        <div className="detail-rule">
+          <span className="text-label text-strong">{t("detail.whySafe")}</span>
+          <p className="detail-why">{explanation}</p>
+          <span className="text-caption text-muted">{t("detail.rule", { id: n.ruleId })}</span>
+        </div>
+      ) : (
+        <p className="detail-why">{explanation}</p>
+      )}
 
       <div className="detail-actions">
         {ghost ? (
@@ -117,12 +125,12 @@ function Detail({ id }: { id: number }) {
                 <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => openUninstall(n.parent)} {...pressable}>
                   <Icon name="trash" size={16} /> {t("detail.uninstall", { name: disk.nodes[n.parent].name })}
                 </motion.button>
-                <motion.button type="button" className="btn btn-wide focus-ring" onClick={() => addToTray([n.id])} {...pressable}>
+                <motion.button type="button" className="btn btn-wide focus-ring" onClick={() => requestDelete([n.id])} {...pressable}>
                   <Icon name="tray" size={16} /> {t("detail.removeAppOnly", { size: sizeText })}
                 </motion.button>
               </>
             ) : n.leftover ? (
-              <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => addToTray([n.id])} {...pressable}>
+              <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => requestDelete([n.id])} {...pressable}>
                 <Icon name="tray" size={16} /> {t("detail.remove", { size: sizeText })}
               </motion.button>
             ) : (
@@ -133,7 +141,7 @@ function Detail({ id }: { id: number }) {
               )
             )}
             {n.safety === "safe" && (
-              <motion.button type="button" className="btn btn-danger btn-wide focus-ring" onClick={() => deleteNow([n.id])} {...pressable}>
+              <motion.button type="button" className="btn btn-danger btn-wide focus-ring" onClick={() => requestDeleteNow([n.id])} {...pressable}>
                 <Icon name="trash" size={16} /> {t("detail.deleteNow")} · {t("detail.notUndoable")}
               </motion.button>
             )}

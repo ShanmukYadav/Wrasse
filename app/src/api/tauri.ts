@@ -1,13 +1,35 @@
-// The real backend: Tauri commands over the Rust core (app/src-tauri/src/scanning.rs).
-// Phase 1 is read-only, so cleanup actions reject; the UI checks appInfo().readOnly first.
+// The real backend: Tauri commands over the Rust core (app/src-tauri/src/scanning.rs and
+// cleanup.rs). Every removal goes through the core's safety layer.
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { WrasseApi } from ".";
 import type { AppInfo } from "../lib/backend";
 import { insights } from "./insights";
-import type { Disk, ScanProgress } from "./types";
+import { detach, reattach } from "./tree";
+import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem } from "./types";
 
-const readOnly = () => Promise.reject(new Error("Cleanup isn't available yet: this version only scans."));
+type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean };
+type CoreReport = { done: { path: string; bytes: number; entry: string | null }[]; skipped: { path: string; reason: SkipReason }[]; bytes: number; dryRun: boolean };
+type CorePreview = { bytes: number; undoable: boolean; synced: string[]; skipped: { path: string; reason: SkipReason }[] };
+type CoreTrayEntry = { id: string; name: string; path: string; bytes: number; at: number; ruleId: string | null };
+
+function request(n: DiskNode, opts: RemoveOptions): ItemRequest {
+  return {
+    path: n.path,
+    // "Keep" items only reach here after the caution sheet; they go to the tray as "your call".
+    safety: n.safety === "safe" ? "safe" : "yourCall",
+    ruleId: n.ruleId,
+    ruleRoot: n.ruleRoot,
+    handPicked: opts.handPicked,
+  };
+}
+
+/** Maps the core's per-path results back to node ids. */
+function byPath(disk: Disk, ids: number[]) {
+  const m = new Map<string, number>();
+  for (const id of ids) m.set(disk.nodes[id].path, id);
+  return (path: string) => m.get(path) ?? -1;
+}
 
 export const tauriApi: WrasseApi = {
   appInfo: () => invoke<AppInfo>("app_info"),
@@ -30,10 +52,52 @@ export const tauriApi: WrasseApi = {
     };
   },
   insights,
-  quarantine: readOnly,
-  restore: readOnly,
-  emptyTray: readOnly,
-  deleteNow: readOnly,
-  thinSnapshots: readOnly,
-  quitApp: readOnly,
+
+  async preview(disk, ids, opts) {
+    const idOf = byPath(disk, ids);
+    const p = await invoke<CorePreview>("preview_removal", { items: ids.map((id) => request(disk.nodes[id], opts)), deleteNow: !!opts.deleteNow });
+    return { bytes: p.bytes, undoable: p.undoable, synced: p.synced.map(idOf), skipped: p.skipped.map((s) => ({ id: idOf(s.path), reason: s.reason })) };
+  },
+  async remove(disk, ids, opts) {
+    const idOf = byPath(disk, ids);
+    const r = await invoke<CoreReport>("remove_items", { items: ids.map((id) => request(disk.nodes[id], opts)), deleteNow: !!opts.deleteNow });
+    const done = r.done.map((d) => ({ id: idOf(d.path), entry: d.entry ?? undefined })).filter((d) => d.id >= 0);
+    if (!r.dryRun) detach(disk, done.map((d) => d.id));
+    return { disk, done, skipped: r.skipped.map((s) => ({ id: idOf(s.path), reason: s.reason })), dryRun: r.dryRun, bytes: r.bytes };
+  },
+  async removeJunk(items: JunkMatch[]) {
+    const reqs: ItemRequest[] = items.map((m) => ({ path: m.path, safety: m.safety, ruleId: m.ruleId, ruleRoot: m.root, handPicked: false }));
+    const r = await invoke<CoreReport>("remove_items", { items: reqs, deleteNow: false });
+    return { done: r.done.length, bytes: r.bytes, skipped: r.skipped.length, dryRun: r.dryRun };
+  },
+  async restore(disk, items: TrayItem[]) {
+    const ids = items.map((i) => i.entry).filter((e): e is string => !!e);
+    await invoke("restore_items", { ids });
+    // Items still in this session's tree come back in place; others need a (quick) rescan.
+    const known = items.filter((i) => i.id >= 0).map((i) => i.id);
+    reattach(disk, known);
+    return { disk, rescan: known.length < items.length };
+  },
+  async emptyTray(items) {
+    const ids = items.map((i) => i.entry).filter((e): e is string => !!e);
+    const status = await invoke<{ dryRun: boolean }>("cleanup_status");
+    const bytes = await invoke<number>("purge_items", { ids });
+    return { bytes, dryRun: status.dryRun };
+  },
+  async emptyTrash(disk, trashId) {
+    const status = await invoke<{ dryRun: boolean }>("cleanup_status");
+    const bytes = await invoke<number>("empty_trash");
+    if (!status.dryRun) detach(disk, [trashId]);
+    return { disk, done: [{ id: trashId }], skipped: [], dryRun: status.dryRun, bytes };
+  },
+  async cleanupStatus() {
+    const s = await invoke<{ dryRun: boolean; dev: boolean; tray: CoreTrayEntry[] }>("cleanup_status");
+    return { dryRun: s.dryRun, dev: s.dev, tray: s.tray.map((e) => ({ id: -1, name: e.name, size: e.bytes, entry: e.id, path: e.path })) };
+  },
+  setDryRun: (on) => invoke("set_dry_run", { on }),
+  junk: () => invoke<JunkReport>("junk_report"),
+  neverTouch: (path, on) => invoke<string[]>("never_touch", { path, on }),
+
+  thinSnapshots: () => Promise.reject(new Error("Snapshot thinning arrives with Space Diagnostics (Phase 4).")),
+  quitApp: () => Promise.reject(new Error("Quitting apps arrives with the uninstaller (Phase 3).")),
 };

@@ -206,7 +206,7 @@ function PlanMeter({ plan }: { plan: Plan }) {
         })}
       </ol>
       <div className="flex items-center gap-2">
-        <button type="button" className="btn btn-primary focus-ring" onClick={() => requestDelete(picked)} disabled={!picked.length}>
+        <button type="button" className="btn btn-primary focus-ring" onClick={() => requestDelete(picked, false)} disabled={!picked.length}>
           <Icon name="trash" size={16} /> {t("plan.deletePicked", { count: picked.length, size: `${pf.value} ${pf.unit}` })}
         </button>
         <button type="button" className="link focus-ring" onClick={() => setPlanAll(!allOn)}>

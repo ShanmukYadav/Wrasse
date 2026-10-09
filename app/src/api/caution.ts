@@ -24,9 +24,18 @@ export function isOsFolder(n: DiskNode): boolean {
   return MAC_HOME.test(n.path) || MAC_TOP.test(n.path) || WIN_HOME.test(n.path) || WIN_TOP.test(n.path);
 }
 
+/** Documents, Desktop and iCloud Drive: only items the user picks by hand, only to the tray,
+ *  never pre-selected (Free Up Space, Large & Old). The folders themselves are OS folders. */
+const HAND_PICK = /^(~|\/Users\/[^/]+)\/(Documents|Desktop|Library\/Mobile Documents|Library\/CloudStorage)\/.+/;
+export function handPickOnly(n: DiskNode): boolean {
+  return HAND_PICK.test(n.path);
+}
+
 export function cautionFor(disk: Disk, id: number): Caution {
   const n = disk.nodes[id];
   if (!n || n.parent < 0 || n.kind === "ghost" || n.kind === "volume" || n.category === "system" || n.readOnly) return { kind: "blocked" };
+  // In iCloud only (0 bytes here): nothing to free, and removing it would remove it from iCloud.
+  if (n.note === "In iCloud only") return { kind: "blocked" };
   // A whole category can't go in one click: open it and choose what to delete inside.
   if (n.depth === 1) return { kind: "category" };
   if (isOsFolder(n)) return { kind: "osFolder" };

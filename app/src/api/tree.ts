@@ -1,5 +1,6 @@
-// Mock tree mutations for the prototype: detach (quarantine/delete) and reattach (restore).
-import { attached, LENS_IDS, type Disk } from "../api/types";
+// The UI's copy of the tree after removals: detach (quarantined or deleted items leave their
+// parent) and reattach (restored). Shared by the mock and the real API.
+import { attached, LENS_IDS, type Disk } from "./types";
 
 /** Adds (sign 1) or removes (sign -1) a node's bytes and lens totals from all its ancestors. */
 function updateAncestors(disk: Disk, id: number, sign: 1 | -1) {

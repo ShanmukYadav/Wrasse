@@ -138,6 +138,15 @@ pub struct UiNode {
     /// Labels beyond the UI's type: iCloud-only, unreadable, shares blocks with clones.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub note: Option<String>,
+    /// The junk rule that covers this item ("Why is this safe?" shows its explanation).
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub rule_id: Option<String>,
+    /// That rule's root: removal checks the item stays inside it.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub rule_root: Option<String>,
+    /// Cleaned through the OS rather than item by item (the Trash).
+    #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+    pub delegate: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1209,6 +1218,9 @@ impl Builder<'_> {
             app_bundle: false,
             leftover: None,
             note: None,
+            rule_id: None,
+            rule_root: None,
+            delegate: false,
         });
         if let Some(p) = parent {
             self.nodes[p as usize].children.push(id);
