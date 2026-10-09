@@ -183,8 +183,25 @@ function History() {
   const disk = useApp((s) => s.disk);
   const scheme = useScheme();
   const restoreItem = useApp((s) => s.restoreItem);
+  const trayCount = useApp((s) => s.tray.length);
   const [filter, setFilter] = useState<HistoryFilter>("all");
-  if (entries.length === 0) return <p className="text-label text-muted">{t("history.empty")}</p>;
+  const openTray = () => {
+    useApp.getState().setOverlay(null);
+    useApp.getState().setTrayOpen(true);
+  };
+  const trayLink = (
+    <button type="button" className="btn focus-ring" onClick={openTray}>
+      <Icon name="tray" size={16} /> {t("tray.open")}
+      {trayCount > 0 && <span className="text-muted"> · {t("tray.items", { count: trayCount })}</span>}
+    </button>
+  );
+  if (entries.length === 0)
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-label text-muted">{t("history.empty")}</p>
+        {trayLink}
+      </div>
+    );
   const shown = filter === "all" ? entries : entries.filter((e) => e.status === filter);
   const freed = entries.filter((e) => e.status !== "restored").reduce((s, e) => s + e.size, 0);
   return (
@@ -199,6 +216,7 @@ function History() {
           onChange={setFilter}
           options={[["all", "history.all"], ["inTray", "history.inTray"], ["deleted", "history.deleted"], ["restored", "history.restored"]]}
         />
+        {trayLink}
       </div>
       <ul className="history-list">
         {shown.map((e) => (

@@ -87,7 +87,7 @@ export const mockApi: WrasseApi = {
     return { disk, done: [{ id: trashId }], skipped: [], dryRun: false, bytes };
   },
   async cleanupStatus() {
-    return { dryRun: false, dev: true, tray: [] };
+    return { dryRun: false, dev: true, tray: [], keepDays: 7 };
   },
   async setDryRun() {},
   async junk() {

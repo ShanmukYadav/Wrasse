@@ -94,13 +94,17 @@ export type RemovePreview = {
 };
 
 /** Something in the tray. `id` is the node it came from (-1 after a relaunch). */
-export type TrayItem = { id: number; name: string; size: number; entry?: string; path?: string };
+/** Something in the tray. `id` is its node in this session's tree (-1 when it was moved before a
+ *  relaunch); `entry` is the core's tray entry; `batch` groups what one delete moved; `at` is when (ms). */
+export type TrayItem = { id: number; name: string; size: number; entry?: string; path?: string; batch?: string; at?: number };
 
 export type CleanupStatus = {
   /** Nothing is moved or deleted; actions report what they would do. */
   dryRun: boolean;
   dev: boolean;
   tray: TrayItem[];
+  /** Days a batch stays in the tray before it's emptied automatically. */
+  keepDays: number;
 };
 
 export type JunkMatch = {

@@ -97,6 +97,8 @@ pub struct Preview {
 #[serde(rename_all = "camelCase")]
 pub struct TrayEntry {
     id: String,
+    /// The batch it was moved in (one delete = one batch), for "Restore all" per batch.
+    batch: String,
     name: String,
     path: PathBuf,
     bytes: u64,
@@ -110,6 +112,8 @@ pub struct Status {
     dry_run: bool,
     dev: bool,
     tray: Vec<TrayEntry>,
+    /// Days a batch stays in the tray before it's emptied automatically.
+    keep_days: u64,
     log_path: Option<PathBuf>,
 }
 
@@ -137,6 +141,7 @@ fn tray(ctx: &Context) -> Vec<TrayEntry> {
             path: e.original,
             bytes: e.bytes,
             at: b.created_at,
+            batch: b.id,
             rule_id: e.rule_id,
             id: e.id,
         })
@@ -150,6 +155,7 @@ pub fn cleanup_status(state: State<'_, CleanupState>) -> Result<Status, String> 
             dry_run: state.dry_run.load(Ordering::Relaxed),
             dev: cfg!(debug_assertions),
             tray: tray(ctx),
+            keep_days: quarantine::DEFAULT_KEEP_DAYS,
             log_path: Some(ctx.audit.path().to_path_buf()),
         })
     })

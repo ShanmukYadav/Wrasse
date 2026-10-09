@@ -31,11 +31,16 @@ export function App() {
 
   useEffect(() => applyTokens(scheme, platform), [scheme, platform]);
 
-  // Esc goes up a level when nothing else is open.
+  // Esc goes up a level when nothing else is open. ⌘Z / Ctrl+Z undoes the last move to the tray.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = useApp.getState();
       const typing = (e.target as HTMLElement).tagName === "INPUT";
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "z" && !typing) {
+        e.preventDefault();
+        s.undoLastMove();
+        return;
+      }
       if (e.key === "Escape" && !typing && !s.overlay && !s.detailOpen && !s.commandOpen && s.uninstall === null && !s.confirmDelete) {
         if (s.checked.length) s.clearChecks();
         else s.zoomOut();

@@ -38,6 +38,9 @@ export type ConfirmKind =
   | "emptyTray"
   | "emptyTrash";
 
+/** A short message; with `action`, a button (e.g. Undo) and a longer stay. */
+export type Toast = { key: number; text: string; action?: { label: string; run: () => void } };
+
 export type Plan = { target: number; ids: number[]; total: number; off: number[] };
 export type Flight = { key: number; id: number; from: Rect; color: string; delay: number };
 
@@ -66,7 +69,13 @@ type State = {
   scanProgress: ScanProgress | null;
   /** Full Disk Access (macOS); null until checked. */
   fullDiskAccess: boolean | null;
-  toast: { key: number; text: string } | null;
+  toast: Toast | null;
+  /** The tray panel (bottom right) is open. */
+  trayOpen: boolean;
+  /** Days a batch stays in the tray before it's emptied automatically. */
+  keepDays: number;
+  /** What the last move to the tray moved, for Undo and ⌘Z. */
+  lastMove: TrayItem[];
   systemScheme: Scheme;
   theme: ThemePref;
   motion: MotionPref;
@@ -105,6 +114,11 @@ type Actions = {
   restoreTray: () => void;
   /** Puts one item from the tray back. */
   restoreItem: (id: number) => void;
+  /** Puts these tray items back (one item, a batch, anything). */
+  restoreEntries: (items: TrayItem[]) => void;
+  /** Undo (toast, ⌘Z, ⌘K): puts back what the last move to the tray moved. */
+  undoLastMove: () => void;
+  setTrayOpen: (open: boolean) => void;
   freeGhost: () => void;
   planFree: (bytes: number) => void;
   clearPlan: () => void;
@@ -119,7 +133,7 @@ type Actions = {
   setViewMode: (mode: "map" | "list") => void;
   setOverlay: (o: Overlay) => void;
   setCommandOpen: (open: boolean) => void;
-  notify: (text: string) => void;
+  notify: (text: string, action?: Toast["action"]) => void;
   endFlight: (key: number) => void;
   setPrefs: (p: Partial<Pick<State, "theme" | "motion">>) => void;
   openUninstall: (appId: number) => void;
@@ -189,7 +203,7 @@ export const useApp = create<State & Actions>((set, get) => {
     if (!result) return;
     if (result.dryRun) {
       set({ selected: null, detailOpen: false });
-      return get().notify(t("dryRun.trayToast", { count: result.done.length, size: fmtBytes(result.bytes) }));
+      return get().notify(t("dryRun.trayToast", { count: result.done.length, size: fmtBytes(result.bytes) }), { label: t("dryRun.turnOff"), run: () => get().setOverlay("settings") });
     }
     const entries = new Map(result.done.map((d) => [d.id, d.entry]));
     const moved = items.filter((n) => entries.has(n.id));
@@ -206,7 +220,9 @@ export const useApp = create<State & Actions>((set, get) => {
       const from = whole ? rect : { x: rect.x + rect.w / 2 - 22, y: rect.y + rect.h / 2 - 22, w: 44, h: 44 };
       flights.push({ key: ++flightKey, id: n.id, from, color: categories[scheme()][disk.nodes[tile].category].accent, delay: flights.length * 0.05 });
     }
-    const trayItems: TrayItem[] = moved.map((n) => ({ id: n.id, name: n.name, size: n.size, entry: entries.get(n.id), path: n.path }));
+    const at = Date.now();
+    const batch = `session-${batchId + 1}`;
+    const trayItems: TrayItem[] = moved.map((n) => ({ id: n.id, name: n.name, size: n.size, entry: entries.get(n.id), path: n.path, batch, at }));
     set((s) => ({
       disk: result.disk,
       diskVersion: s.diskVersion + 1,
@@ -217,10 +233,15 @@ export const useApp = create<State & Actions>((set, get) => {
       detailOpen: false,
       checked: s.checked.filter((c) => !moved.some((n) => n.id === c)),
       plan: remainingPlan(s.plan, moved.map((n) => n.id)),
+      lastMove: moved.length ? trayItems : s.lastMove,
     }));
     for (const n of moved) log(t("audit.quarantined"), n.path, n.size);
     record(moved, "inTray", entries);
-    if (moved.length) get().notify(t("delete.toast"));
+    if (moved.length) {
+      const size = fmtBytes(trayItems.reduce((s, i) => s + i.size, 0));
+      get().notify(t("tray.movedToast", { count: moved.length, size }), { label: t("tray.undo"), run: () => get().undoLastMove() });
+      void syncTray();
+    }
     reportSkipped(result.skipped.length);
     ascendIfEmpty();
   }
@@ -234,12 +255,26 @@ export const useApp = create<State & Actions>((set, get) => {
       disk: result.disk,
       diskVersion: s.diskVersion + 1,
       tray: s.tray.filter((i) => !ids.has(i.entry ?? String(i.id))),
+      lastMove: s.lastMove.filter((i) => !ids.has(i.entry ?? String(i.id))),
       batches: s.tray.length === items.length ? s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "restored" } : b)) : s.batches,
       deleted: s.deleted.map((d) => (d.status === "inTray" && items.some((i) => i.id === d.id || (i.entry && i.entry === d.entry)) ? { ...d, status: "restored" } : d)),
     }));
     log(t("audit.restored"), t("tray.items", { count: items.length }), items.reduce((s, i) => s + i.size, 0));
     // Items from before a relaunch aren't in this tree: a quick (incremental) rescan shows them.
     if (result.rescan) void get().scanDisk();
+  }
+
+  /** Takes the core's batch ids and times for the tray (the UI's own are provisional). */
+  async function syncTray() {
+    if (mockMode()) return;
+    const status = await api.cleanupStatus().catch(() => null);
+    if (!status) return;
+    set((s) => {
+      const nodeOf = new Map(s.tray.filter((i) => i.entry).map((i) => [i.entry, i.id]));
+      const lastMove = new Set(s.lastMove.map((i) => i.entry));
+      const tray = status.tray.map((i) => ({ ...i, id: nodeOf.get(i.entry) ?? i.id }));
+      return { tray, keepDays: status.keepDays, lastMove: tray.filter((i) => lastMove.has(i.entry)) };
+    });
   }
 
   async function emptyTrash(id: number) {
@@ -296,6 +331,9 @@ export const useApp = create<State & Actions>((set, get) => {
     scanProgress: null,
     fullDiskAccess: null,
     toast: null,
+    trayOpen: false,
+    keepDays: 7,
+    lastMove: [],
     systemScheme: systemScheme(),
     theme: "light", // Day reef first; night comes after the light theme is approved
     motion: "system",
@@ -411,6 +449,15 @@ export const useApp = create<State & Actions>((set, get) => {
     },
 
     restoreTray: () => void restoreItems(get().tray),
+    restoreEntries: (items) => void restoreItems(items),
+    undoLastMove: () => {
+      const keys = new Set(get().tray.map((i) => i.entry ?? String(i.id)));
+      const items = get().lastMove.filter((i) => keys.has(i.entry ?? String(i.id)));
+      if (!items.length) return get().notify(t("tray.nothingToUndo"));
+      set({ lastMove: [] });
+      void restoreItems(items).then(() => get().notify(t("tray.undoneToast", { count: items.length })));
+    },
+    setTrayOpen: (open) => set({ trayOpen: open }),
     restoreItem: (id) => {
       const item = get().tray.find((i) => i.id === id || i.entry === String(id));
       if (item) void restoreItems([item]);
@@ -495,7 +542,7 @@ export const useApp = create<State & Actions>((set, get) => {
     setViewMode: (viewMode) => set({ viewMode }),
     setOverlay: (overlay) => set({ overlay, commandOpen: false }),
     setCommandOpen: (commandOpen) => set({ commandOpen }),
-    notify: (text) => set({ toast: { key: Date.now(), text } }),
+    notify: (text, action) => set({ toast: { key: Date.now(), text, action } }),
     endFlight: (key) => set((s) => ({ flights: s.flights.filter((f) => f.key !== key) })),
     setPrefs: (p) => set(p),
 
@@ -544,7 +591,7 @@ export function boot() {
     setInfo(info);
     // The tray survives restarts (it lives in the core); dry-run starts on in dev builds.
     const cleanup = await api.cleanupStatus().catch(() => null);
-    if (cleanup) useApp.setState({ dryRun: cleanup.dryRun, tray: cleanup.tray });
+    if (cleanup) useApp.setState({ dryRun: cleanup.dryRun, tray: cleanup.tray, keepDays: cleanup.keepDays });
     const cached = await api.cachedScan().catch(() => null);
     if (cached) useApp.setState((s) => ({ disk: cached, focus: cached.root, scan: "done", diskVersion: s.diskVersion + 1 }));
     let onboarded = false;

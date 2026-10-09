@@ -7,7 +7,8 @@ export function Toast() {
   const toast = useApp((s) => s.toast);
   useEffect(() => {
     if (!toast) return;
-    const id = setTimeout(() => useApp.setState({ toast: null }), 2600);
+    // A toast with a button (Undo) stays long enough to reach it.
+    const id = setTimeout(() => useApp.setState({ toast: null }), toast.action ? 7000 : 2600);
     return () => clearTimeout(id);
   }, [toast]);
   return (
@@ -16,12 +17,24 @@ export function Toast() {
         {toast && (
           <motion.div
             key={toast.key}
-            className="toast glass-css"
+            className={`toast glass-css ${toast.action ? "has-action" : ""}`}
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0, transition: { duration: duration.base, ease: ease.out } }}
             exit={{ opacity: 0, y: 8, transition: { duration: duration.fast, ease: ease.inOut } }}
           >
-            {toast.text}
+            <span>{toast.text}</span>
+            {toast.action && (
+              <button
+                type="button"
+                className="toast-action focus-ring"
+                onClick={() => {
+                  toast.action?.run();
+                  useApp.setState({ toast: null });
+                }}
+              >
+                {toast.action.label}
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

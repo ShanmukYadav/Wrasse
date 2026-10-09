@@ -11,7 +11,7 @@ import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress
 type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean };
 type CoreReport = { done: { path: string; bytes: number; entry: string | null }[]; skipped: { path: string; reason: SkipReason }[]; bytes: number; dryRun: boolean };
 type CorePreview = { bytes: number; undoable: boolean; synced: string[]; skipped: { path: string; reason: SkipReason }[] };
-type CoreTrayEntry = { id: string; name: string; path: string; bytes: number; at: number; ruleId: string | null };
+type CoreTrayEntry = { id: string; batch: string; name: string; path: string; bytes: number; at: number; ruleId: string | null };
 
 function request(n: DiskNode, opts: RemoveOptions): ItemRequest {
   return {
@@ -91,8 +91,13 @@ export const tauriApi: WrasseApi = {
     return { disk, done: [{ id: trashId }], skipped: [], dryRun: status.dryRun, bytes };
   },
   async cleanupStatus() {
-    const s = await invoke<{ dryRun: boolean; dev: boolean; tray: CoreTrayEntry[] }>("cleanup_status");
-    return { dryRun: s.dryRun, dev: s.dev, tray: s.tray.map((e) => ({ id: -1, name: e.name, size: e.bytes, entry: e.id, path: e.path })) };
+    const s = await invoke<{ dryRun: boolean; dev: boolean; keepDays: number; tray: CoreTrayEntry[] }>("cleanup_status");
+    return {
+      dryRun: s.dryRun,
+      dev: s.dev,
+      keepDays: s.keepDays,
+      tray: s.tray.map((e) => ({ id: -1, name: e.name, size: e.bytes, entry: e.id, path: e.path, batch: e.batch, at: e.at * 1000 })),
+    };
   },
   setDryRun: (on) => invoke("set_dry_run", { on }),
   junk: () => invoke<JunkReport>("junk_report"),

@@ -817,6 +817,13 @@ button {
   -webkit-backdrop-filter: var(--blur-glass);
   z-index: 20;
 }
+/* On narrow windows, center the lens and selection bars in the space left of the always-visible
+   tray (about 280 px) so they never overlap it. */
+@media (max-width: 1120px) {
+  .lens-bar {
+    left: calc((100% - 280px) / 2);
+  }
+}
 .lens-pill {
   position: relative;
   height: var(--d1-lens-pill-height);
@@ -1047,17 +1054,123 @@ button {
 
 /* ---- Tray, flyers, toast, DEV --------------------------------------------------------- */
 
-.tray {
+/* Always in the bottom-right corner; the panel opens above it. */
+.tray-root {
   position: fixed;
   right: var(--d1-grid-pad-x);
   bottom: var(--d1-lens-bottom);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+.tray {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 8px 12px 8px 8px;
   border-radius: var(--d1-lens-radius);
-  z-index: 20;
   min-height: 52px;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tray-chevron {
+  color: var(--c-text-muted);
+  transform: rotate(-90deg);
+  transition: transform var(--dur-fast, 0.15s) ease;
+}
+.tray-chevron.is-open {
+  transform: rotate(90deg);
+}
+.tray-panel {
+  width: min(400px, calc(100vw - 2 * var(--d1-grid-pad-x)));
+  max-height: min(560px, 70vh);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--d1-tile-radius, 20px);
+}
+.tray-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tray-panel-head h2 {
+  flex: 1;
+}
+.tray-batches {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+.tray-batch {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--d1-row-radius);
+  background: var(--c-pill);
+}
+.tray-batch-head .link,
+.tray-item .link {
+  white-space: nowrap;
+}
+.tray-batch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.tray-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tray-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+.tray-item-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tray-item-name {
+  font-size: var(--t-label);
+  font-weight: var(--w-strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tray-item-size {
+  font-size: var(--t-caption);
+  font-variant-numeric: tabular-nums;
+  color: var(--c-text-muted);
+}
+.tray-panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+}
+.tray-panel-foot .chip {
+  margin-right: auto;
 }
 .tray-icon {
   display: grid;
@@ -1086,10 +1199,27 @@ button {
   pointer-events: none;
 }
 .toast {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 8px 14px;
   border-radius: var(--d1-row-radius);
   font-size: var(--t-label);
   white-space: nowrap;
+  pointer-events: auto;
+}
+.toast.has-action {
+  padding-right: 6px;
+}
+.toast-action {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: calc(var(--d1-row-radius) - 4px);
+  font: inherit;
+  font-weight: var(--w-strong);
+  color: var(--c-on-accent, #fff);
+  background: var(--c-accent);
+  cursor: pointer;
 }
 .dev-badge {
   position: fixed;
