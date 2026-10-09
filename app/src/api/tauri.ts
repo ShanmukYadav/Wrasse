@@ -6,11 +6,20 @@ import type { WrasseApi } from ".";
 import type { AppInfo } from "../lib/backend";
 import { insights } from "./insights";
 import { detach, reattach } from "./tree";
-import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem } from "./types";
+import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute } from "./types";
 
 type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean };
 type CoreReport = { done: { path: string; bytes: number; entry: string | null }[]; skipped: { path: string; reason: SkipReason }[]; bytes: number; dryRun: boolean };
 type CorePreview = { bytes: number; undoable: boolean; synced: string[]; skipped: { path: string; reason: SkipReason }[] };
+type CoreUninstall = {
+  route: UninstallRoute;
+  bundleRemoved: boolean;
+  bundleBytes: number;
+  bundleEntry: string | null;
+  bundleSkipped: SkipReason | null;
+  leftovers: CoreReport;
+  dryRun: boolean;
+};
 type CoreTrayEntry = { id: string; batch: string; name: string; path: string; bytes: number; at: number; ruleId: string | null };
 
 function request(n: DiskNode, opts: RemoveOptions): ItemRequest {
@@ -104,5 +113,33 @@ export const tauriApi: WrasseApi = {
   neverTouch: (path, on) => invoke<string[]>("never_touch", { path, on }),
 
   thinSnapshots: () => Promise.reject(new Error("Snapshot thinning arrives with Space Diagnostics (Phase 4).")),
-  quitApp: () => Promise.reject(new Error("Quitting apps arrives with the uninstaller (Phase 3).")),
+  async quitApp(disk, appId) {
+    const app = disk.nodes[appId];
+    const r = await invoke<{ quit: boolean }>("quit_app", { bundle: app.path });
+    if (r.quit) app.running = false;
+    return { disk, quit: r.quit };
+  },
+  async uninstall(disk, appId, leftoverIds): Promise<UninstallOutcome> {
+    const app = disk.nodes[appId];
+    const bundle = app.children.map((c) => disk.nodes[c]).find((c) => c.appBundle);
+    const idOf = byPath(disk, leftoverIds);
+    const r = await invoke<CoreUninstall>("uninstall_app", { bundle: app.path, leftovers: leftoverIds.map((id) => disk.nodes[id].path) });
+    const leftovers = r.leftovers.done.map((d) => ({ id: idOf(d.path), entry: d.entry ?? undefined })).filter((d) => d.id >= 0);
+    if (!r.dryRun) {
+      detach(disk, leftovers.map((d) => d.id));
+      if (r.bundleRemoved && bundle) detach(disk, [bundle.id]);
+    }
+    return {
+      disk,
+      route: r.route,
+      bundleRemoved: r.bundleRemoved,
+      bundleBytes: r.bundleBytes,
+      bundleEntry: r.bundleEntry ?? undefined,
+      bundleSkipped: r.bundleSkipped ?? undefined,
+      leftovers,
+      leftoverBytes: r.leftovers.bytes,
+      skipped: r.leftovers.skipped.map((s) => ({ id: idOf(s.path), reason: s.reason })),
+      dryRun: r.dryRun,
+    };
+  },
 };

@@ -60,7 +60,7 @@ function Detail({ id }: { id: number }) {
   const units = useApp((s) => s.info?.units ?? "decimal");
   const fileManager = useApp((s) => s.info?.fileManager ?? "Finder");
   const scheme = useScheme();
-  const { closeDetail, requestDeleteNow, freeGhost, notify, setFocus, openUninstall, requestDelete } = useApp.getState();
+  const { closeDetail, requestDeleteNow, freeGhost, notify, setFocus, requestDelete } = useApp.getState();
   const blocked = !deletable(disk, id);
   const n = disk.nodes[id];
   const ghost = n.kind === "ghost";
@@ -119,16 +119,8 @@ function Detail({ id }: { id: number }) {
           </motion.button>
         ) : (
           <>
-            {n.appBundle ? (
-              <>
-                {disk.nodes[n.parent].running && <p className="detail-note">{t("detail.runningNote", { name: disk.nodes[n.parent].name })}</p>}
-                <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => openUninstall(n.parent)} {...pressable}>
-                  <Icon name="trash" size={16} /> {t("detail.uninstall", { name: disk.nodes[n.parent].name })}
-                </motion.button>
-                <motion.button type="button" className="btn btn-wide focus-ring" onClick={() => requestDelete([n.id])} {...pressable}>
-                  <Icon name="tray" size={16} /> {t("detail.removeAppOnly", { size: sizeText })}
-                </motion.button>
-              </>
+            {n.kind === "app" || n.appBundle ? (
+              <AppActions appId={n.kind === "app" ? n.id : n.parent} />
             ) : n.leftover ? (
               <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => requestDelete([n.id])} {...pressable}>
                 <Icon name="tray" size={16} /> {t("detail.remove", { size: sizeText })}
@@ -158,5 +150,28 @@ function Detail({ id }: { id: number }) {
         )}
       </div>
     </div>
+  );
+}
+
+/** Uninstall for an app (or its bundle): how it goes, given where it came from. */
+function AppActions({ appId }: { appId: number }) {
+  const app = useApp((s) => s.disk.nodes[appId]);
+  const { openUninstall } = useApp.getState();
+  const meta = app.app;
+  const route = meta?.route.kind ?? "tray";
+  if (route === "notRemovable") return <p className="detail-note">{t("uninstall.route.notRemovable")}</p>;
+  return (
+    <>
+      {meta && (
+        <p className="text-caption text-muted">
+          {t(`app.source.${meta.source.kind}`)}
+          {meta.version ? ` · ${t("app.version", { version: meta.version })}` : ""} · {t(`uninstall.routeShort.${route}`)}
+        </p>
+      )}
+      {app.running && <p className="detail-note">{t("detail.runningNote", { name: app.name })}</p>}
+      <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => openUninstall(appId)} {...pressable}>
+        <Icon name="trash" size={16} /> {t("detail.uninstall", { name: app.name })}
+      </motion.button>
+    </>
   );
 }

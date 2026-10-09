@@ -47,9 +47,15 @@ export function insights(disk: Disk, id: number): Insight[] {
   if (app) {
     const chips: Insight[] = [];
     if (app.running) chips.push({ tone: "protected", text: t("insight.running") });
-    if (app.lastOpenedDays > 180) chips.push({ tone: "amber", text: t("insight.unusedApp") });
-    return chips;
+    if (app.app?.neverOpened) chips.push({ tone: "amber", text: t("app.neverOpened") });
+    else if (app.lastOpenedDays > 180) chips.push({ tone: "amber", text: t("insight.unusedApp") });
+    const source = app.app?.source.kind;
+    if (source === "system") chips.push({ tone: "protected", text: t("app.source.system") });
+    else if (source === "cask") chips.push({ tone: "violet", text: t("insight.homebrew") });
+    else if (source === "appStore") chips.push({ tone: "violet", text: t("insight.appStore") });
+    return chips.slice(0, 2);
   }
+  if (n.orphan) return [{ tone: "amber", text: t("insight.appRemoved") }];
   if (n.leftover) return n.safety === "safe" ? [{ tone: "green", text: t("insight.safeToClear") }] : [];
   if (n.category === "system" || (n.safety === "keep" && n.depth > 1)) return [{ tone: "protected", text: t("insight.protected") }];
   if (n.category === "junk") return allSafe ? [{ tone: "green", text: t("insight.allSafe") }] : [];

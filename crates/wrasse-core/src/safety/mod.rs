@@ -17,6 +17,8 @@
 
 pub mod audit;
 pub mod exclusions;
+#[cfg(test)]
+mod uninstall_tests;
 
 use crate::platform::{self, Protected, Protection};
 use crate::quarantine::Quarantine;

@@ -4,7 +4,7 @@
 import { inTauri, type AppInfo } from "../lib/backend";
 import { mockApi } from "../mock/api";
 import { tauriApi } from "./tauri";
-import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem } from "./types";
+import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -51,8 +51,11 @@ export interface WrasseApi {
   neverTouch(path: string, on: boolean): Promise<string[]>;
   /** Thins local Time Machine snapshots, freeing the "held by snapshots" space. */
   thinSnapshots(disk: Disk): Promise<Disk>;
-  /** Asks a running app to quit (before uninstalling it). */
-  quitApp(disk: Disk, appId: number): Promise<Disk>;
+  /** Asks a running app to quit (before uninstalling it); waits up to 10 s. */
+  quitApp(disk: Disk, appId: number): Promise<{ disk: Disk; quit: boolean }>;
+  /** Uninstalls an app: the bundle goes by its route (tray, Homebrew, Finder Trash), the chosen
+   *  leftovers go to the tray. The core looks the app up again and checks it isn't running. */
+  uninstall(disk: Disk, appId: number, leftoverIds: number[]): Promise<UninstallOutcome>;
 }
 
 /** Dev toggle: in the app, `wrasse.mock = "1"` in localStorage switches to mock data for UI work. */

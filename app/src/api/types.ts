@@ -44,7 +44,13 @@ export type DiskNode = {
   /** The .app bundle inside an app: the item "Uninstall" targets. */
   appBundle?: boolean;
   /** For an app's leftovers: what kind of leftover it is (Caches, Logs, …). */
-  leftover?: "caches" | "support" | "containers" | "logs" | "preferences" | "savedState";
+  leftover?: LeftoverKind;
+  /** For an app's leftovers: how it was tied to the app, and whether it starts unticked. */
+  leftoverMeta?: LeftoverMeta;
+  /** For an app (kind "app"): where it came from and how it's removed. */
+  app?: AppMeta;
+  /** Data left by an app that's no longer installed ("Leftovers from removed apps"). */
+  orphan?: boolean;
   /** Extra label from the scanner: "In iCloud only", "Couldn't read", "Shares space with clones". */
   note?: string;
   /** The junk rule covering this item; `why` then holds its explanation ("Why is this safe?"). */
@@ -52,6 +58,62 @@ export type DiskNode = {
   ruleRoot?: string;
   /** Cleaned through the OS (the Trash) rather than item by item. */
   delegate?: boolean;
+};
+
+export type LeftoverKind =
+  | "caches"
+  | "support"
+  | "containers"
+  | "groupContainers"
+  | "preferences"
+  | "savedState"
+  | "logs"
+  | "httpStorages"
+  | "webKit"
+  | "launchAgents"
+  | "launchDaemons"
+  | "helperTools";
+
+export type AppSource = { kind: "folder" } | { kind: "cask"; token: string } | { kind: "appStore" } | { kind: "system" };
+
+/** How an app's bundle goes when it's uninstalled. */
+export type UninstallRoute = { kind: "tray" } | { kind: "homebrew"; token: string } | { kind: "finderTrash" } | { kind: "notRemovable" };
+
+export type AppMeta = {
+  source: AppSource;
+  owner: "user" | "root";
+  bundleId?: string;
+  version?: string;
+  /** Spotlight has no last-used date and it was installed over 30 days ago. */
+  neverOpened: boolean;
+  /** `lastOpenedDays` comes from Spotlight (otherwise from file dates). */
+  lastUsedKnown: boolean;
+  route: UninstallRoute;
+  /** Leftovers in the system Library: shown as "Needs admin", not removable here. */
+  adminLeftovers: string[];
+};
+
+export type LeftoverMeta = {
+  matchedBy: "bundleId" | "name";
+  sharedWith: string[];
+  /** Starts unticked in the uninstall sheet (matched by name only, or shared with another app). */
+  defaultOff: boolean;
+};
+
+/** What uninstalling did. */
+export type UninstallOutcome = {
+  disk: Disk;
+  route: UninstallRoute;
+  bundleRemoved: boolean;
+  bundleBytes: number;
+  /** Tray entry for the bundle (route "tray"). */
+  bundleEntry?: string;
+  bundleSkipped?: SkipReason;
+  /** Leftovers moved to the tray, with their entries. */
+  leftovers: { id: number; entry?: string }[];
+  leftoverBytes: number;
+  skipped: { id: number; reason: SkipReason }[];
+  dryRun: boolean;
 };
 
 /** Why the safety layer left an item alone. */
@@ -66,6 +128,7 @@ export type SkipReason =
   | "notFound"
   | "changed"
   | "inUse"
+  | "appRunning"
   | "notSafeForDeleteNow"
   | "failed";
 

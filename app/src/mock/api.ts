@@ -119,6 +119,25 @@ export const mockApi: WrasseApi = {
   },
   async quitApp(disk, appId) {
     disk.nodes[appId].running = false;
-    return disk;
+    return { disk, quit: true };
+  },
+  async uninstall(disk, appId, leftoverIds) {
+    const app = disk.nodes[appId];
+    const route = app.app?.route ?? { kind: "tray" as const };
+    const bundle = app.children.map((c) => disk.nodes[c]).find((c) => c.appBundle);
+    const bundleBytes = bundle?.size ?? 0;
+    const leftoverBytes = leftoverIds.reduce((s, id) => s + disk.nodes[id].size, 0);
+    detach(disk, [...(bundle ? [bundle.id] : []), ...leftoverIds]);
+    return {
+      disk,
+      route,
+      bundleRemoved: true,
+      bundleBytes,
+      bundleEntry: route.kind === "tray" && bundle ? `mock/${bundle.id}` : undefined,
+      leftovers: leftoverIds.map((id) => ({ id, entry: `mock/${id}` })),
+      leftoverBytes,
+      skipped: [],
+      dryRun: false,
+    };
   },
 };

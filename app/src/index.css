@@ -1855,6 +1855,13 @@ button {
   place-items: center;
   flex-shrink: 0;
 }
+.sheet-row.is-disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.sheet-check.is-off {
+  border-style: dashed;
+}
 .sheet-check.is-on,
 .sheet-check.is-locked {
   background: var(--acc);

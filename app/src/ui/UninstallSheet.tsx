@@ -58,20 +58,32 @@ function Sheet({ appId }: { appId: number }) {
   const disk = useApp((s) => s.disk);
   useApp((s) => s.diskVersion);
   const units = useApp((s) => s.info?.units ?? "decimal");
+  const quitting = useApp((s) => s.quitting === appId);
+  const dryRun = useApp((s) => s.dryRun);
   const scheme = useScheme();
   const { close, quit, confirm } = { close: useApp.getState().closeUninstall, quit: useApp.getState().quitApp, confirm: useApp.getState().confirmUninstall };
   const app = disk.nodes[appId];
   const parts = app.children.map((c) => disk.nodes[c]).filter((c) => attached(disk, c.id) && c.size > 0);
   const bundle = parts.find((p) => p.appBundle);
   const leftovers = parts.filter((p) => !p.appBundle);
-  const [checked, setChecked] = useState<Set<number>>(() => new Set(leftovers.map((l) => l.id)));
-  const ids = [...(bundle ? [bundle.id] : []), ...leftovers.filter((l) => checked.has(l.id)).map((l) => l.id)];
-  const total = ids.reduce((s, id) => s + disk.nodes[id].size, 0);
+  // Leftovers matched by the app's name, or shared with another app, start unticked.
+  const [checked, setChecked] = useState<Set<number>>(() => new Set(leftovers.filter((l) => !l.leftoverMeta?.defaultOff).map((l) => l.id)));
+  const route = app.app?.route ?? { kind: "tray" as const };
+  const admin = app.app?.adminLeftovers ?? [];
+  const ticked = leftovers.filter((l) => checked.has(l.id)).map((l) => l.id);
+  const total = (bundle?.size ?? 0) + ticked.reduce((s, id) => s + disk.nodes[id].size, 0);
   const fmt = (b: number) => {
     const f = formatBytes(b, units);
     return `${f.value} ${f.unit}`;
   };
   const c = categories[scheme][app.category];
+  const removable = route.kind !== "notRemovable";
+  const confirmLabel =
+    route.kind === "homebrew"
+      ? t("uninstall.confirmBrew", { size: fmt(total) })
+      : route.kind === "finderTrash"
+        ? t("uninstall.confirmFinder", { size: fmt(total) })
+        : t("uninstall.confirm", { size: fmt(total) });
 
   return (
     <div className="sheet-body" style={{ "--acc": c.accent } as CSSProperties}>
@@ -80,14 +92,16 @@ function Sheet({ appId }: { appId: number }) {
           <Icon name="app" tone="white" size={20} />
         </span>
         <h2 className="detail-name">{t("uninstall.title", { name: app.name })}</h2>
+        {route.kind === "homebrew" && <span className="chip chip-amber">{t("detail.notUndoable")}</span>}
       </div>
-      <p className="detail-why">{t("uninstall.subtitle")}</p>
+      <p className="detail-why">{t(`uninstall.route.${route.kind}`, { token: route.kind === "homebrew" ? route.token : "" })}</p>
+      {removable && <p className="text-caption text-muted">{t("uninstall.subtitle")}</p>}
 
       {app.running && (
         <div className="sheet-warning" role="alert">
           <Icon name="warning" tone="warning" size={20} />
-          <span>{t("uninstall.running", { name: app.name })}</span>
-          <button type="button" className="btn focus-ring" onClick={() => quit(appId)}>
+          <span>{quitting ? t("uninstall.quitting", { name: app.name }) : t("uninstall.running", { name: app.name })}</span>
+          <button type="button" className="btn focus-ring" disabled={quitting} onClick={() => quit(appId)}>
             {t("uninstall.quit", { name: app.name })}
           </button>
         </div>
@@ -101,14 +115,16 @@ function Sheet({ appId }: { appId: number }) {
             </span>
             <Icon name="app" tone={app.category} size={16} />
             <span className="sheet-name">
-              {bundle.name} <span className="text-muted">· {t("uninstall.app")}</span>
+              {bundle.name} <span className="text-muted">· {t(`uninstall.routeShort.${route.kind}`)}</span>
             </span>
             <span className="tile-row-size">{fmt(bundle.size)}</span>
           </div>
         )}
-        <span className="sheet-label">{t("uninstall.leftovers")}</span>
+        {(leftovers.length > 0 || admin.length > 0) && <span className="sheet-label">{t("uninstall.leftovers")}</span>}
         {leftovers.map((l) => {
           const on = checked.has(l.id);
+          const meta = l.leftoverMeta;
+          const hint = meta?.sharedWith.length ? t("uninstall.shared", { names: meta.sharedWith.join(", ") }) : meta?.matchedBy === "name" ? t("uninstall.byName") : null;
           return (
             <label key={l.id} className="sheet-row">
               <input
@@ -127,22 +143,41 @@ function Sheet({ appId }: { appId: number }) {
               </span>
               <Icon name={iconFor(l)} tone={app.category} size={16} />
               <span className="sheet-name" title={l.path}>
-                {l.name}
+                <span>
+                  {l.name}
+                  {hint && <span className="text-your-call"> · {hint}</span>}
+                </span>
                 <span className="sheet-path">{l.path}</span>
               </span>
               <span className="tile-row-size">{fmt(l.size)}</span>
             </label>
           );
         })}
+        {admin.map((p) => (
+          <div key={p} className="sheet-row is-disabled" title={t("uninstall.needsAdminNote")}>
+            <span className="sheet-check is-off" aria-hidden />
+            <Icon name="keep" tone="neutral" size={16} />
+            <span className="sheet-name">
+              <span>
+                {p.split("/").pop()} <span className="text-muted">· {t("uninstall.needsAdmin")}</span>
+              </span>
+              <span className="sheet-path">{p}</span>
+            </span>
+          </div>
+        ))}
+        {admin.length > 0 && <p className="text-caption text-muted">{t("uninstall.needsAdminNote")}</p>}
       </div>
 
+      {dryRun && <p className="text-caption text-muted">{t("confirm.dryRunNote")}</p>}
       <div className="sheet-actions">
         <button type="button" className="btn focus-ring" onClick={close}>
           {t("uninstall.cancel")}
         </button>
-        <motion.button type="button" className="btn btn-primary focus-ring" disabled={app.running || ids.length === 0} onClick={() => confirm(appId, ids)} {...pressable}>
-          {t("uninstall.confirm", { size: fmt(total) })}
-        </motion.button>
+        {removable && (
+          <motion.button type="button" className={`btn ${route.kind === "homebrew" ? "btn-danger" : "btn-primary"} focus-ring`} disabled={app.running || quitting} onClick={() => confirm(appId, ticked)} {...pressable}>
+            {confirmLabel}
+          </motion.button>
+        )}
       </div>
     </div>
   );

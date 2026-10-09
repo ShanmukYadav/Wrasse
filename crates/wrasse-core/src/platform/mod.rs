@@ -1,7 +1,7 @@
 //! Platform abstraction (PLAN.md §3). All OS-specific code lives under this module.
 
 #[cfg(target_os = "macos")]
-mod macos;
+pub(crate) mod macos;
 mod volume;
 #[cfg(windows)]
 mod windows;

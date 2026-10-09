@@ -2,7 +2,7 @@
 // the six Reef Blocks categories plus a snapshot ghost. Deterministic. Nothing here touches the
 // real file system; Stage B replaces it with the Rust scanner behind the same api/ interface.
 import type { Category } from "../design/tokens";
-import { GB, LENS_BIT, LENS_IDS, type Disk, type DiskNode, type NodeKind } from "../api/types";
+import { GB, LENS_BIT, LENS_IDS, type AppSource, type Disk, type DiskNode, type NodeKind } from "../api/types";
 
 const CAPACITY = 1000 * GB;
 
@@ -176,6 +176,9 @@ export function generateDisk(seed = 7): Disk {
   ];
   const unused = new Set(["Unity Hub", "Steam", "Webex", "Parallels Desktop"]);
   const running = new Set(["Xcode", "Google Chrome", "Slack", "Spotify", "Visual Studio Code", "Figma", "Raycast", "1Password", "Docker"]);
+  const CASKS = new Set(["Firefox", "Visual Studio Code", "iTerm", "Raycast", "Obsidian", "VLC", "IINA", "Discord", "Postman"]);
+  const STORE = new Set(["Keynote", "Pages", "Numbers", "iMovie", "GarageBand", "WhatsApp", "Kindle", "Pixelmator Pro", "Telegram"]);
+  const ROOT_OWNED = new Set(["Zoom", "Microsoft Teams", "Parallels Desktop", "Microsoft PowerPoint"]);
   const bundleId = (name: string) => `com.${name.toLowerCase().replace(/[^a-z0-9]+/g, "")}`;
   // Each app holds its bundle plus the leftovers it keeps in ~/Library (PLAN.md §6.4: true app size).
   const LEFTOVERS: [NonNullable<DiskNode["leftover"]>, string, (id: string) => string, number, string][] = [
@@ -192,14 +195,52 @@ export function generateDisk(seed = 7): Disk {
     const age = unused.has(name) ? days(200, 500) : days(0, 60);
     const a = add(apps, name, "app", { path: `/Applications/${name}.app`, lastOpenedDays: age }, 0);
     nodes[a].running = running.has(name) && !unused.has(name);
+    const source: AppSource = CASKS.has(name)
+      ? { kind: "cask", token: name.toLowerCase().replace(/[^a-z0-9]+/g, "-") }
+      : STORE.has(name)
+        ? { kind: "appStore" }
+        : { kind: "folder" };
+    const owner = source.kind === "appStore" || ROOT_OWNED.has(name) ? "root" : "user";
+    nodes[a].app = {
+      source,
+      owner,
+      bundleId: id,
+      version: "1.0",
+      neverOpened: unused.has(name) && name === "Webex",
+      lastUsedKnown: true,
+      route: source.kind === "cask" ? { kind: "homebrew", token: source.token } : owner === "root" ? { kind: "finderTrash" } : { kind: "tray" },
+      adminLeftovers: ROOT_OWNED.has(name) ? [`/Library/LaunchDaemons/${id}.helper.plist`] : [],
+    };
     const share = LEFTOVERS.reduce((s, l) => s + l[3], 0);
     const bundle = file(a, `${name}.app`, Math.round(b * (1 - share)), { path: `/Applications/${name}.app`, why: WHY.app });
     nodes[bundle].appBundle = true;
     for (const [kind, label, path, frac, why] of LEFTOVERS) {
-      const f = file(a, label, Math.max(4096, Math.round(b * frac * (0.6 + rand() * 0.8))), { path: path(id), why, safety: kind === "caches" || kind === "logs" ? "safe" : "yourCall" });
+      // Application Support is matched by the app's name here, so it starts unticked.
+      const byName = kind === "support";
+      const f = file(a, label, Math.max(4096, Math.round(b * frac * (0.6 + rand() * 0.8))), {
+        path: byName ? `~/Library/Application Support/${name}` : path(id),
+        why: byName ? `${why} Matched by the app's name, so check it's really ${name}'s.` : why,
+        safety: kind === "caches" || kind === "logs" ? "safe" : "yourCall",
+      });
       nodes[f].leftover = kind;
+      nodes[f].leftoverMeta = { matchedBy: byName ? "name" : "bundleId", sharedWith: [], defaultOff: byName };
+      nodes[f].lastOpenedDays = age;
     }
   });
+
+  // Leftovers from removed apps (orphans): their apps aren't installed anywhere.
+  const gone = add(apps, "Leftovers from removed apps", "dir", { path: "~/Library", why: "Data apps left behind after they were removed. No installed app uses these folders." }, 0);
+  nodes[gone].orphan = true;
+  for (const [oid, size, untouched] of [["com.adobe.Photoshop2022", 2.1 * GB, 410], ["com.skype.skype", 0.9 * GB, 640], ["com.evernote.Evernote", 0.4 * GB, 300]] as const) {
+    const o = add(gone, oid, "dir", { path: `~/Library/Application Support/${oid}`, lastOpenedDays: untouched, why: `Left by an app with the id ${oid}, which isn't installed on this Mac. Nothing here changed in ${untouched} days.` }, 0);
+    nodes[o].orphan = true;
+    for (const [kind, label, frac] of [["support", "Application Support", 0.7], ["caches", "Caches", 0.3]] as const) {
+      const f = file(o, label, Math.round(size * frac), { path: `~/Library/${label}/${oid}`, why: `${label} of an app that's no longer installed (${oid}).`, lastOpenedDays: untouched });
+      nodes[f].leftover = kind;
+      nodes[f].orphan = true;
+      nodes[f].leftoverMeta = { matchedBy: "bundleId", sharedWith: [], defaultOff: true };
+    }
+  }
 
   // ---- System: 52 GB ----------------------------------------------------------------------
   const sys = top("System", "system", { path: "/System", safety: "keep", why: WHY.system });

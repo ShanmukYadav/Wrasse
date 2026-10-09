@@ -32,6 +32,7 @@ export function iconFor(n: DiskNode): IconName {
   if (n.leftover) {
     const byLeftover: Record<NonNullable<DiskNode["leftover"]>, IconName> = {
       caches: "cache", logs: "log", preferences: "settings", savedState: "history", support: "folder", containers: "folder",
+      groupContainers: "folder", httpStorages: "cache", webKit: "cache", launchAgents: "settings", launchDaemons: "settings", helperTools: "settings",
     };
     return byLeftover[n.leftover];
   }

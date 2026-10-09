@@ -564,12 +564,13 @@ fn newest_day(path: &Path) -> u32 {
     newest
 }
 
+/// Test doubles for discovery, shared with other modules' tests.
 #[cfg(test)]
-mod tests {
+pub mod fake {
     use super::*;
-    use crate::apps::uninstall::{route, Route};
 
     /// Fake answers: two root-owned bundles, fixed usage, one id registered on another disk.
+    #[derive(Default)]
     pub struct Fake {
         pub root_owned: Vec<PathBuf>,
         pub usage: HashMap<String, (Option<u32>, Option<u32>)>,
@@ -598,6 +599,13 @@ mod tests {
             System.today()
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::apps::uninstall::{route, Route};
+    use fake::Fake;
 
     fn setup(tag: &str) -> (PathBuf, wrasse_fixtures::AppsFixture, Places, Fake) {
         let nanos = SystemTime::now()

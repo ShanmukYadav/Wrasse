@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
+use wrasse_core::apps::uninstall;
 use wrasse_core::platform;
 use wrasse_core::quarantine;
 use wrasse_core::safety::{self, Context, Delegated, Mode, Request, Safety};
@@ -279,4 +280,59 @@ pub fn never_touch_list(state: State<'_, CleanupState>) -> Result<Vec<PathBuf>, 
 #[tauri::command]
 pub fn audit_recent(state: State<'_, CleanupState>) -> Result<Vec<serde_json::Value>, String> {
     with_ctx(&state, |ctx| Ok(ctx.audit.recent(500)))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct QuitResult {
+    /// The app is no longer running.
+    quit: bool,
+}
+
+/// Asks the app at `bundle` to quit (never forces it) and waits up to 10 s for it to close.
+#[tauri::command]
+pub async fn quit_app(bundle: PathBuf) -> Result<QuitResult, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let home = platform::home_dir().ok_or("no home folder")?;
+        let app = platform::app_at(&home, &bundle).ok_or("that app isn't installed")?;
+        let id = app.id.ok_or("the app has no bundle identifier")?;
+        let running = || uninstall::runs_from(&bundle, &platform::running_executables());
+        if !running() {
+            return Ok(QuitResult { quit: true });
+        }
+        platform::quit_app(&id).map_err(|e| e.to_string())?;
+        for _ in 0..40 {
+            std::thread::sleep(std::time::Duration::from_millis(250));
+            if !running() {
+                return Ok(QuitResult { quit: true });
+            }
+        }
+        Ok(QuitResult { quit: false })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Uninstalls the app at `bundle` (looked up again here, never trusted from the UI) and sends the
+/// chosen leftovers to the tray. The route (tray, Homebrew, Finder) follows the app's source and
+/// owner; see `wrasse_core::apps::uninstall`. Dry run reports without acting.
+#[tauri::command]
+pub async fn uninstall_app(
+    app: AppHandle,
+    bundle: PathBuf,
+    leftovers: Vec<PathBuf>,
+) -> Result<uninstall::Outcome, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<CleanupState>();
+        let dry_run = state.dry_run.load(Ordering::Relaxed);
+        let home = platform::home_dir().ok_or("no home folder")?;
+        let found = platform::app_at(&home, &bundle).ok_or("that app isn't installed any more")?;
+        let running = uninstall::runs_from(&found.bundle, &platform::running_executables());
+        with_ctx(&state, |ctx| {
+            uninstall::uninstall(ctx, &found, &leftovers, running, dry_run)
+                .map_err(|e| e.to_string())
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

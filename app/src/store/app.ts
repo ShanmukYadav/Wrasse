@@ -81,6 +81,8 @@ type State = {
   motion: MotionPref;
   /** The app whose uninstall sheet is open. */
   uninstall: number | null;
+  /** The app Wrasse is asking to quit (waits up to 10 s). */
+  quitting: number | null;
   /** Everything deleted this session, newest first (History). */
   deleted: DeletedEntry[];
   /** Tiles ticked for a bulk action. */
@@ -139,7 +141,8 @@ type Actions = {
   openUninstall: (appId: number) => void;
   closeUninstall: () => void;
   quitApp: (appId: number) => void;
-  confirmUninstall: (appId: number, ids: number[]) => void;
+  /** Uninstalls the app; `leftoverIds` are the ticked leftovers (they go to the tray). */
+  confirmUninstall: (appId: number, leftoverIds: number[]) => void;
 };
 
 const ONBOARDED_KEY = "wrasse.onboarded";
@@ -264,6 +267,64 @@ export const useApp = create<State & Actions>((set, get) => {
     if (result.rescan) void get().scanDisk();
   }
 
+  /** Uninstall: the bundle goes by its route; ticked leftovers go to the tray. */
+  async function uninstallApp(appId: number, leftoverIds: number[]) {
+    const { disk, focus } = get();
+    const app = disk.nodes[appId];
+    if (!app) return;
+    const bundle = app.children.map((c) => disk.nodes[c]).find((c) => c.appBundle);
+    const tile = visibleTileOf(disk, focus, appId);
+    const rect = tile === null ? null : tileRect(tile);
+    const r = await api.uninstall(disk, appId, leftoverIds).catch(failed);
+    if (!r) return;
+    if (r.dryRun) {
+      return get().notify(t("dryRun.uninstallToast", { name: app.name, route: t(`uninstall.routeShort.${r.route.kind}`) }), {
+        label: t("dryRun.turnOff"),
+        run: () => get().setOverlay("settings"),
+      });
+    }
+    const at = Date.now();
+    const batch = `session-${batchId + 1}`;
+    const entries = new Map<number, string | undefined>(r.leftovers.map((l) => [l.id, l.entry]));
+    const parts: DiskNode[] = r.leftovers.map((l) => disk.nodes[l.id]);
+    if (r.bundleRemoved && bundle) {
+      parts.unshift(bundle);
+      if (r.bundleEntry) entries.set(bundle.id, r.bundleEntry);
+    }
+    const toTray = parts.filter((n) => entries.get(n.id));
+    const trayItems: TrayItem[] = toTray.map((n) => ({ id: n.id, name: n === bundle ? n.name : `${app.name} · ${n.name}`, size: n.size, entry: entries.get(n.id), path: n.path, batch, at }));
+    const flights: Flight[] =
+      rect && tile !== null && parts.length
+        ? [{ key: ++flightKey, id: appId, from: rect, color: categories[scheme()][disk.nodes[tile].category].accent, delay: 0 }]
+        : [];
+    set((s) => ({
+      disk: r.disk,
+      diskVersion: s.diskVersion + 1,
+      tray: [...s.tray, ...trayItems],
+      batches: trayItems.length ? [{ id: ++batchId, at, items: trayItems, state: "inTray" as const }, ...s.batches] : s.batches,
+      flights: [...s.flights, ...flights],
+      selected: null,
+      detailOpen: false,
+      lastMove: trayItems.length ? trayItems : s.lastMove,
+    }));
+    record(toTray, "inTray", entries);
+    if (r.bundleRemoved && bundle && !r.bundleEntry) record([bundle], "deleted");
+    log(t("audit.uninstalled"), app.path, r.bundleBytes + r.leftoverBytes);
+    const size = fmtBytes(r.bundleBytes + r.leftoverBytes);
+    if (!r.bundleRemoved) {
+      get().notify(t("uninstall.bundleStayed", { name: app.name, why: t(`skip.${r.bundleSkipped ?? "failed"}`) }));
+    } else if (r.route.kind === "tray") {
+      get().notify(t("uninstall.toastTray", { name: app.name, size }), { label: t("tray.undo"), run: () => get().undoLastMove() });
+    } else if (r.route.kind === "homebrew") {
+      get().notify(trayItems.length ? t("uninstall.toastBrewData", { name: app.name }) : t("uninstall.toastBrew", { name: app.name }));
+    } else {
+      get().notify(trayItems.length ? t("uninstall.toastFinderData", { name: app.name }) : t("uninstall.toastFinder", { name: app.name }));
+    }
+    reportSkipped(r.skipped.length);
+    void syncTray();
+    ascendIfEmpty();
+  }
+
   /** Takes the core's batch ids and times for the tray (the UI's own are provisional). */
   async function syncTray() {
     if (mockMode()) return;
@@ -338,6 +399,7 @@ export const useApp = create<State & Actions>((set, get) => {
     theme: "light", // Day reef first; night comes after the light theme is approved
     motion: "system",
     uninstall: null,
+    quitting: null,
     checked: [],
     confirmDelete: null,
     deleted: [],
@@ -549,19 +611,25 @@ export const useApp = create<State & Actions>((set, get) => {
     openUninstall: (appId) => set({ uninstall: appId, detailOpen: false }),
     closeUninstall: () => set({ uninstall: null }),
     quitApp: (appId) => {
-      if (readOnly()) return;
-      log(t("audit.quit"), get().disk.nodes[appId].name, 0);
+      if (readOnly() || get().quitting !== null) return;
+      const name = get().disk.nodes[appId].name;
+      log(t("audit.quit"), name, 0);
+      set({ quitting: appId });
       void api
         .quitApp(get().disk, appId)
-        .then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })))
-        .catch(failed);
+        .then(({ disk, quit }) => {
+          set((s) => ({ disk, diskVersion: s.diskVersion + 1, quitting: null }));
+          if (!quit) get().notify(t("uninstall.stillOpen", { name }));
+        })
+        .catch((e) => {
+          set({ quitting: null });
+          failed(e);
+        });
     },
-    confirmUninstall: (appId, ids) => {
+    confirmUninstall: (appId, leftoverIds) => {
       if (readOnly()) return set({ uninstall: null });
-      const { disk } = get();
       set({ uninstall: null });
-      get().addToTray(ids);
-      log(t("audit.uninstalled"), disk.nodes[appId].path, ids.reduce((s, id) => s + disk.nodes[id].size, 0));
+      void uninstallApp(appId, leftoverIds);
     },
   };
 });
