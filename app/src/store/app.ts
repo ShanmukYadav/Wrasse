@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, attached, cautionFor, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { type DiskNode, api, attached, cautionFor, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -15,6 +15,19 @@ export type TrayItem = { id: number; name: string; size: number };
 export type AuditEntry = { at: number; action: string; target: string; size: number };
 export type Batch = { id: number; at: number; items: TrayItem[]; state: "inTray" | "emptied" | "restored" };
 /** A Free Up Space plan: ranked candidates; `off` are the ones the user unticked. */
+/** One deleted item, for History: what it was, where, how big, and whether it can come back. */
+export type DeletedEntry = {
+  id: number;
+  name: string;
+  path: string;
+  size: number;
+  category: DiskNode["category"];
+  /** What kind of thing it was, for the label: app, appData, model, dev, cache, folder, file, snapshots. */
+  what: "app" | "appData" | "model" | "dev" | "cache" | "folder" | "file" | "snapshots";
+  at: number;
+  status: "inTray" | "restored" | "deleted";
+};
+
 export type Plan = { target: number; ids: number[]; total: number; off: number[] };
 export type Flight = { key: number; id: number; from: Rect; color: string; delay: number };
 
@@ -49,6 +62,8 @@ type State = {
   motion: MotionPref;
   /** The app whose uninstall sheet is open. */
   uninstall: number | null;
+  /** Everything deleted this session, newest first (History). */
+  deleted: DeletedEntry[];
   /** Tiles ticked for a bulk action. */
   checked: number[];
   /** Items waiting on the delete caution sheet. */
@@ -73,6 +88,8 @@ type Actions = {
   deleteNow: (ids: number[]) => void;
   emptyTray: () => void;
   restoreTray: () => void;
+  /** Puts one item from the tray back. */
+  restoreItem: (id: number) => void;
   freeGhost: () => void;
   planFree: (bytes: number) => void;
   clearPlan: () => void;
@@ -135,6 +152,13 @@ export const useApp = create<State & Actions>((set, get) => {
     return true;
   }
 
+  /** Adds deleted items to History. */
+  function record(items: DiskNode[], status: DeletedEntry["status"]) {
+    const at = Date.now();
+    const entries = items.map((n) => ({ id: n.id, name: n.name, path: n.path, size: n.size, category: n.category, what: whatItWas(n), at, status }));
+    set((s) => ({ deleted: [...entries, ...s.deleted].slice(0, 500) }));
+  }
+
   function log(action: string, target: string, size: number) {
     set((s) => ({ audit: [{ at: Date.now(), action, target, size }, ...s.audit].slice(0, 200) }));
   }
@@ -173,6 +197,7 @@ export const useApp = create<State & Actions>((set, get) => {
     uninstall: null,
     checked: [],
     confirmDelete: null,
+    deleted: [],
 
     setInfo: (info) => set({ info }),
     setSystemScheme: (systemScheme) => set({ systemScheme }),
@@ -239,6 +264,7 @@ export const useApp = create<State & Actions>((set, get) => {
         plan: remainingPlan(s.plan, items.map((n) => n.id)),
       }));
       for (const n of items) log(t("audit.quarantined"), n.path, n.size);
+      record(items, "inTray");
       void api.quarantine(disk, items.map((n) => n.id)).then((d) => {
         set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 }));
         ascendIfEmpty();
@@ -280,6 +306,7 @@ export const useApp = create<State & Actions>((set, get) => {
         });
       }, 260);
       for (const n of items) log(t("audit.deleted"), n.path, n.size);
+      record(items, "deleted");
     },
 
     emptyTray: () => {
@@ -287,7 +314,11 @@ export const useApp = create<State & Actions>((set, get) => {
       if (!tray.length) return;
       const total = tray.reduce((s, i) => s + i.size, 0);
       void api.emptyTray(tray.map((i) => i.id));
-      set((s) => ({ tray: [], batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "emptied" } : b)) }));
+      set((s) => ({
+        tray: [],
+        batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "emptied" } : b)),
+        deleted: s.deleted.map((d) => (d.status === "inTray" ? { ...d, status: "deleted" } : d)),
+      }));
       log(t("audit.emptied"), t("tray.items", { count: tray.length }), total);
       get().notify(t("tray.emptiedToast"));
     },
@@ -295,9 +326,25 @@ export const useApp = create<State & Actions>((set, get) => {
     restoreTray: () => {
       const { tray, disk } = get();
       if (!tray.length) return;
-      set((s) => ({ tray: [], batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "restored" } : b)) }));
+      set((s) => ({
+        tray: [],
+        batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "restored" } : b)),
+        deleted: s.deleted.map((d) => (d.status === "inTray" ? { ...d, status: "restored" } : d)),
+      }));
       void api.restore(disk, tray.map((i) => i.id)).then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })));
       log(t("audit.restored"), t("tray.items", { count: tray.length }), tray.reduce((s, i) => s + i.size, 0));
+    },
+
+    restoreItem: (id) => {
+      const { tray, disk } = get();
+      const item = tray.find((i) => i.id === id);
+      if (!item) return;
+      set((s) => ({
+        tray: s.tray.filter((i) => i.id !== id),
+        deleted: s.deleted.map((d) => (d.id === id && d.status === "inTray" ? { ...d, status: "restored" } : d)),
+      }));
+      void api.restore(disk, [id]).then((d) => set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 })));
+      log(t("audit.restored"), item.name, item.size);
     },
 
     freeGhost: () => {
@@ -308,6 +355,7 @@ export const useApp = create<State & Actions>((set, get) => {
       const size = ghost.size;
       set({ selected: null, detailOpen: false });
       log(t("audit.snapshotsThinned"), "/", size);
+      set((s) => ({ deleted: [{ id: ghost.id, name: ghost.name, path: ghost.path, size, category: ghost.category, what: "snapshots", at: Date.now(), status: "deleted" }, ...s.deleted] }));
       void api.thinSnapshots(disk).then((d) => {
         set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 }));
         ascendIfEmpty();
@@ -456,3 +504,14 @@ export function trayBytes(tray: TrayItem[]): number {
 }
 
 export const DEFAULT_FREE_TARGET = 30 * GB;
+
+/** What a deleted item was, in the words History uses. */
+export function whatItWas(n: DiskNode): DeletedEntry["what"] {
+  if (n.kind === "app" || n.appBundle) return "app";
+  if (n.leftover) return "appData";
+  if (n.kind === "model" || n.category === "aiModels") return "model";
+  if (n.kind === "ghost") return "snapshots";
+  if (n.category === "developer") return "dev";
+  if (n.rebuildable || n.category === "junk") return "cache";
+  return n.children.length > 0 || n.kind === "dir" ? "folder" : "file";
+}

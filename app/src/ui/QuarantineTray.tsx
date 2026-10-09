@@ -52,6 +52,9 @@ export function QuarantineTray() {
             animate={{ opacity: 1, transition: { duration: duration.base, ease: ease.out } }}
             exit={{ opacity: 0, transition: { duration: duration.fast } }}
           >
+            <button type="button" className="icon-btn focus-ring" aria-label={t("history.open")} title={t("history.open")} onClick={() => useApp.getState().setOverlay("history")}>
+              <Icon name="history" size={16} />
+            </button>
             <motion.button type="button" className="btn focus-ring" onClick={restoreTray} {...pressable}>
               {t("tray.restore")}
             </motion.button>

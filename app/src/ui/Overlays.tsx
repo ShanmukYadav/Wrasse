@@ -4,7 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { Bytes } from "../components/Bytes";
 import { t, type MessageKey } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
-import { useApp, type Overlay } from "../store/app";
+import type { DiskNode } from "../api";
+import { useApp, type DeletedEntry, type Overlay } from "../store/app";
+import { iconFor } from "../design/icons/semantic";
+import { categories } from "../design/tokens";
+import { useScheme } from "../lib/prefs";
+import { MiddleEllipsis } from "./home/MiddleEllipsis";
 
 export function Overlays() {
   const overlay = useApp((s) => s.overlay);
@@ -31,7 +36,7 @@ export function Overlays() {
             role="dialog"
             aria-modal="true"
             aria-label={t(`overlay.${overlay}`)}
-            className="overlay-panel glass-css"
+            className={`overlay-panel glass-css ${overlay === "history" ? "is-wide" : ""}`}
             onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1, transition: spring.soft }}
@@ -50,7 +55,7 @@ function Panel({ overlay }: { overlay: Exclude<Overlay, null | "design" | "onboa
   const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => closeRef.current?.focus(), []);
   return (
-    <div className="flex max-h-full flex-col gap-4">
+    <div className="flex min-h-0 max-h-full flex-1 flex-col gap-4">
       <div className="flex items-center justify-between">
         <h2 className="text-title">{t(`overlay.${overlay}`)}</h2>
         <button ref={closeRef} type="button" className="icon-btn focus-ring" aria-label={t("detail.close")} onClick={() => setOverlay(null)}>
@@ -165,31 +170,71 @@ function Audit() {
   );
 }
 
+type HistoryFilter = "all" | "inTray" | "deleted" | "restored";
+
+/** Everything deleted this session: what, where, how big, when, and whether it can come back. */
 function History() {
-  const batches = useApp((s) => s.batches);
-  const restoreTray = useApp((s) => s.restoreTray);
-  return batches.length === 0 ? (
-    <p className="text-label text-muted">{t("history.empty")}</p>
-  ) : (
-    <ul className="flex flex-col gap-1">
-      {batches.map((b) => (
-        <li key={b.id} className="row">
-          <div className="flex flex-col">
-            <span className="text-label text-strong">{t("tray.items", { count: b.items.length })}</span>
-            <span className="text-caption text-muted">
-              {new Date(b.at).toLocaleTimeString()} · {t(`history.${b.state}`)}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Bytes value={b.items.reduce((s, i) => s + i.size, 0)} className="text-caption text-muted" />
-            {b.state === "inTray" && (
-              <button type="button" className="btn focus-ring" onClick={restoreTray}>
-                {t("tray.restore")}
-              </button>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
+  const entries = useApp((s) => s.deleted);
+  const disk = useApp((s) => s.disk);
+  const scheme = useScheme();
+  const restoreItem = useApp((s) => s.restoreItem);
+  const [filter, setFilter] = useState<HistoryFilter>("all");
+  if (entries.length === 0) return <p className="text-label text-muted">{t("history.empty")}</p>;
+  const shown = filter === "all" ? entries : entries.filter((e) => e.status === filter);
+  const freed = entries.filter((e) => e.status !== "restored").reduce((s, e) => s + e.size, 0);
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-label text-muted">
+          {t("history.summary", { count: entries.length })} · <Bytes value={freed} /> {t("history.freed")}
+        </span>
+        <Segmented<HistoryFilter>
+          label="history-filter"
+          value={filter}
+          onChange={setFilter}
+          options={[["all", "history.all"], ["inTray", "history.inTray"], ["deleted", "history.deleted"], ["restored", "history.restored"]]}
+        />
+      </div>
+      <ul className="history-list">
+        {shown.map((e) => (
+          <HistoryRow key={`${e.id}-${e.at}`} entry={e} node={disk.nodes[e.id]} scheme={scheme} onRestore={() => restoreItem(e.id)} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function HistoryRow({ entry: e, node, scheme, onRestore }: { entry: DeletedEntry; node: DiskNode | undefined; scheme: "light" | "dark"; onRestore: () => void }) {
+  const c = categories[scheme][e.category];
+  const when = new Date(e.at);
+  const today = when.toDateString() === new Date().toDateString();
+  const time = today ? when.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : when.toLocaleDateString();
+  return (
+    <li className="history-row">
+      <span className="tile-badge history-badge" style={{ background: c.accent, boxShadow: `0 4px 10px ${c.shadow}` }}>
+        <Icon name={node ? iconFor(node) : "file"} tone="white" size={16} />
+      </span>
+      <span className="history-main">
+        <span className="history-title">
+          <span className="history-name">{e.name}</span>
+          <span className="history-kind" style={{ color: c.ink, background: c.to, borderColor: c.border }}>
+            {t(`history.what.${e.what}`)}
+          </span>
+        </span>
+        <MiddleEllipsis text={e.path} className="history-path" />
+      </span>
+      <span className="history-side">
+        <Bytes value={e.size} className="history-size" />
+        <span className="text-caption text-muted tabular">{time}</span>
+      </span>
+      <span className="history-status">
+        <span className={`chip ${e.status === "inTray" ? "chip-green" : e.status === "restored" ? "chip-violet" : "chip-protected"}`}>{t(`history.status.${e.status}`)}</span>
+        {e.status === "inTray" && (
+          <button type="button" className="link focus-ring" onClick={onRestore}>
+            {t("tray.restore")}
+          </button>
+        )}
+      </span>
+    </li>
   );
 }

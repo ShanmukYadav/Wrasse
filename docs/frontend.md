@@ -32,6 +32,7 @@ The frontend is a React 19 + TypeScript app in `app/src`, styled in the locked *
 | **Quarantine tray** | `ui/QuarantineTray.tsx`, `ui/Flyers.tsx` | Removed tiles fly into the tray (bottom right). Shows count and size, Restore and Empty now. Hidden when empty. |
 | **Snapshots ghost** | `ui/home/GhostTile.tsx` | Dashed tile for space held by local Time Machine snapshots, with "Free now". |
 | **List view** | `ui/ListView.tsx` | The focused folder's direct children as rows; Back returns to the map of the same folder. |
+| **History** | `ui/Overlays.tsx` (History), store `deleted` | Everything deleted this session, newest first: category-colored icon, name, kind (App, App data, AI model, Developer, Cache, Folder, File, Snapshots) in its category color, full path, size, time, and status (In tray · restorable with Restore, Restored, Deleted). Filters All / In tray / Deleted / Restored. Opens from the clock button in the header (after the first delete), the button on the tray, or the command bar ("history", "deleted"). |
 | **Overlays** | `ui/Overlays.tsx` | Startup items, Settings (theme, motion), Audit log (every action with path and size), Quarantine history. |
 | **Design page** | `ui/DesignPage.tsx` | Hidden (command "design system"): brand mark, icons, palette, chips and real tiles in both themes. |
 | **Toast** | `ui/Toast.tsx` | Short confirmations ("Tray emptied", "Revealed in Finder"). |

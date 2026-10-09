@@ -28,6 +28,7 @@ export function Header() {
       <CommandBar />
       <div className="d1-header-right">
         <FreeSpace />
+        <HistoryButton />
         <ScanButton />
       </div>
     </header>
@@ -102,5 +103,16 @@ function ScanButton() {
     <motion.button type="button" className="btn-scan focus-ring" onClick={scanning ? cancelScan : startScan} {...pressable}>
       {scanning ? t("home.stop") : t("home.scan")}
     </motion.button>
+  );
+}
+
+/** Opens History (everything deleted). Shown once something has been deleted. */
+function HistoryButton() {
+  const count = useApp((s) => s.deleted.length);
+  if (!count) return null;
+  return (
+    <button type="button" className="icon-btn header-history focus-ring" aria-label={t("history.open")} title={t("history.open")} onClick={() => useApp.getState().setOverlay("history")}>
+      <Icon name="history" size={20} />
+    </button>
   );
 }
