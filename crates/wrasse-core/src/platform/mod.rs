@@ -216,7 +216,8 @@ pub fn bundle_id(app: &Path) -> Option<String> {
 /// else, so it can't be pointed at real data.
 #[cfg(test)]
 pub fn remove_test_dir(path: &Path) {
-    let tmp = std::env::temp_dir();
+    let tmp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let path = &fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let name = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -232,7 +233,8 @@ pub fn remove_test_dir(path: &Path) {
 /// Tests only: removes one file inside a test scratch folder (same guard as `remove_test_dir`).
 #[cfg(test)]
 pub fn remove_test_file(path: &Path) {
-    let tmp = std::env::temp_dir();
+    let tmp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
+    let path = &fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     assert!(
         path.starts_with(&tmp) && path.to_string_lossy().contains("/wrasse-"),
         "not a test file: {}",
@@ -313,5 +315,172 @@ pub fn release_free_memory() {
         unsafe {
             malloc_zone_pressure_relief(std::ptr::null_mut(), 0);
         }
+    }
+}
+
+// ---- Safety support (Phase 2) -----------------------------------------------------------------
+
+/// How a protected location may be touched (PLAN.md §4.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Protection {
+    /// Nothing at or under this path is ever removed.
+    Hard,
+    /// The folder itself is never removed; items inside only when the user picks them by hand,
+    /// only to quarantine, never pre-selected (Documents, Desktop, iCloud Drive).
+    HandPickOnly,
+    /// The folder itself is never removed; what's inside follows the normal rules (Downloads, …).
+    FolderOnly,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Protected {
+    pub path: PathBuf,
+    pub protection: Protection,
+}
+
+/// The hardcoded protected locations for this OS. Rules and settings can't override them.
+pub fn protected_paths(home: &Path, wrasse_data: &Path) -> Vec<Protected> {
+    let mut out = vec![
+        Protected {
+            path: PathBuf::from("/"),
+            protection: Protection::FolderOnly,
+        },
+        Protected {
+            path: home.to_path_buf(),
+            protection: Protection::FolderOnly,
+        },
+        Protected {
+            path: wrasse_data.to_path_buf(),
+            protection: Protection::Hard,
+        },
+    ];
+    #[cfg(target_os = "macos")]
+    out.extend(macos::protect::protected(home));
+    out
+}
+
+/// Path parts that make everything under them protected wherever they appear (app-managed
+/// libraries: Photos, Music, TV).
+pub fn protected_name_suffixes() -> &'static [&'static str] {
+    &[
+        ".photoslibrary",
+        ".musiclibrary",
+        ".tvlibrary",
+        ".imovielibrary",
+    ]
+}
+
+/// Folders synced to other devices through iCloud (removing an item there removes it everywhere).
+pub fn synced_folders(home: &Path) -> Vec<PathBuf> {
+    #[cfg(target_os = "macos")]
+    return macos::protect::synced(home);
+    #[allow(unreachable_code)]
+    {
+        let _ = home;
+        Vec::new()
+    }
+}
+
+/// The current user's id; items owned by anyone else are never removed.
+pub fn current_uid() -> Option<u32> {
+    #[cfg(unix)]
+    // SAFETY: getuid has no preconditions.
+    return Some(unsafe { libc::getuid() });
+    #[allow(unreachable_code)]
+    None
+}
+
+pub fn owner_uid(md: &fs::Metadata) -> Option<u32> {
+    #[cfg(unix)]
+    return Some(std::os::unix::fs::MetadataExt::uid(md));
+    #[allow(unreachable_code)]
+    {
+        let _ = md;
+        None
+    }
+}
+
+/// Device and file id, to re-check that an item is still the same thing right before acting.
+pub fn file_identity(md: &fs::Metadata) -> (u64, u64) {
+    #[cfg(unix)]
+    return (
+        std::os::unix::fs::MetadataExt::dev(md),
+        std::os::unix::fs::MetadataExt::ino(md),
+    );
+    #[allow(unreachable_code)]
+    {
+        let _ = md;
+        (0, 0)
+    }
+}
+
+/// Whether a process has the file open.
+pub fn is_open(path: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::commands::is_open(path);
+    #[allow(unreachable_code)]
+    {
+        let _ = path;
+        false
+    }
+}
+
+/// Keeps the machine awake while the returned guard lives.
+pub struct Awake {
+    #[cfg(target_os = "macos")]
+    _inner: macos::awake::Awake,
+}
+
+#[cfg(target_os = "macos")]
+pub fn keep_awake(reason: &str) -> Awake {
+    Awake {
+        _inner: macos::awake::keep_awake(reason),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn keep_awake(_reason: &str) -> Awake {
+    Awake {}
+}
+
+/// Keeps one of Wrasse's own folders out of backups and search indexing.
+pub fn exclude_from_backups(dir: &Path) -> io::Result<()> {
+    #[cfg(target_os = "macos")]
+    return macos::commands::exclude_from_backups(dir);
+    #[allow(unreachable_code)]
+    {
+        let _ = dir;
+        Ok(())
+    }
+}
+
+pub fn is_excluded_from_backups(dir: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::commands::is_excluded_from_backups(dir);
+    #[allow(unreachable_code)]
+    {
+        let _ = dir;
+        false
+    }
+}
+
+/// Delegated OS actions (PLAN.md §4.1). Only `safety::delegate` calls this.
+pub fn run_delegated(action: crate::safety::Delegated) -> io::Result<()> {
+    match action {
+        crate::safety::Delegated::EmptyTrash => {
+            #[cfg(target_os = "macos")]
+            return macos::commands::empty_trash_via_finder();
+            #[allow(unreachable_code)]
+            Err(io::Error::from(io::ErrorKind::Unsupported))
+        }
+    }
+}
+
+/// Where the Trash is, to show its size before emptying.
+pub fn trash_dir(home: &Path) -> Option<PathBuf> {
+    if cfg!(target_os = "macos") {
+        Some(home.join(".Trash"))
+    } else {
+        None
     }
 }

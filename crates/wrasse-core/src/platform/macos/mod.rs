@@ -1,6 +1,9 @@
+pub mod awake;
+pub mod commands;
 mod fs;
 pub mod fsevents;
 pub mod power;
+pub mod protect;
 mod settings;
 
 pub use fs::{
