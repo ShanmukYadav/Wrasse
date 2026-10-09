@@ -308,7 +308,7 @@ fn count(d: &DirOut) -> ScanStats {
     s
 }
 
-fn pool() -> io::Result<rayon::ThreadPool> {
+pub(crate) fn pool() -> io::Result<rayon::ThreadPool> {
     let threads = std::thread::available_parallelism()
         .map_or(2, |n| n.get())
         .saturating_sub(1)
@@ -580,7 +580,7 @@ fn last_used_day(md: &fs::Metadata) -> u32 {
 }
 
 #[cfg(unix)]
-fn allocated(md: &fs::Metadata) -> u64 {
+pub(crate) fn allocated(md: &fs::Metadata) -> u64 {
     md.blocks() * 512
 }
 #[cfg(unix)]
@@ -598,7 +598,7 @@ fn nlink(md: &fs::Metadata) -> u64 {
 
 // Windows parity (allocation size, file IDs) arrives with the Windows checkpoint.
 #[cfg(not(unix))]
-fn allocated(md: &fs::Metadata) -> u64 {
+pub(crate) fn allocated(md: &fs::Metadata) -> u64 {
     md.len()
 }
 #[cfg(not(unix))]

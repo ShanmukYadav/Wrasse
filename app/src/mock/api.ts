@@ -4,6 +4,7 @@ import type { Disk, RemoveOptions, ScanProgress, SkipReason } from "../api/types
 import { deletable, handPickOnly } from "../api/caution";
 import { generateDisk } from "./disk";
 import { planFree } from "./rank";
+import { mockDuplicates, mockLarge, mockRemoval } from "./files";
 import { detach, reattach, zeroOut } from "../api/tree";
 
 const progressListeners = new Set<(p: ScanProgress) => void>();
@@ -121,6 +122,23 @@ export const mockApi: WrasseApi = {
   async quitApp(disk, appId) {
     disk.nodes[appId].running = false;
     return { disk, quit: true };
+  },
+  async largeFiles(minBytes) {
+    return mockLarge(minBytes);
+  },
+  async findDuplicates(onProgress) {
+    for (let i = 1; i <= 4; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      onProgress(i * 5e9, 2e10);
+    }
+    return mockDuplicates();
+  },
+  async cancelDuplicates() {},
+  async removeDuplicates(_keep, remove) {
+    return mockRemoval(remove);
+  },
+  async removePaths(paths) {
+    return mockRemoval(paths);
   },
   async planFree(disk, target) {
     return planFree(disk, target);

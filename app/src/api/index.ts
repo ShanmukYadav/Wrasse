@@ -4,7 +4,7 @@
 import { inTauri, type AppInfo } from "../lib/backend";
 import { mockApi } from "../mock/api";
 import { tauriApi } from "./tauri";
-import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan } from "./types";
+import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathRemoval } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -56,6 +56,15 @@ export interface WrasseApi {
   /** Free Up Space: what to remove to free `target` bytes, best first. `gone` are nodes
    *  already removed this session. Read-only. */
   planFree(disk: Disk, target: number): Promise<FreePlan>;
+  /** The biggest files in the home folder of at least `minBytes`, with last use. */
+  largeFiles(minBytes: number): Promise<BigFile[]>;
+  /** Byte-identical files of 10 MB or more (size, then partial hash, then full hash). */
+  findDuplicates(onProgress: (hashed: number, toHash: number) => void): Promise<DuplicateGroup[]>;
+  cancelDuplicates(): Promise<void>;
+  /** Moves the chosen copies to the tray, keeping `keep`, after checking they're still identical. */
+  removeDuplicates(keep: string, remove: string[]): Promise<PathRemoval>;
+  /** Moves files picked by hand to the tray (by path). */
+  removePaths(paths: string[]): Promise<PathRemoval>;
   /** Uninstalls an app: the bundle goes by its route (tray, Homebrew, Finder Trash), the chosen
    *  leftovers go to the tray. The core looks the app up again and checks it isn't running. */
   uninstall(disk: Disk, appId: number, leftoverIds: number[]): Promise<UninstallOutcome>;

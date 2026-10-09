@@ -82,6 +82,7 @@ const OVERLAYS: [Exclude<Overlay, null | "design" | "onboarding">, string[]][] =
   ["audit", ["audit log", "log", "history of actions"]],
   ["history", ["history", "deleted", "deleted items", "what did i delete", "quarantine history", "restore history"]],
   ["junk", ["system junk", "junk", "clean junk", "caches", "clean up"]],
+  ["largeOld", ["large files", "old files", "large and old", "big files", "duplicates", "duplicate files"]],
 ];
 
 export function suggest(raw: string): Suggestion[] {

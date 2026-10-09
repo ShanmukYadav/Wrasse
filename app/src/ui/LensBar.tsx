@@ -56,6 +56,11 @@ export function LensBar() {
           </button>
         );
       })}
+      {active === "largeOld" && (
+        <button type="button" className="lens-pill lens-extra focus-ring" onClick={() => useApp.getState().setOverlay("largeOld")}>
+          <span className="relative">{t("largeOld.showList")}</span>
+        </button>
+      )}
     </div>
   );
 }

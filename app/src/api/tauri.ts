@@ -6,7 +6,7 @@ import type { WrasseApi } from ".";
 import type { AppInfo } from "../lib/backend";
 import { insights } from "./insights";
 import { detach, detachedRoots, reattach } from "./tree";
-import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan } from "./types";
+import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathRemoval } from "./types";
 
 type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean };
 type CoreReport = { done: { path: string; bytes: number; entry: string | null }[]; skipped: { path: string; reason: SkipReason }[]; bytes: number; dryRun: boolean };
@@ -31,6 +31,10 @@ function request(n: DiskNode, opts: RemoveOptions): ItemRequest {
     ruleRoot: n.ruleRoot,
     handPicked: opts.handPicked,
   };
+}
+
+function pathRemoval(r: CoreReport): PathRemoval {
+  return { done: r.done.map((d) => ({ path: d.path, bytes: d.bytes, entry: d.entry ?? undefined })), skipped: r.skipped, bytes: r.bytes, dryRun: r.dryRun };
 }
 
 /** Maps the core's per-path results back to node ids. */
@@ -118,6 +122,23 @@ export const tauriApi: WrasseApi = {
     const r = await invoke<{ quit: boolean }>("quit_app", { bundle: app.path });
     if (r.quit) app.running = false;
     return { disk, quit: r.quit };
+  },
+  largeFiles: (minBytes) => invoke<BigFile[]>("large_files", { minBytes }),
+  async findDuplicates(onProgress) {
+    const off = await listen<{ hashed: number; toHash: number }>("dupes-progress", (e) => onProgress(e.payload.hashed, e.payload.toHash));
+    try {
+      return await invoke<DuplicateGroup[]>("find_duplicates");
+    } finally {
+      off();
+    }
+  },
+  cancelDuplicates: () => invoke("cancel_duplicates"),
+  async removeDuplicates(keep, remove) {
+    return pathRemoval(await invoke<CoreReport>("remove_duplicates", { keep, remove }));
+  },
+  async removePaths(paths) {
+    const items: ItemRequest[] = paths.map((path) => ({ path, safety: "yourCall", handPicked: true }));
+    return pathRemoval(await invoke<CoreReport>("remove_items", { items, deleteNow: false }));
   },
   planFree: (disk, target) => invoke<FreePlan>("plan_free", { target, gone: detachedRoots(disk) }),
   async uninstall(disk, appId, leftoverIds): Promise<UninstallOutcome> {

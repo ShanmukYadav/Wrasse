@@ -10,6 +10,9 @@
 //!                          the same safety checks as the app; prints the report as JSON
 //!   wrasse restore <entry-id>...   put tray items back
 //!   wrasse tray            list what's in the tray
+//!   wrasse large [MB]      the biggest files in the home folder (default 500 MB), from the last
+//!                          saved scan of the app, with last use. Read-only.
+//!   wrasse dupes           identical files of 10 MB or more in the home folder. Read-only.
 //!   wrasse apps [--orphans] list installed apps with source, owner, last use and leftovers (JSON);
 //!                          with --orphans, data folders whose app is gone. Read-only.
 
@@ -47,6 +50,49 @@ fn main() {
                 .map(|(_, e)| e)
                 .collect::<Vec<_>>()))
         }),
+        Some("large") | Some("dupes") => {
+            let dir = wrasse_core::scan::cache::data_dir(APP_ID).expect("no data folder");
+            let saved = wrasse_core::scan::cache::load_tree(&dir).expect("scan in the app first");
+            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let (_, prefix) = wrasse_core::platform::scan_root();
+            let today = (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                / 86_400) as u32;
+            let started = Instant::now();
+            let v = if args[0] == "large" {
+                let mb: u64 = args.get(1).and_then(|a| a.parse().ok()).unwrap_or(500);
+                serde_json::json!(wrasse_core::files::large_files(
+                    &saved.tree,
+                    prefix,
+                    &home,
+                    mb * 1_000_000,
+                    500,
+                    today,
+                    &wrasse_core::platform::last_used
+                ))
+            } else {
+                use wrasse_core::files::{dupes, files_over};
+                let candidates = files_over(&saved.tree, prefix, &home, dupes::MIN_BYTES);
+                eprintln!("{} files of 10 MB or more", candidates.len());
+                let docs = [home.join("Documents"), home.join("Desktop")];
+                let control = dupes::Control::default();
+                let groups = dupes::find(
+                    candidates,
+                    &|p| docs.iter().any(|d| p.starts_with(d)),
+                    today,
+                    &control,
+                );
+                eprintln!(
+                    "hashed {:.1} GB in full",
+                    control.hashed.load(std::sync::atomic::Ordering::Relaxed) as f64 / 1e9
+                );
+                serde_json::json!(groups)
+            };
+            println!("{}", serde_json::to_string_pretty(&v).unwrap());
+            eprintln!("{:.2}s", started.elapsed().as_secs_f64());
+        }
         Some("apps") => {
             let home = wrasse_core::platform::home_dir().expect("no home folder");
             let apps = wrasse_core::platform::installed_apps(&home);

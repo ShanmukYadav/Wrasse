@@ -16,6 +16,8 @@
 //! and only to quarantine. Platform-neutral: OS specifics come from `platform`.
 
 pub mod audit;
+#[cfg(test)]
+mod dupes_tests;
 pub mod exclusions;
 #[cfg(test)]
 mod uninstall_tests;

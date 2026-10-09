@@ -588,6 +588,17 @@ pub fn cask_of(app: &Path) -> Option<String> {
     }
 }
 
+/// When a file or app was last opened (Unix seconds), from Spotlight.
+pub fn last_used(path: &Path) -> Option<i64> {
+    #[cfg(target_os = "macos")]
+    return macos::spotlight::last_used(path);
+    #[allow(unreachable_code)]
+    {
+        let _ = path;
+        None
+    }
+}
+
 /// Politely asks an app to quit (never forces it). Returns once asked; the caller waits.
 pub fn quit_app(bundle_id: &str) -> io::Result<()> {
     #[cfg(target_os = "macos")]

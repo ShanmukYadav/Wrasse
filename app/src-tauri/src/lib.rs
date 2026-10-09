@@ -1,6 +1,7 @@
 //! Thin Tauri wrapper around wrasse-core. All logic lives in the core crate.
 
 mod cleanup;
+mod files;
 mod glass;
 mod scanning;
 
@@ -77,6 +78,7 @@ pub fn run() {
         }))
         .manage(scanning::ScanState::default())
         .manage(cleanup::CleanupState::default())
+        .manage(files::DupesState::default())
         .setup(|app| {
             cleanup::init(app.handle());
             if let Some(window) = app.get_webview_window("main") {
@@ -109,7 +111,11 @@ pub fn run() {
             cleanup::audit_recent,
             cleanup::quit_app,
             cleanup::uninstall_app,
-            cleanup::plan_free
+            cleanup::plan_free,
+            files::large_files,
+            files::find_duplicates,
+            files::cancel_duplicates,
+            files::remove_duplicates
         ])
         .run(tauri::generate_context!())
         .expect("error while running Wrasse");

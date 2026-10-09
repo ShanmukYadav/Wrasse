@@ -8,6 +8,7 @@ import { duration, ease, spring } from "../motion/tokens";
 import { api, type DiskNode, type JunkMatch, type JunkReport } from "../api";
 import { useApp, type DeletedEntry, type Overlay } from "../store/app";
 import { iconFor } from "../design/icons/semantic";
+import { LargeOld } from "./LargeOld";
 import { categories } from "../design/tokens";
 import { useScheme } from "../lib/prefs";
 import { MiddleEllipsis } from "./home/MiddleEllipsis";
@@ -37,7 +38,7 @@ export function Overlays() {
             role="dialog"
             aria-modal="true"
             aria-label={t(`overlay.${overlay}`)}
-            className={`overlay-panel glass-css ${overlay === "history" || overlay === "junk" ? "is-wide" : ""}`}
+            className={`overlay-panel glass-css ${overlay === "history" || overlay === "junk" || overlay === "largeOld" ? "is-wide" : ""}`}
             onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1, transition: spring.soft }}
@@ -69,6 +70,7 @@ function Panel({ overlay }: { overlay: Exclude<Overlay, null | "design" | "onboa
         {overlay === "audit" && <Audit />}
         {overlay === "history" && <History />}
         {overlay === "junk" && <Junk />}
+        {overlay === "largeOld" && <LargeOld />}
       </div>
     </div>
   );

@@ -129,6 +129,37 @@ export type FreePlan = {
   heldRunning: number;
 };
 
+export type FileKind = "video" | "archive" | "diskImage" | "model" | "audio" | "image" | "document" | "other";
+
+/** A big file in the home folder (Large & Old). */
+export type BigFile = {
+  path: string;
+  bytes: number;
+  /** Days since last opened (Spotlight) or, when `approx`, since last read or changed. */
+  lastUsedDays: number;
+  approx: boolean;
+  kind: FileKind;
+};
+
+export type DuplicateCopy = {
+  path: string;
+  modifiedDays: number;
+  /** In Documents, Desktop or iCloud Drive: never suggested for removal. */
+  handPickOnly: boolean;
+  /** An APFS clone: shares blocks, removing it frees (almost) nothing. */
+  clone: boolean;
+};
+
+export type DuplicateGroup = { hash: string; bytes: number; copies: DuplicateCopy[]; reclaimable: number };
+
+/** Moving files to the tray by path (Large & Old, Duplicates). */
+export type PathRemoval = {
+  done: { path: string; bytes: number; entry?: string }[];
+  skipped: { path: string; reason: SkipReason }[];
+  bytes: number;
+  dryRun: boolean;
+};
+
 /** What uninstalling did. */
 export type UninstallOutcome = {
   disk: Disk;

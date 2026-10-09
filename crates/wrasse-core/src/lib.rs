@@ -3,6 +3,7 @@
 pub mod apps;
 pub mod devjunk;
 pub mod diagnostics;
+pub mod files;
 pub mod format;
 pub mod llm;
 pub mod platform;

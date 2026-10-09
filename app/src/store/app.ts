@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type DiskNode, type FreeWhy, type TrayItem, api, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { type DiskNode, type FreeWhy, type PathRemoval, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -7,7 +7,7 @@ import type { AppInfo } from "../lib/backend";
 import { formatBytes } from "../lib/format";
 import { mapMotion } from "../motion/tokens";
 
-export type Overlay = "onboarding" | "junk" | "startup" | "settings" | "audit" | "history" | "design" | null;
+export type Overlay = "onboarding" | "junk" | "startup" | "settings" | "audit" | "history" | "design" | "largeOld" | null;
 export type ThemePref = "system" | "dark" | "light";
 export type MotionPref = "system" | "reduce" | "full";
 
@@ -143,6 +143,8 @@ type Actions = {
   /** Undo (toast, ⌘Z, ⌘K): puts back what the last move to the tray moved. */
   undoLastMove: () => void;
   setTrayOpen: (open: boolean) => void;
+  /** Moves files picked by path (Large & Old, Duplicates) to the tray; resolves to the paths moved. */
+  moveFilesToTray: (run: () => Promise<PathRemoval>) => Promise<string[]>;
   freeGhost: () => void;
   planFree: (bytes: number) => void;
   clearPlan: () => void;
@@ -550,6 +552,40 @@ export const useApp = create<State & Actions>((set, get) => {
       void restoreItems(items).then(() => get().notify(t("tray.undoneToast", { count: items.length })));
     },
     setTrayOpen: (open) => set({ trayOpen: open }),
+    moveFilesToTray: async (run) => {
+      if (readOnly()) return [];
+      const r = await run().catch(failed);
+      if (!r) return [];
+      if (r.dryRun) {
+        get().notify(t("dryRun.trayToast", { count: r.done.length, size: fmtBytes(r.bytes) }), { label: t("dryRun.turnOff"), run: () => get().setOverlay("settings") });
+        return [];
+      }
+      const { disk } = get();
+      const byPath = new Map(disk.nodes.filter((n) => n.parent >= 0).map((n) => [n.path, n.id]));
+      const at = Date.now();
+      const batch = `session-${batchId + 1}`;
+      const items: TrayItem[] = r.done.map((d) => ({ id: byPath.get(d.path) ?? -1, name: d.path.split("/").pop() ?? d.path, size: d.bytes, entry: d.entry, path: d.path, batch, at }));
+      const known = items.filter((i) => i.id >= 0).map((i) => i.id);
+      detach(disk, known);
+      set((s) => ({
+        diskVersion: s.diskVersion + 1,
+        tray: [...s.tray, ...items],
+        batches: items.length ? [{ id: ++batchId, at, items, state: "inTray" as const }, ...s.batches] : s.batches,
+        lastMove: items.length ? items : s.lastMove,
+        plan: remainingPlan(s.plan, known),
+        deleted: [
+          ...items.map((i) => ({ id: i.id, name: i.name, path: i.path ?? "", size: i.size, category: "files" as const, what: "file" as const, at, status: "inTray" as const, entry: i.entry })),
+          ...s.deleted,
+        ].slice(0, 500),
+      }));
+      for (const i of items) log(t("audit.quarantined"), i.path ?? i.name, i.size);
+      if (items.length) {
+        get().notify(t("tray.movedToast", { count: items.length, size: fmtBytes(r.bytes) }), { label: t("tray.undo"), run: () => get().undoLastMove() });
+        void syncTray();
+      }
+      reportSkipped(r.skipped.length);
+      return r.done.map((d) => d.path);
+    },
     restoreItem: (id) => {
       const item = get().tray.find((i) => i.id === id || i.entry === String(id));
       if (item) void restoreItems([item]);

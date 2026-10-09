@@ -31,6 +31,11 @@ export function handPickOnly(n: DiskNode): boolean {
   return HAND_PICK.test(n.path);
 }
 
+/** The same rule for a bare path (Large & Old, Duplicates). */
+export function handPickPath(path: string): boolean {
+  return HAND_PICK.test(path);
+}
+
 export function cautionFor(disk: Disk, id: number): Caution {
   const n = disk.nodes[id];
   if (!n || n.parent < 0 || n.kind === "ghost" || n.kind === "volume" || n.category === "system" || n.readOnly) return { kind: "blocked" };

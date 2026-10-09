@@ -119,6 +119,21 @@ pub struct Status {
     log_path: Option<PathBuf>,
 }
 
+impl CleanupState {
+    pub fn dry_run(&self) -> bool {
+        self.dry_run.load(Ordering::Relaxed)
+    }
+
+    /// Runs `f` with the safety context (for other modules' commands).
+    pub fn with<T>(&self, f: impl FnOnce(&mut Context) -> Result<T, String>) -> Result<T, String> {
+        let mut guard = self.ctx.lock().map_err(|e| e.to_string())?;
+        let ctx = guard
+            .as_mut()
+            .ok_or("cleanup isn't available (no data folder)")?;
+        f(ctx)
+    }
+}
+
 fn with_ctx<T>(
     state: &State<'_, CleanupState>,
     f: impl FnOnce(&mut Context) -> Result<T, String>,
