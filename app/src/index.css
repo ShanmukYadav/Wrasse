@@ -15,7 +15,6 @@ body {
   /* The reef light is painted into the page background: no extra full-window layers to keep in
      memory (an animated light layer cost ~24 MB of GPU memory at idle). */
   background: var(--caustics), var(--backdrop);
-  background-attachment: fixed;
   color: var(--c-text);
   font-family: var(--font);
   font-size: var(--t-body);
@@ -40,20 +39,10 @@ button {
   white-space: nowrap;
 }
 
-.app-backdrop {
-  position: fixed;
-  inset: 0;
-  background: var(--backdrop);
-}
-.caustics {
-  position: fixed;
-  inset: -12%;
-  background: var(--caustics);
-  pointer-events: none;
-}
-
+/* Absolute, not fixed: the window never scrolls, and a fixed full-window box gets its own GPU
+   layer (~16 MB at Retina size) for nothing. */
 .d1-frame {
-  position: fixed;
+  position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;

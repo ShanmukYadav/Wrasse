@@ -19,6 +19,5 @@ export const mapMotion = {
   candidateStagger: 0.045, // "free N GB" candidates light up in ranked order
   flight: 0.7, // block flying into the quarantine tray
   wheelThreshold: 60, // accumulated wheel delta that triggers one zoom step
-  caustics: 48, // one slow drift cycle of the backdrop light
   bubbleRise: 1.8, // seconds for a scan bubble to rise and fade
 } as const;

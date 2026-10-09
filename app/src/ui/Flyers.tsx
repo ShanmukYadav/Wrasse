@@ -7,6 +7,8 @@ import { useApp, type Flight } from "../store/app";
 // Quarantined blocks lift, shrink and fly into the tray icon.
 export function Flyers() {
   const flights = useApp((s) => s.flights);
+  // The full-window layer exists only while something is flying (it costs GPU memory at idle).
+  if (!flights.length) return null;
   return (
     <div className="flyers" aria-hidden>
       {flights.map((f) => (

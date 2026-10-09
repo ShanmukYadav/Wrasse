@@ -48,7 +48,7 @@ The frontend is a React 19 + TypeScript app in `app/src`, styled in the locked *
 |---|---|
 | App shell | `App.tsx` (backdrop, header, map, list, lens bar, panels, overlays, Esc handling), `main.tsx` |
 | Home | `ui/home/Home.tsx` (Home, Level, MoreTile), `Tile.tsx` (Tile, Row, SizeBar), `GhostTile.tsx`, `Header.tsx` (traffic lights, breadcrumb/back, command bar, free space, Scan), `Sonar.tsx`, `MiddleEllipsis.tsx`, `gridLayout.ts`, `nodes.ts` (isDrillable, lensMatch) |
-| Panels and bars | `ui/LensBar.tsx`, `ui/CommandBar.tsx` (CommandBar, PlanMeter), `ui/DetailPanel.tsx`, `ui/UninstallSheet.tsx`, `ui/QuarantineTray.tsx`, `ui/ListView.tsx`, `ui/Overlays.tsx`, `ui/Toast.tsx`, `ui/Flyers.tsx`, `ui/Caustics.tsx`, `ui/Safety.tsx`, `ui/DesignPage.tsx` |
+| Panels and bars | `ui/LensBar.tsx`, `ui/CommandBar.tsx` (CommandBar, PlanMeter), `ui/DetailPanel.tsx`, `ui/UninstallSheet.tsx`, `ui/QuarantineTray.tsx`, `ui/ListView.tsx`, `ui/Overlays.tsx`, `ui/Toast.tsx`, `ui/Flyers.tsx`, `ui/Safety.tsx`, `ui/DesignPage.tsx` |
 | Shared | `components/Bytes.tsx` (animated byte count), `components/DevBadge.tsx`, `design/icons/Icon.tsx` + `nodes.ts` + `semantic.ts` (duotone icon set, iconFor/toneFor), `design/brand/BrandMark.tsx` |
 | State | `store/app.ts` (zustand: focus, lens, selection, tray, batches, audit, plan, flights, scan, prefs, uninstall; all actions) |
 | Text | `i18n/en.ts`, `i18n/index.ts` (`t(key, vars)`, plurals with `one|other`) |
@@ -138,7 +138,6 @@ Each category also has `border`, `glow` (top-right circle) and badge `shadow` va
 | "where is" pulse | 1.5 s |
 | tray flight | 0.7 s |
 | candidate stagger | 0.045 s |
-| caustics drift | 48 s cycle |
 
 ## API (`src/api/`)
 
@@ -179,3 +178,8 @@ Actions take the UI's current tree and resolve to the updated tree. The mock edi
 - **`DiskNode`**: `id, name, path, size` (bytes on disk), `parent` (-1 for root), `children, depth, category` (files, aiModels, developer, apps, system, junk, other), `kind` (volume, dir, file, app, model, ghost), `lastOpenedDays, safety` (safe, yourCall, keep), `why` (one-line explanation), `lenses` / `deep` (lens bitmasks), `matchBytes` (bytes per lens), `grewBy, shade`. Optional: `duplicateOf, readOnly, rebuildable, running, appBundle, leftover` (caches, support, containers, logs, preferences, savedState), `note` ("In iCloud only", "Couldn't read", "Shares space with clones").
 - **`Insight`**: `{ tone: "amber" | "green" | "violet" | "protected", text }`.
 - **Helpers** (pure, no I/O): `lensMatches`, `ancestors`, `isAncestor`, `attached`, `lensForFocus`, `categoryForLens`, `throughSingles`, `emptyDisk`, constants `GB`, `LENS_BIT`, `LENS_IDS`.
+
+## Performance notes (Phase 1, macOS)
+
+- Idle memory with the window open (release build, after a scan): about 131 MB in total: app 47 MB, WebKit page 61 MB, WebKit GPU 18 MB, WebKit network 5 MB. The app process is ~44 MB before any scan, so most of it is the Tauri/WebKit baseline.
+- Keep full-window layers to a minimum: no `position: fixed` full-window boxes, no animated full-window layers, overlays mounted only while shown. Each full-window layer costs ~16 MB at Retina size. The reef light is painted into the page background for this reason.
