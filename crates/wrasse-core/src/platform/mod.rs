@@ -228,3 +228,90 @@ pub fn remove_test_dir(path: &Path) {
     );
     let _ = fs::remove_dir_all(path);
 }
+
+/// Tests only: removes one file inside a test scratch folder (same guard as `remove_test_dir`).
+#[cfg(test)]
+pub fn remove_test_file(path: &Path) {
+    let tmp = std::env::temp_dir();
+    assert!(
+        path.starts_with(&tmp) && path.to_string_lossy().contains("/wrasse-"),
+        "not a test file: {}",
+        path.display()
+    );
+    let _ = fs::remove_file(path);
+}
+
+/// Folders that changed under `watch` since a stored change-log position, for incremental
+/// rescans: `Some(changes)`, or `None` when only a full scan is reliable (no log, log reset,
+/// events dropped). macOS: FSEvents. Elsewhere: always `None` for now.
+pub fn changes_since(
+    watch: &Path,
+    since: u64,
+    log_id: Option<&str>,
+) -> Option<Vec<(PathBuf, bool)>> {
+    #[cfg(target_os = "macos")]
+    {
+        let dev = fs::symlink_metadata(watch)
+            .ok()
+            .map(|m| std::os::unix::fs::MetadataExt::dev(&m))?;
+        if macos::fsevents::volume_uuid(dev).as_deref() != log_id {
+            return None;
+        }
+        return macos::fsevents::changes_since(watch, since, std::time::Duration::from_secs(15));
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = (watch, since, log_id);
+        None
+    }
+}
+
+/// The change log's current position and identity for the volume holding `path`.
+pub fn change_log_position(path: &Path) -> (u64, Option<String>) {
+    #[cfg(target_os = "macos")]
+    {
+        let dev = fs::symlink_metadata(path)
+            .ok()
+            .map(|m| std::os::unix::fs::MetadataExt::dev(&m));
+        return (
+            macos::fsevents::current_event_id(),
+            dev.and_then(macos::fsevents::volume_uuid),
+        );
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = path;
+        (0, None)
+    }
+}
+
+/// Power source, for pausing scans on low battery (PLAN.md Phase 1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PowerState {
+    pub on_battery: bool,
+    /// Battery charge, 0–100 (100 where there is no battery).
+    pub percent: u8,
+    pub low_power: bool,
+}
+
+pub fn power_state() -> Option<PowerState> {
+    #[cfg(target_os = "macos")]
+    return macos::power::power_state();
+    #[allow(unreachable_code)]
+    None
+}
+
+/// Hands memory freed after a scan back to the OS (macOS keeps freed heap pages otherwise, which
+/// shows as idle memory).
+pub fn release_free_memory() {
+    #[cfg(target_os = "macos")]
+    {
+        extern "C" {
+            fn malloc_zone_pressure_relief(zone: *mut std::ffi::c_void, goal: usize) -> usize;
+        }
+        // SAFETY: a null zone means all zones; goal 0 means release as much as possible.
+        unsafe {
+            malloc_zone_pressure_relief(std::ptr::null_mut(), 0);
+        }
+    }
+}

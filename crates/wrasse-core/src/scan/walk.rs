@@ -21,11 +21,27 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 
+/// Why a scan is paused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PauseReason {
+    User,
+    /// On battery and below [`LOW_BATTERY`] percent.
+    Battery,
+    LowPowerMode,
+}
+
+/// Scans pause on battery below this charge (PLAN.md Phase 1).
+pub const LOW_BATTERY: u8 = 20;
+
 /// Shared between the scan and whoever drives it: cancel, pause and live progress.
 #[derive(Default)]
 pub struct ScanControl {
     cancel: AtomicBool,
     paused: AtomicBool,
+    /// 0 running, 1 user, 2 battery, 3 Low Power Mode.
+    reason: std::sync::atomic::AtomicU8,
+    /// The user resumed a power pause: don't pause for power again during this scan.
+    power_override: AtomicBool,
     items: AtomicU64,
     bytes: AtomicU64,
     current: Mutex<String>,
@@ -36,14 +52,49 @@ pub struct Progress {
     pub items: u64,
     pub bytes: u64,
     pub current: String,
+    pub paused: Option<PauseReason>,
 }
 
 impl ScanControl {
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Relaxed);
     }
+    /// Pause or resume by hand. Resuming also overrides power pauses for the rest of the scan.
     pub fn set_paused(&self, paused: bool) {
+        if !paused {
+            self.power_override.store(true, Ordering::Relaxed);
+        }
+        self.reason
+            .store(if paused { 1 } else { 0 }, Ordering::Relaxed);
         self.paused.store(paused, Ordering::Relaxed);
+    }
+
+    /// Pauses on battery below [`LOW_BATTERY`] or in Low Power Mode, and resumes when that
+    /// clears, unless the user paused by hand or chose to carry on.
+    pub fn apply_power(&self, power: crate::platform::PowerState) {
+        if self.power_override.load(Ordering::Relaxed) || self.reason.load(Ordering::Relaxed) == 1 {
+            return;
+        }
+        let reason = if power.low_power {
+            3
+        } else if power.on_battery && power.percent < LOW_BATTERY {
+            2
+        } else {
+            0
+        };
+        self.reason.store(reason, Ordering::Relaxed);
+        self.paused.store(reason != 0, Ordering::Relaxed);
+    }
+
+    pub fn pause_reason(&self) -> Option<PauseReason> {
+        if !self.paused.load(Ordering::Relaxed) {
+            return None;
+        }
+        match self.reason.load(Ordering::Relaxed) {
+            2 => Some(PauseReason::Battery),
+            3 => Some(PauseReason::LowPowerMode),
+            _ => Some(PauseReason::User),
+        }
     }
     pub fn is_cancelled(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)
@@ -53,6 +104,7 @@ impl ScanControl {
             items: self.items.load(Ordering::Relaxed),
             bytes: self.bytes.load(Ordering::Relaxed),
             current: self.current.lock().map(|c| c.clone()).unwrap_or_default(),
+            paused: self.pause_reason(),
         }
     }
 }
@@ -113,18 +165,7 @@ pub fn scan(root: &Path, control: &ScanControl) -> io::Result<Tree> {
             "scan root is not a folder",
         ));
     }
-    let threads = std::thread::available_parallelism()
-        .map_or(2, |n| n.get())
-        .saturating_sub(1)
-        .max(1);
-    let pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(threads)
-        .stack_size(16 * 1024 * 1024)
-        .thread_name(|i| format!("wrasse-scan-{i}"))
-        .start_handler(|_| platform::lower_thread_priority())
-        .build()
-        .map_err(io::Error::other)?;
-
+    let pool = pool()?;
     let ctx = Ctx {
         control,
         links: LinkSet::new(),
@@ -138,7 +179,199 @@ pub fn scan(root: &Path, control: &ScanControl) -> io::Result<Tree> {
     Ok(flatten(out, root.to_string_lossy().into_owned(), stats))
 }
 
+/// A folder that changed since the last scan (from FSEvents).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Change {
+    pub path: PathBuf,
+    /// The OS lost track of details below this folder: re-walk all of it, not just its entries.
+    pub recursive: bool,
+}
+
+/// Updates a previous scan in place of a full walk: only the changed folders are re-read.
+/// Paths outside the tree's root are ignored. Hard links seen in unchanged parts aren't known,
+/// so a hard link added inside a changed folder may be counted again until the next full scan.
+pub fn rescan(previous: &Tree, changes: &[Change], control: &ScanControl) -> io::Result<Tree> {
+    let root_path = PathBuf::from(&previous.root_path);
+    let md = fs::symlink_metadata(&root_path)?;
+    let pool = pool()?;
+    let ctx = Ctx {
+        control,
+        links: LinkSet::new(),
+        dev: dev_of(&md),
+        stats: Mutex::new(ScanStats::default()),
+    };
+    let mut root = unflatten(previous, previous.root());
+    // Shallow paths first, so a re-walked folder isn't then refreshed again for a change inside it.
+    let mut ordered: Vec<&Change> = changes.iter().collect();
+    ordered.sort_by_key(|c| c.path.components().count());
+    let mut rewalked: Vec<PathBuf> = Vec::new();
+    pool.install(|| {
+        for change in ordered {
+            if rewalked.iter().any(|r| change.path.starts_with(r)) {
+                continue;
+            }
+            let Ok(rel) = change.path.strip_prefix(&root_path) else {
+                continue;
+            };
+            // The deepest folder of the old tree on the way to the changed path.
+            let mut node = &mut root;
+            let mut path = root_path.clone();
+            let mut exact = true;
+            for part in rel.components() {
+                let name = part.as_os_str().to_string_lossy();
+                match node.dirs.iter().position(|d| *d.name == *name) {
+                    Some(i) => {
+                        path.push(part);
+                        node = &mut node.dirs[i];
+                    }
+                    None => {
+                        exact = false;
+                        break;
+                    }
+                }
+            }
+            let Ok(own) = fs::symlink_metadata(&path) else {
+                continue; // gone; its parent's change event covers the removal
+            };
+            if !own.is_dir() || dev_of(&own) != ctx.dev {
+                continue;
+            }
+            let old = std::mem::take(node);
+            *node = if exact && change.recursive {
+                rewalked.push(path.clone());
+                walk_dir(path, old.name, &own, &ctx)
+            } else {
+                refresh_dir(old, path, &own, &ctx)
+            };
+        }
+    });
+    total_all(&mut root);
+    let mut stats = count(&root);
+    stats.hardlinks_deduped = previous.stats.hardlinks_deduped;
+    stats.cancelled = control.is_cancelled();
+    stats.clone_shared_bytes = root.clone_shared;
+    Ok(flatten(root, previous.root_path.clone(), stats))
+}
+
+/// The arena back into nested folders, so parts of it can be swapped out.
+fn unflatten(tree: &Tree, id: u32) -> DirOut {
+    let n = tree.node(id);
+    let mut out = DirOut {
+        name: tree.name(id).into(),
+        size: n.size,
+        small_size: n.small_size,
+        small_count: n.small_count,
+        items: n.items,
+        last_used_day: n.last_used_day,
+        clone_shared: n.clone_shared,
+        flags: n.flags,
+        files: Vec::new(),
+        dirs: Vec::new(),
+    };
+    for c in tree.children(id) {
+        let cn = tree.node(c);
+        match cn.kind {
+            Kind::Dir => out.dirs.push(unflatten(tree, c)),
+            Kind::File => out.files.push(FileOut {
+                name: tree.name(c).into(),
+                size: cn.size,
+                last_used_day: cn.last_used_day,
+                clone_shared: cn.clone_shared,
+                flags: cn.flags,
+            }),
+        }
+    }
+    out
+}
+
+/// Scan statistics recounted from a tree (after an incremental update).
+fn count(d: &DirOut) -> ScanStats {
+    let mut s = ScanStats {
+        files: d.files.len() as u64 + u64::from(d.small_count),
+        dirs: d.dirs.len() as u64,
+        unreadable_dirs: u64::from(d.flags & flag::UNREADABLE != 0),
+        dataless_items: d
+            .files
+            .iter()
+            .filter(|f| f.flags & flag::DATALESS != 0)
+            .count() as u64
+            + u64::from(d.flags & flag::DATALESS != 0),
+        ..Default::default()
+    };
+    for c in &d.dirs {
+        let cs = count(c);
+        s.files += cs.files;
+        s.dirs += cs.dirs;
+        s.unreadable_dirs += cs.unreadable_dirs;
+        s.dataless_items += cs.dataless_items;
+    }
+    s
+}
+
+fn pool() -> io::Result<rayon::ThreadPool> {
+    let threads = std::thread::available_parallelism()
+        .map_or(2, |n| n.get())
+        .saturating_sub(1)
+        .max(1);
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(threads)
+        .stack_size(16 * 1024 * 1024)
+        .thread_name(|i| format!("wrasse-scan-{i}"))
+        .start_handler(|_| platform::lower_thread_priority())
+        .build()
+        .map_err(io::Error::other)
+}
+
 fn walk_dir(path: PathBuf, name: Box<str>, own: &fs::Metadata, ctx: &Ctx) -> DirOut {
+    let Some((mut out, subdirs)) = read_level(&path, name, own, ctx) else {
+        return DirOut::default();
+    };
+    let children: Vec<DirOut> = subdirs
+        .into_par_iter()
+        .map(|(p, n, md)| walk_dir(p, n, &md, ctx))
+        .collect();
+    out.dirs.extend(children);
+    total(&mut out);
+    out
+}
+
+/// Re-reads one folder's own entries and keeps the subtrees of subfolders that are still there
+/// (FSEvents reports changes per folder). New subfolders are walked in full.
+fn refresh_dir(old: DirOut, path: PathBuf, own: &fs::Metadata, ctx: &Ctx) -> DirOut {
+    let Some((mut out, subdirs)) = read_level(&path, old.name.clone(), own, ctx) else {
+        return old;
+    };
+    let mut previous: std::collections::HashMap<Box<str>, DirOut> =
+        old.dirs.into_iter().map(|d| (d.name.clone(), d)).collect();
+    let (kept, fresh): (Vec<_>, Vec<_>) = subdirs.into_iter().partition(|(_, n, _)| {
+        previous
+            .get(n)
+            .is_some_and(|d| d.flags & (flag::UNREADABLE | flag::MOUNT | flag::DATALESS) == 0)
+    });
+    let walked: Vec<DirOut> = fresh
+        .into_par_iter()
+        .map(|(p, n, md)| walk_dir(p, n, &md, ctx))
+        .collect();
+    for (_, n, _) in kept {
+        if let Some(d) = previous.remove(&n) {
+            out.dirs.push(d);
+        }
+    }
+    out.dirs.extend(walked);
+    total(&mut out);
+    out
+}
+
+/// One folder's direct entries: large files listed, small files aggregated, special folders
+/// (other volumes, iCloud dataless) recorded, and the subfolders still to visit. `None` when the
+/// scan was cancelled.
+#[allow(clippy::type_complexity)]
+fn read_level(
+    path: &Path,
+    name: Box<str>,
+    own: &fs::Metadata,
+    ctx: &Ctx,
+) -> Option<(DirOut, Vec<(PathBuf, Box<str>, fs::Metadata)>)> {
     let mut out = DirOut {
         name,
         last_used_day: last_used_day(own),
@@ -149,19 +382,19 @@ fn walk_dir(path: PathBuf, name: Box<str>, own: &fs::Metadata, ctx: &Ctx) -> Dir
         std::thread::sleep(Duration::from_millis(50));
     }
     if control.is_cancelled() {
-        return out;
+        return None;
     }
     if let Ok(mut current) = control.current.try_lock() {
         current.clear();
         current.push_str(&path.to_string_lossy());
     }
 
-    let entries = match fs::read_dir(&path) {
+    let entries = match fs::read_dir(path) {
         Ok(e) => e,
         Err(_) => {
             out.flags |= flag::UNREADABLE;
             bump(ctx, |s| s.unreadable_dirs += 1);
-            return out;
+            return Some((out, Vec::new()));
         }
     };
 
@@ -171,7 +404,6 @@ fn walk_dir(path: PathBuf, name: Box<str>, own: &fs::Metadata, ctx: &Ctx) -> Dir
         let Ok(md) = entry.metadata() else { continue }; // lstat: symlinks are not followed
         let name: Box<str> = entry.file_name().to_string_lossy().into();
         let used = last_used_day(&md);
-        out.items += 1;
         if md.is_dir() {
             dirs += 1;
             if dev_of(&md) != ctx.dev {
@@ -209,7 +441,6 @@ fn walk_dir(path: PathBuf, name: Box<str>, own: &fs::Metadata, ctx: &Ctx) -> Dir
         }
         control.items.fetch_add(1, Ordering::Relaxed);
         control.bytes.fetch_add(size, Ordering::Relaxed);
-        out.last_used_day = out.last_used_day.max(used);
         if size >= SMALL_FILE {
             let mut clone_shared = 0;
             if md.is_file() {
@@ -218,8 +449,6 @@ fn walk_dir(path: PathBuf, name: Box<str>, own: &fs::Metadata, ctx: &Ctx) -> Dir
                     clone_shared = shared;
                 }
             }
-            out.size += size;
-            out.clone_shared += clone_shared;
             out.files.push(FileOut {
                 name,
                 size,
@@ -228,9 +457,9 @@ fn walk_dir(path: PathBuf, name: Box<str>, own: &fs::Metadata, ctx: &Ctx) -> Dir
                 flags,
             });
         } else {
-            out.size += size;
             out.small_size += size;
             out.small_count += 1;
+            out.last_used_day = out.last_used_day.max(used);
         }
     }
     bump(ctx, |s| {
@@ -240,19 +469,34 @@ fn walk_dir(path: PathBuf, name: Box<str>, own: &fs::Metadata, ctx: &Ctx) -> Dir
         s.hardlinks_deduped += deduped;
     });
     control.items.fetch_add(dirs, Ordering::Relaxed);
+    Some((out, subdirs))
+}
 
-    let children: Vec<DirOut> = subdirs
-        .into_par_iter()
-        .map(|(p, n, md)| walk_dir(p, n, &md, ctx))
-        .collect();
-    for d in &children {
-        out.size += d.size;
-        out.items += d.items;
-        out.clone_shared += d.clone_shared;
-        out.last_used_day = out.last_used_day.max(d.last_used_day);
+/// A folder's totals from its direct entries and its (already totalled) subfolders.
+fn total(d: &mut DirOut) {
+    let direct = d.files.len() as u64 + u64::from(d.small_count) + d.dirs.len() as u64;
+    d.size = d.small_size
+        + d.files.iter().map(|f| f.size).sum::<u64>()
+        + d.dirs.iter().map(|c| c.size).sum::<u64>();
+    d.items = direct + d.dirs.iter().map(|c| c.items).sum::<u64>();
+    d.clone_shared = d.files.iter().map(|f| f.clone_shared).sum::<u64>()
+        + d.dirs.iter().map(|c| c.clone_shared).sum::<u64>();
+    let newest = d
+        .files
+        .iter()
+        .map(|f| f.last_used_day)
+        .chain(d.dirs.iter().map(|c| c.last_used_day))
+        .max()
+        .unwrap_or(0);
+    d.last_used_day = d.last_used_day.max(newest);
+}
+
+/// Totals for a whole subtree, bottom-up (after folders inside it were refreshed).
+fn total_all(d: &mut DirOut) {
+    for c in &mut d.dirs {
+        total_all(c);
     }
-    out.dirs.extend(children);
-    out
+    total(d);
 }
 
 fn bump(ctx: &Ctx, f: impl FnOnce(&mut ScanStats)) {
@@ -456,5 +700,81 @@ mod tests {
         assert!(tree.stats.cancelled);
         assert_eq!(tree.nodes.len(), 1);
         crate::platform::remove_test_dir(&root);
+    }
+
+    #[test]
+    fn rescan_picks_up_changes_in_changed_folders_only() {
+        let root = temp_dir("rescan");
+        fs::create_dir_all(root.join("a/deep")).unwrap();
+        fs::create_dir_all(root.join("b")).unwrap();
+        write(&root.join("a/deep/one.bin"), 2_000_000);
+        write(&root.join("b/two.bin"), 3_000_000);
+        let first = scan(&root, &ScanControl::default()).unwrap();
+
+        // Change a/ (new file, new folder) and remove b/two.bin.
+        write(&root.join("a/new.bin"), 4_000_000);
+        fs::create_dir_all(root.join("a/fresh")).unwrap();
+        write(&root.join("a/fresh/x.bin"), 1_500_000);
+        crate::platform::remove_test_file(&root.join("b/two.bin"));
+        let changes = [
+            Change {
+                path: root.join("a"),
+                recursive: false,
+            },
+            Change {
+                path: root.join("b"),
+                recursive: false,
+            },
+        ];
+        let updated = rescan(&first, &changes, &ScanControl::default()).unwrap();
+        let full = scan(&root, &ScanControl::default()).unwrap();
+        assert_eq!(updated.node(0).size, full.node(0).size);
+        assert!(updated
+            .find(&format!("{}/a/fresh/x.bin", root.display()))
+            .is_some());
+        assert!(updated
+            .find(&format!("{}/a/deep/one.bin", root.display()))
+            .is_some());
+        assert!(updated
+            .find(&format!("{}/b/two.bin", root.display()))
+            .is_none());
+        assert_consistent(&updated, 0);
+        crate::platform::remove_test_dir(&root);
+    }
+
+    #[test]
+    fn power_pauses_and_resumes_unless_overridden() {
+        use crate::platform::PowerState;
+        let c = ScanControl::default();
+        let low = PowerState {
+            on_battery: true,
+            percent: 15,
+            low_power: false,
+        };
+        let fine = PowerState {
+            on_battery: true,
+            percent: 60,
+            low_power: false,
+        };
+        let lpm = PowerState {
+            on_battery: false,
+            percent: 100,
+            low_power: true,
+        };
+        c.apply_power(low);
+        assert_eq!(c.pause_reason(), Some(PauseReason::Battery));
+        c.apply_power(fine);
+        assert_eq!(c.pause_reason(), None);
+        c.apply_power(lpm);
+        assert_eq!(c.pause_reason(), Some(PauseReason::LowPowerMode));
+        // The user resumes: power no longer pauses this scan.
+        c.set_paused(false);
+        c.apply_power(low);
+        assert_eq!(c.pause_reason(), None);
+        // A hand pause isn't undone by power changes.
+        let d = ScanControl::default();
+        d.set_paused(true);
+        d.apply_power(fine);
+        assert_eq!(d.pause_reason(), Some(PauseReason::User));
     }
 }

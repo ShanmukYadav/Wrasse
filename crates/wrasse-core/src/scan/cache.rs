@@ -3,6 +3,7 @@
 //! "what grew". Writing it is the only file Wrasse creates in this phase.
 
 use super::breakdown::UiDisk;
+use super::tree::{Kind, Node, ScanStats, Tree};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io;
@@ -53,4 +54,214 @@ pub fn load(dir: &Path) -> Option<(UiDisk, u64)> {
     let bytes = fs::read(dir.join(FILE)).ok()?;
     let file: CacheFile = serde_json::from_slice(&bytes).ok()?;
     (file.version == VERSION).then_some((file.disk, file.scanned_at))
+}
+
+// ---- The full tree, for incremental rescans --------------------------------------------------
+//
+// A compact binary file (`scan-tree.bin`): the arena as fixed-size records plus the names, and the
+// FSEvents event ID taken just before the walk started, so the next scan can ask "what changed
+// since then?" and re-read only those folders.
+
+const TREE_FILE: &str = "scan-tree.bin";
+const TREE_MAGIC: &[u8; 8] = b"WRSTREE2";
+
+pub struct SavedTree {
+    pub tree: Tree,
+    /// FSEvents event ID from just before this tree was walked (0 where there's no event log).
+    pub event_id: u64,
+    /// Seconds since the Unix epoch.
+    pub scanned_at: u64,
+    /// Identity of the volume's change log when `event_id` was taken (FSEvents UUID).
+    pub log_id: Option<String>,
+}
+
+fn put_u32(b: &mut Vec<u8>, v: u32) {
+    b.extend_from_slice(&v.to_le_bytes());
+}
+fn put_u64(b: &mut Vec<u8>, v: u64) {
+    b.extend_from_slice(&v.to_le_bytes());
+}
+
+pub fn save_tree(
+    dir: &Path,
+    tree: &Tree,
+    event_id: u64,
+    log_id: Option<&str>,
+    scanned_at: u64,
+) -> io::Result<()> {
+    let mut b = Vec::with_capacity(tree.nodes.len() * 56 + 1024);
+    b.extend_from_slice(TREE_MAGIC);
+    put_u64(&mut b, event_id);
+    put_u64(&mut b, scanned_at);
+    let log = log_id.unwrap_or("");
+    put_u32(&mut b, log.len() as u32);
+    b.extend_from_slice(log.as_bytes());
+    put_u32(&mut b, tree.root_path.len() as u32);
+    b.extend_from_slice(tree.root_path.as_bytes());
+    let s = tree.stats;
+    for v in [
+        s.files,
+        s.dirs,
+        s.unreadable_dirs,
+        s.dataless_items,
+        s.hardlinks_deduped,
+        s.clone_shared_bytes,
+    ] {
+        put_u64(&mut b, v);
+    }
+    put_u32(&mut b, tree.nodes.len() as u32);
+    for n in &tree.nodes {
+        for v in [
+            n.parent,
+            n.first_child,
+            n.next_sibling,
+            n.name,
+            n.small_count,
+            n.last_used_day,
+        ] {
+            put_u32(&mut b, v);
+        }
+        for v in [n.size, n.small_size, n.items, n.clone_shared] {
+            put_u64(&mut b, v);
+        }
+        b.push(n.kind as u8);
+        b.push(n.flags);
+    }
+    put_u32(&mut b, tree.names.len() as u32);
+    for name in &tree.names {
+        put_u32(&mut b, name.len() as u32);
+        b.extend_from_slice(name.as_bytes());
+    }
+    if b.len() > MAX_BYTES {
+        return Ok(());
+    }
+    fs::create_dir_all(dir)?;
+    fs::write(dir.join(TREE_FILE), b)
+}
+
+struct Reader<'a> {
+    b: &'a [u8],
+    at: usize,
+}
+
+impl Reader<'_> {
+    fn take(&mut self, n: usize) -> Option<&[u8]> {
+        let s = self.b.get(self.at..self.at.checked_add(n)?)?;
+        self.at += n;
+        Some(s)
+    }
+    fn u32(&mut self) -> Option<u32> {
+        Some(u32::from_le_bytes(self.take(4)?.try_into().ok()?))
+    }
+    fn u64(&mut self) -> Option<u64> {
+        Some(u64::from_le_bytes(self.take(8)?.try_into().ok()?))
+    }
+    fn u8(&mut self) -> Option<u8> {
+        Some(self.take(1)?[0])
+    }
+}
+
+pub fn load_tree(dir: &Path) -> Option<SavedTree> {
+    let bytes = fs::read(dir.join(TREE_FILE)).ok()?;
+    let mut r = Reader { b: &bytes, at: 0 };
+    if r.take(8)? != TREE_MAGIC {
+        return None;
+    }
+    let event_id = r.u64()?;
+    let scanned_at = r.u64()?;
+    let log_len = r.u32()? as usize;
+    let log = String::from_utf8(r.take(log_len)?.to_vec()).ok()?;
+    let log_id = (!log.is_empty()).then_some(log);
+    let len = r.u32()? as usize;
+    let root_path = String::from_utf8(r.take(len)?.to_vec()).ok()?;
+    let stats = ScanStats {
+        files: r.u64()?,
+        dirs: r.u64()?,
+        unreadable_dirs: r.u64()?,
+        dataless_items: r.u64()?,
+        hardlinks_deduped: r.u64()?,
+        clone_shared_bytes: r.u64()?,
+        cancelled: false,
+    };
+    let count = r.u32()? as usize;
+    let mut nodes = Vec::with_capacity(count);
+    for _ in 0..count {
+        let (parent, first_child, next_sibling, name, small_count, last_used_day) =
+            (r.u32()?, r.u32()?, r.u32()?, r.u32()?, r.u32()?, r.u32()?);
+        let (size, small_size, items, clone_shared) = (r.u64()?, r.u64()?, r.u64()?, r.u64()?);
+        let kind = if r.u8()? == Kind::File as u8 {
+            Kind::File
+        } else {
+            Kind::Dir
+        };
+        let flags = r.u8()?;
+        nodes.push(Node {
+            parent,
+            first_child,
+            next_sibling,
+            name,
+            size,
+            small_size,
+            small_count,
+            items,
+            last_used_day,
+            clone_shared,
+            kind,
+            flags,
+        });
+    }
+    let name_count = r.u32()? as usize;
+    let mut names = Vec::with_capacity(name_count);
+    for _ in 0..name_count {
+        let len = r.u32()? as usize;
+        names.push(
+            String::from_utf8_lossy(r.take(len)?)
+                .into_owned()
+                .into_boxed_str(),
+        );
+    }
+    if nodes.is_empty() || nodes.iter().any(|n| n.name as usize >= names.len()) {
+        return None;
+    }
+    Some(SavedTree {
+        tree: Tree {
+            nodes,
+            names,
+            root_path,
+            stats,
+        },
+        event_id,
+        scanned_at,
+        log_id,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scan::{scan, ScanControl};
+
+    #[test]
+    fn tree_round_trips() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("wrasse-cache-{nanos}"));
+        fs::create_dir_all(dir.join("data/sub")).unwrap();
+        fs::write(dir.join("data/sub/a.bin"), vec![1u8; 2_000_000]).unwrap();
+        let tree = scan(&dir.join("data"), &ScanControl::default()).unwrap();
+        save_tree(&dir, &tree, 42, Some("uuid"), 7).unwrap();
+        let back = load_tree(&dir).unwrap();
+        assert_eq!(back.event_id, 42);
+        assert_eq!(back.log_id.as_deref(), Some("uuid"));
+        assert_eq!(back.tree.nodes.len(), tree.nodes.len());
+        assert_eq!(back.tree.node(0).size, tree.node(0).size);
+        assert_eq!(back.tree.root_path, tree.root_path);
+        assert!(back
+            .tree
+            .find(&format!("{}/data/sub/a.bin", dir.display()))
+            .is_some());
+        crate::platform::remove_test_dir(&dir);
+    }
 }

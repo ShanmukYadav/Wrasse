@@ -8,7 +8,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, State};
 use wrasse_core::platform;
 use wrasse_core::scan::breakdown::UiDisk;
-use wrasse_core::scan::{cache, ScanControl};
+use wrasse_core::scan::{cache, PauseReason, ScanControl};
 use wrasse_core::session;
 
 /// The scan in progress, if any (for cancel and pause).
@@ -22,6 +22,19 @@ struct ProgressEvent {
     items: u64,
     bytes: u64,
     current: String,
+    /// "user", "battery" or "lowPower" while paused.
+    paused: Option<&'static str>,
+}
+
+/// Power is checked this often during a scan (it runs `pmset`).
+const POWER_EVERY_TICKS: u32 = 100;
+
+fn pause_label(p: Option<PauseReason>) -> Option<&'static str> {
+    p.map(|r| match r {
+        PauseReason::User => "user",
+        PauseReason::Battery => "battery",
+        PauseReason::LowPowerMode => "lowPower",
+    })
 }
 
 /// Progress events at most 10 times a second (PLAN.md §5.4).
@@ -56,7 +69,15 @@ pub async fn scan(app: AppHandle, state: State<'_, ScanState>) -> Result<UiDisk,
     let ticker = {
         let (app, control, done) = (app.clone(), control.clone(), done.clone());
         std::thread::spawn(move || {
+            let mut tick: u32 = 0;
             while !done.load(std::sync::atomic::Ordering::Relaxed) {
+                // On battery below 20% or in Low Power Mode the scan waits (checked every 10 s).
+                if tick % POWER_EVERY_TICKS == 0 {
+                    if let Some(power) = platform::power_state() {
+                        control.apply_power(power);
+                    }
+                }
+                tick = tick.wrapping_add(1);
                 let p = control.progress();
                 let _ = app.emit(
                     "scan-progress",
@@ -65,6 +86,7 @@ pub async fn scan(app: AppHandle, state: State<'_, ScanState>) -> Result<UiDisk,
                         items: p.items,
                         bytes: p.bytes,
                         current: display(&p.current),
+                        paused: pause_label(p.paused),
                     },
                 );
                 std::thread::sleep(PROGRESS_EVERY);
@@ -121,6 +143,7 @@ pub async fn scan(app: AppHandle, state: State<'_, ScanState>) -> Result<UiDisk,
             items: p.items,
             bytes: p.bytes,
             current: String::new(),
+            paused: None,
         },
     );
     Ok(disk)

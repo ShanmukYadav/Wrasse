@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import { BrandMark } from "../../design/brand/BrandMark";
+import { api } from "../../api";
 import { t } from "../../i18n";
 import { formatBytes } from "../../lib/format";
 import { useApp } from "../../store/app";
@@ -16,9 +17,11 @@ export function Sonar() {
   const scheme = useScheme();
   const reduced = useReducedMotion();
   const vars = { "--sonar-dur": `${mapMotion.sonar}s`, "--bubble-dur": `${mapMotion.bubbleRise}s` } as CSSProperties;
+  // The sweep holds still while the scan waits.
+  const paused = useApp((s) => !!s.scanProgress?.paused);
   if (reduced) {
     return (
-      <div className="sonar" style={vars} aria-hidden>
+      <div className={`sonar ${paused ? "is-paused" : ""}`} style={vars}>
         <span className="sonar-mark is-fade">
           <BrandMark size={56} />
         </span>
@@ -27,7 +30,7 @@ export function Sonar() {
     );
   }
   return (
-    <div className="sonar" style={vars} aria-hidden>
+    <div className={`sonar ${paused ? "is-paused" : ""}`} style={vars}>
       {[0, 1].map((i) => (
         <span key={i} className="sonar-ring" style={{ borderColor: reef.sonar[scheme], animationDelay: `${i * 0.35}s` }} />
       ))}
@@ -55,7 +58,7 @@ export function Sonar() {
   );
 }
 
-/** Items and bytes counted so far, and the folder being read. */
+/** Items and bytes counted so far, and the folder being read; or why the scan is waiting. */
 function ScanReadout() {
   const p = useApp((s) => s.scanProgress);
   const units = useApp((s) => s.info?.units ?? "decimal");
@@ -63,8 +66,20 @@ function ScanReadout() {
   const f = formatBytes(p.bytes, units);
   return (
     <span className="sonar-readout" role="status">
-      <span className="sonar-count tabular">{t("scan.progress", { items: p.items.toLocaleString(), size: `${f.value} ${f.unit}` })}</span>
-      {p.current && <MiddleEllipsis text={p.current} className="sonar-path" />}
+      {p.paused ? (
+        <>
+          <span className="sonar-count">{t(`scan.paused.${p.paused}`)}</span>
+          <span className="sonar-path">{t(p.paused === "user" ? "scan.pausedUserHint" : "scan.pausedHint", { items: p.items.toLocaleString() })}</span>
+          <button type="button" className="btn btn-primary focus-ring sonar-resume" onClick={() => void api.pauseScan(false)}>
+            {t("scan.resume")}
+          </button>
+        </>
+      ) : (
+        <>
+          <span className="sonar-count tabular">{t("scan.progress", { items: p.items.toLocaleString(), size: `${f.value} ${f.unit}` })}</span>
+          {p.current && <MiddleEllipsis text={p.current} className="sonar-path" />}
+        </>
+      )}
     </span>
   );
 }

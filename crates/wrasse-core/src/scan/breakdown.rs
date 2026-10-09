@@ -169,6 +169,11 @@ pub struct Summary {
     pub hardlinks_deduped: u64,
     pub clone_shared_bytes: u64,
     pub cancelled: bool,
+    /// This scan only re-read the folders FSEvents reported as changed.
+    #[serde(default)]
+    pub incremental: bool,
+    #[serde(default)]
+    pub changed_folders: u64,
 }
 
 /// What the breakdown needs besides the tree.
@@ -543,6 +548,24 @@ pub fn build(input: &Input) -> UiDisk {
         }
     }
     let home_size = home_id.map_or(0, |h| tree.node(h).size);
+    // Why this total can differ from Finder: iCloud-only items and APFS clones (PLAN.md Phase 1).
+    let s = tree.stats;
+    let mut why = String::from("Your documents, downloads, photos and projects. Wrasse never removes these without asking.");
+    if s.dataless_items > 0 {
+        why.push_str(&format!(
+            " {} item{} are in iCloud only and take no space on this Mac, so they count as 0.",
+            s.dataless_items,
+            if s.dataless_items == 1 { "" } else { "s" }
+        ));
+    }
+    let home_clones = home_id.map_or(0, |h| tree.node(h).clone_shared);
+    if home_clones >= 100_000_000 {
+        why.push_str(&format!(
+            " {:.1} GB of these files share space with copies (APFS clones); like `du`, Wrasse counts each copy, so Finder may show less.",
+            home_clones as f64 / 1e9
+        ));
+    }
+    b.nodes[files as usize].why = why;
 
     let stats = tree.stats;
     let leaf_count = b.nodes.iter().filter(|n| n.children.is_empty()).count() as u32;
@@ -565,6 +588,8 @@ pub fn build(input: &Input) -> UiDisk {
             hardlinks_deduped: stats.hardlinks_deduped,
             clone_shared_bytes: stats.clone_shared_bytes,
             cancelled: stats.cancelled,
+            incremental: false,
+            changed_folders: 0,
         },
         nodes: b.nodes,
     }

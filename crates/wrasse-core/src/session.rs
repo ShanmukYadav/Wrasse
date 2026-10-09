@@ -3,10 +3,10 @@
 
 use crate::platform::{self, Volumes};
 use crate::scan::breakdown::{self, Input, UiDisk};
-use crate::scan::{cache, scan, ScanControl};
+use crate::scan::{cache, rescan, scan, Change, ScanControl, Tree};
 use std::collections::HashMap;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Environment variables that move model folders (PLAN.md §6.6).
@@ -14,7 +14,10 @@ const MODEL_ENV: [&str; 3] = ["OLLAMA_MODELS", "HF_HOME", "HF_HUB_CACHE"];
 
 pub fn scan_volume(control: &ScanControl, cache_dir: Option<&Path>) -> io::Result<UiDisk> {
     let (root, prefix) = platform::scan_root();
-    let tree = scan(&root, control)?;
+    // The change-log position goes with the tree, taken *before* walking so that anything that
+    // changes during the walk is replayed next time.
+    let (position, log_id) = platform::change_log_position(&root);
+    let (tree, changed) = walk(&root, control, cache_dir)?;
     let scanned = tree.node(tree.root()).size;
     let volumes = platform::volumes().unwrap_or(Volumes {
         capacity: scanned,
@@ -44,18 +47,62 @@ pub fn scan_volume(control: &ScanControl, cache_dir: Option<&Path>) -> io::Resul
         bundle_id: &platform::bundle_id,
         hf_models: &crate::scan::hf::hf_models,
     };
-    let disk = breakdown::build(&input);
-    drop(tree);
+    let mut disk = breakdown::build(&input);
+    disk.summary.incremental = changed.is_some();
+    disk.summary.changed_folders = changed.unwrap_or(0) as u64;
     if let Some(dir) = cache_dir {
         if !disk.summary.cancelled {
-            // A cache that can't be written only costs "what grew" next time.
+            // Caches that can't be written only cost a full scan and "what grew" next time.
             let _ = cache::save(dir, &disk, now);
+            let _ = cache::save_tree(dir, &tree, position, log_id.as_deref(), now);
         }
     }
+    drop(tree);
+    platform::release_free_memory();
     Ok(disk)
 }
 
 /// The last saved scan, to show at launch while a new one runs.
 pub fn cached(cache_dir: &Path) -> Option<UiDisk> {
     cache::load(cache_dir).map(|(d, _)| d)
+}
+
+/// An incremental rescan when the last tree and the change log allow it, else a full walk.
+/// Returns the tree and, for an incremental rescan, how many changed folders were re-read.
+fn walk(
+    root: &Path,
+    control: &ScanControl,
+    cache_dir: Option<&Path>,
+) -> io::Result<(Tree, Option<usize>)> {
+    let saved = cache_dir
+        .and_then(cache::load_tree)
+        .filter(|s| Path::new(&s.tree.root_path) == root);
+    if let Some(saved) = saved {
+        if let Some(events) = platform::changes_since(root, saved.event_id, saved.log_id.as_deref())
+        {
+            let changes: Vec<Change> = events
+                .into_iter()
+                .map(|(path, recursive)| Change {
+                    path: inside(root, path),
+                    recursive,
+                })
+                .collect();
+            let count = changes.len();
+            let tree = rescan(&saved.tree, &changes, control)?;
+            return Ok((tree, Some(count)));
+        }
+    }
+    Ok((scan(root, control)?, None))
+}
+
+/// FSEvents may report firmlinked paths (`/Users/…`) for the data volume; map them under the
+/// scan root (`/System/Volumes/Data/Users/…`).
+fn inside(root: &Path, path: PathBuf) -> PathBuf {
+    if path.starts_with(root) {
+        return path;
+    }
+    match path.strip_prefix("/") {
+        Ok(rel) if root != Path::new("/") => root.join(rel),
+        _ => path,
+    }
 }

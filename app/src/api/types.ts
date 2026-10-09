@@ -99,6 +99,8 @@ export type ScanProgress = {
   bytes: number;
   /** The folder being read right now, for the status line. */
   current: string;
+  /** Why the scan is waiting: paused by hand, battery below 20%, or Low Power Mode. */
+  paused?: "user" | "battery" | "lowPower" | null;
 };
 
 export function ancestors(disk: Disk, id: number): number[] {

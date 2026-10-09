@@ -90,6 +90,7 @@ function Detail({ id }: { id: number }) {
       </div>
       <div className="flex flex-wrap gap-2">
         <span className={`chip chip-${label.tone}`}>{label.text}</span>
+        {n.note && <span className="chip chip-protected">{n.note}</span>}
       </div>
 
       <dl className="detail-grid">

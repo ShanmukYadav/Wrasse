@@ -8,4 +8,4 @@ pub mod tree;
 pub mod walk;
 
 pub use tree::{ScanStats, Tree};
-pub use walk::{scan, Progress, ScanControl};
+pub use walk::{rescan, scan, Change, PauseReason, Progress, ScanControl, LOW_BATTERY};

@@ -1,4 +1,6 @@
 mod fs;
+pub mod fsevents;
+pub mod power;
 mod settings;
 
 pub use fs::{

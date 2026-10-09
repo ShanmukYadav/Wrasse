@@ -12,7 +12,10 @@ body,
 
 body {
   margin: 0;
-  background: var(--backdrop);
+  /* The reef light is painted into the page background: no extra full-window layers to keep in
+     memory (an animated light layer cost ~24 MB of GPU memory at idle). */
+  background: var(--caustics), var(--backdrop);
+  background-attachment: fixed;
   color: var(--c-text);
   font-family: var(--font);
   font-size: var(--t-body);
@@ -751,6 +754,15 @@ button {
   border-radius: 50%;
   border: 1px solid;
   animation: sonar-bubble var(--bubble-dur) cubic-bezier(0.22, 1, 0.36, 1) infinite both;
+}
+.sonar.is-paused .sonar-ring,
+.sonar.is-paused .sonar-mark,
+.sonar.is-paused .sonar-bubble {
+  animation-play-state: paused;
+}
+.sonar-resume {
+  margin-top: 6px;
+  pointer-events: auto;
 }
 .sonar-readout {
   position: absolute;

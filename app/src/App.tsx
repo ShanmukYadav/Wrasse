@@ -4,7 +4,6 @@ import { DevBadge } from "./components/DevBadge";
 import { applyTokens, onSystemSchemeChange } from "./design/apply";
 import { useReducedMotion, useScheme } from "./lib/prefs";
 import { boot, useApp } from "./store/app";
-import { Caustics } from "./ui/Caustics";
 import { DesignPage } from "./ui/DesignPage";
 import { DetailPanel } from "./ui/DetailPanel";
 import { Flyers } from "./ui/Flyers";
@@ -48,8 +47,6 @@ export function App() {
 
   return (
     <MotionConfig reducedMotion={reduced ? "always" : "never"}>
-      <div className="app-backdrop" aria-hidden />
-      <Caustics />
       <div className="d1-frame">
         <Header />
         <Home />

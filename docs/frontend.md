@@ -22,7 +22,7 @@ The frontend is a React 19 + TypeScript app in `app/src`, styled in the locked *
 | **Drill-in** | `Home.tsx` (`Level`) | Opening a folder, category or app crossfades (0.18 s) to its level: the category-tinted frame with its children as tiles. No zoom, sweep or staggered reveal: the user found them distracting. Back, Esc and the breadcrumb go up; single-child folders are skipped. When everything in a level is removed, the map goes up to the nearest level that still has items. |
 | **Apps drill-in** | `mock/disk.ts`, `DetailPanel.tsx` | An app opens into mini tiles: the `.app` bundle, Caches, Application Support, Containers, Logs, Saved State, Preferences, with a "Running" chip when the app is open. |
 | **Onboarding** | `ui/Onboarding.tsx` | First run: what Wrasse does, no telemetry, Full Disk Access with the real status (re-checked when the window regains focus) and a button to System Settings, then "Scan this Mac". Command "Permissions" reopens it. |
-| **Sonar scan** | `ui/home/Sonar.tsx` | CSS sweep: two rings, the Wrasse mark, 24 bubbles, plus live progress (items, bytes, current folder). Mounted only while a scan runs and repeats until it ends; reduced motion shows only a fade. Tiles re-reveal with one last sweep when results land. Scan becomes Stop while scanning; "Pause scan" / "Resume scan" in the command bar. |
+| **Sonar scan** | `ui/home/Sonar.tsx` | CSS sweep: two rings, the Wrasse mark, 24 bubbles, plus live progress (items, bytes, current folder). Mounted only while a scan runs and repeats until it ends; reduced motion shows only a fade. Tiles re-reveal with one last sweep when results land. Scan becomes Stop while scanning; "Pause scan" / "Resume scan" in the command bar. On battery below 20% or in Low Power Mode the scan pauses by itself (checked every 10 s) and the readout says why, with Resume scan; resuming keeps it going for the rest of that scan. After the first scan, Scan re-reads only the folders FSEvents reports as changed (`summary.incremental`, `summary.changedFolders`). |
 | **Lens bar** | `ui/LensBar.tsx`, `ui/lenses.ts` | All, Junk, Apps, AI Models, Dev, Large & Old, Grew. Category lenses open their category from anywhere; All goes home; Large & Old and Grew dim non-matching tiles. One navy pill slides to the active lens and follows the category you open. |
 | **Command bar** | `ui/CommandBar.tsx`, `command/commands.ts` | ⌘K or type anywhere. Fuzzy commands: free N GB, where is <name>, lenses, scan, list/map view, zoom out, home, empty/restore tray, overlays, design system. |
 | **Free Up Space** | `CommandBar.tsx` (`PlanMeter`), `ui/planReason.ts` | "free 30 GB" ranks candidates by size × unused time × safety and lists each one (rank, icon, name, where it lives, size, reason). Fill meter toward the target, "Add all N to tray", "Clear"; clicking a row shows it on the map. |
@@ -170,7 +170,7 @@ Actions take the UI's current tree and resolve to the updated tree. The mock edi
 
 | Event | Payload |
 |---|---|
-| scan progress | `ScanProgress { phase: "walking" \| "done" \| "cancelled", items, bytes, current }` |
+| scan progress | `ScanProgress { phase: "walking" \| "done" \| "cancelled", items, bytes, current, paused?: "user" \| "battery" \| "lowPower" \| null }` |
 
 ### Types (`src/api/types.ts`)
 
