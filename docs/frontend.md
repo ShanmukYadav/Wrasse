@@ -156,10 +156,16 @@ Each category also has `border`, `glow` (top-right circle) and badge `shadow` va
 | `openFullDiskAccessSettings()` | none | `Promise<void>` | Opens System Settings › Privacy & Security › Full Disk Access. |
 | `onScanProgress(listener)` | `(p: ScanProgress) => void` | unsubscribe `() => void` | Event stream for the scan (Stage B: at most 10 per second). |
 | `insights(disk, id)` | tree, node id | `Insight[]` | Chips for a tile, e.g. "1 duplicate · 39 GB", "31 GB rebuildable", "Running", "All safe". At most 2. |
-| `quarantine(disk, ids)` | tree, node ids | `Promise<Disk>` | Moves items to the tray (recoverable). |
-| `restore(disk, ids)` | tree, node ids | `Promise<Disk>` | Puts quarantined items back. |
-| `emptyTray(ids)` | node ids | `Promise<void>` | Permanently removes quarantined items. |
-| `deleteNow(disk, ids)` | tree, node ids | `Promise<Disk>` | Permanent delete, safe items only, skips the tray. |
+| `preview(disk, ids, opts)` | tree, node ids, `{ handPicked, deleteNow? }` | `Promise<RemovePreview>` | What removing would do: bytes, undoable, iCloud-synced items, skips with reasons. Touches nothing. |
+| `remove(disk, ids, opts)` | tree, node ids, `{ handPicked, deleteNow? }` | `Promise<RemoveOutcome>` | To the tray (or Delete now for Safe items) through the core's safety layer. Returns the updated tree, what was done (with tray entry ids), what was skipped and why, and `dryRun`. |
+| `removeJunk(items)` | junk matches | counts, bytes, `dryRun` | System Junk: rule items to the tray by path; the map refreshes by rescan. |
+| `restore(disk, items)` | tree, tray items | `{ disk, rescan }` | Puts tray items back (works after a relaunch; `rescan` asks for a quick rescan). |
+| `emptyTray(items)` | tray items | `{ bytes, dryRun }` | Deletes tray items for good. Not undoable. |
+| `emptyTrash(disk, id)` | tree, Trash node id | `RemoveOutcome` | Empties the Trash through the OS. Not undoable. |
+| `cleanupStatus()` | none | `{ dryRun, dev, tray }` | Dry-run state and the tray (it survives restarts). |
+| `setDryRun(on)` | boolean | none | Dev builds start every launch in dry run. |
+| `junk()` | none | `JunkReport` | Rule matches, rules waiting for an app to close, rule errors. |
+| `neverTouch(path, on)` | path, boolean | the list | The user's Never touch list. |
 | `thinSnapshots(disk)` | tree | `Promise<Disk>` | Frees space held by local Time Machine snapshots. |
 | `quitApp(disk, appId)` | tree, app node id | `Promise<Disk>` | Asks a running app to quit before uninstalling. |
 

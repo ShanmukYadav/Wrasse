@@ -5,6 +5,11 @@
 //!   wrasse scan <folder>   one folder (e.g. ~ to compare with `du -sk ~`)
 //!   wrasse scan --dump <file>   whole volume, and write the full breakdown as JSON
 //!   wrasse scan --cache <dir>   whole volume, incremental when <dir> holds a previous scan
+//!   wrasse clean [--dry-run] [--delete-now] [--hand-picked] [--safe] <path>...
+//!                          move items to the app's quarantine tray (or delete Safe items) through
+//!                          the same safety checks as the app; prints the report as JSON
+//!   wrasse restore <entry-id>...   put tray items back
+//!   wrasse tray            list what's in the tray
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -20,6 +25,26 @@ fn main() {
             run_scan(None, None, args.get(2).map(PathBuf::from))
         }
         Some("scan") => run_scan(args.get(1).map(PathBuf::from), None, None),
+        Some("clean") => clean(&args[1..]),
+        Some("restore") => with_ctx(|ctx| {
+            let restored = wrasse_core::safety::restore(ctx, &args[1..])?;
+            if restored.len() < args.len() - 1 {
+                eprintln!(
+                    "warning: {} of {} ids weren't in the tray",
+                    args.len() - 1 - restored.len(),
+                    args.len() - 1
+                );
+            }
+            Ok(serde_json::json!(restored))
+        }),
+        Some("tray") => with_ctx(|ctx| {
+            Ok(serde_json::json!(ctx
+                .quarantine
+                .stored()
+                .into_iter()
+                .map(|(_, e)| e)
+                .collect::<Vec<_>>()))
+        }),
         _ => println!(
             "wrasse {}\nusage: wrasse scan [folder]",
             wrasse_core::VERSION
@@ -67,4 +92,61 @@ fn run_scan(folder: Option<PathBuf>, dump: Option<PathBuf>, cache: Option<PathBu
             println!("{}", serde_json::to_string_pretty(&out).unwrap());
         }
     }
+}
+
+const APP_ID: &str = "com.shanmukyadav.wrasse";
+
+/// Runs `f` with the app's safety context (same data folder and tray as the app) and prints JSON.
+fn with_ctx(f: impl FnOnce(&wrasse_core::safety::Context) -> std::io::Result<serde_json::Value>) {
+    let home = wrasse_core::platform::home_dir().expect("no home folder");
+    let data = wrasse_core::scan::cache::data_dir(APP_ID).expect("no data folder");
+    let ctx =
+        wrasse_core::safety::Context::new(home, data).expect("couldn't open the safety context");
+    let _ = ctx.quarantine.reconcile();
+    match f(&ctx) {
+        Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn clean(args: &[String]) {
+    use wrasse_core::safety::{self, Mode, Request, Safety};
+    let flag = |f: &str| args.iter().any(|a| a == f);
+    let (dry_run, delete_now, hand_picked, safe) = (
+        flag("--dry-run"),
+        flag("--delete-now"),
+        flag("--hand-picked"),
+        flag("--safe"),
+    );
+    let paths: Vec<PathBuf> = args
+        .iter()
+        .filter(|a| !a.starts_with("--"))
+        .map(PathBuf::from)
+        .collect();
+    with_ctx(|ctx| {
+        let reqs: Vec<Request> = paths
+            .iter()
+            .map(|p| Request {
+                path: p.clone(),
+                safety: if safe { Safety::Safe } else { Safety::YourCall },
+                rule_id: None,
+                root: None,
+                hand_picked,
+            })
+            .collect();
+        let plan = safety::prepare(
+            ctx,
+            &reqs,
+            if delete_now {
+                Mode::DeleteNow
+            } else {
+                Mode::Quarantine
+            },
+        );
+        let report = safety::remove(ctx, &plan, dry_run)?;
+        Ok(serde_json::json!({ "plan": plan, "report": report }))
+    });
 }
