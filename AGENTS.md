@@ -29,12 +29,14 @@ cd app && ../dev.sh npm install && ../dev.sh npm run tauri dev
 ## Git hook
 
 Enable the local pre-commit checks once per clone: `git config core.hooksPath scripts/hooks`.
+The hook runs the forbidden-API, SECURITY_AUDIT.md and Windows compile checks.
 
 ## Before you finish
 
 ```sh
 scripts/check-forbidden-apis.sh
 scripts/check-security-audit.sh   # SECURITY_AUDIT.md matches the code
+scripts/check-windows-compile.sh  # core crates still compile for Windows (only macOS is built for now)
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
 ./dev.sh cargo test --workspace

@@ -5,3 +5,4 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 scripts/check-forbidden-apis.sh
 scripts/check-security-audit.sh
+scripts/check-windows-compile.sh

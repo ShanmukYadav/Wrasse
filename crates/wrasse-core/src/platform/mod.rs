@@ -340,6 +340,7 @@ pub struct Protected {
 
 /// The hardcoded protected locations for this OS. Rules and settings can't override them.
 pub fn protected_paths(home: &Path, wrasse_data: &Path) -> Vec<Protected> {
+    #[allow(unused_mut)] // extended per OS below
     let mut out = vec![
         Protected {
             path: PathBuf::from("/"),
