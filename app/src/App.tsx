@@ -12,7 +12,9 @@ import { Header } from "./ui/home/Header";
 import { Home } from "./ui/home/Home";
 import { LensBar } from "./ui/LensBar";
 import { ListView } from "./ui/ListView";
+import { CautionSheet } from "./ui/CautionSheet";
 import { Onboarding } from "./ui/Onboarding";
+import { SelectionBar } from "./ui/SelectionBar";
 import { Overlays } from "./ui/Overlays";
 import { QuarantineTray } from "./ui/QuarantineTray";
 import { Toast } from "./ui/Toast";
@@ -35,7 +37,10 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       const s = useApp.getState();
       const typing = (e.target as HTMLElement).tagName === "INPUT";
-      if (e.key === "Escape" && !typing && !s.overlay && !s.detailOpen && !s.commandOpen && s.uninstall === null) s.zoomOut();
+      if (e.key === "Escape" && !typing && !s.overlay && !s.detailOpen && !s.commandOpen && s.uninstall === null && !s.confirmDelete) {
+        if (s.checked.length) s.clearChecks();
+        else s.zoomOut();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -51,12 +56,14 @@ export function App() {
         <ListView />
       </div>
       <LensBar />
+      <SelectionBar />
       <DetailPanel />
       <QuarantineTray />
       <Flyers />
       <Toast />
       <Overlays />
       <Onboarding />
+      <CautionSheet />
       <UninstallSheet />
       <DesignPage />
       <DevBadge />

@@ -1,0 +1,38 @@
+// When deleting needs a second look. Pure rules over the tree, shared by every delete entry point.
+import type { Disk, DiskNode } from "./types";
+
+export type Caution =
+  /** Can't be deleted from Wrasse at all (macOS itself, snapshots, app-managed libraries). */
+  | { kind: "blocked" }
+  /** A folder the OS creates for every user (Documents, Desktop, …) or a whole category. */
+  | { kind: "osFolder" }
+  /** Personal or app data marked Keep (Mail, Keychains, iCloud Drive, …). */
+  | { kind: "protected" }
+  | { kind: "none" };
+
+// macOS: the folders in every home, and the top-level system folders.
+const MAC_HOME = /^(~|\/Users\/[^/]+)(\/(Desktop|Documents|Downloads|Movies|Music|Pictures|Public|Library|Applications))?$/;
+const MAC_TOP = /^\/(Applications|Library|System|Users|private|usr|opt|bin|sbin|cores|Volumes)$/;
+// Windows: the folders in every profile, and the system folders on the system drive.
+const WIN_HOME = /^[A-Za-z]:\\Users\\[^\\]+(\\(Desktop|Documents|Downloads|Pictures|Videos|Music|AppData|OneDrive|Favorites|Contacts|Links|Saved Games|Searches))?$/;
+const WIN_TOP = /^[A-Za-z]:\\(Windows|Program Files|Program Files \(x86\)|ProgramData|Users)$/;
+
+/** A folder the operating system creates and apps expect to exist. */
+export function isOsFolder(n: DiskNode): boolean {
+  return MAC_HOME.test(n.path) || MAC_TOP.test(n.path) || WIN_HOME.test(n.path) || WIN_TOP.test(n.path);
+}
+
+export function cautionFor(disk: Disk, id: number): Caution {
+  const n = disk.nodes[id];
+  if (!n || n.parent < 0 || n.kind === "ghost" || n.kind === "volume" || n.category === "system" || n.readOnly) return { kind: "blocked" };
+  // A whole category tile (Your Files, Apps, …) is as drastic as an OS folder.
+  if (n.depth === 1 || isOsFolder(n)) return { kind: "osFolder" };
+  if (n.safety === "keep") return { kind: "protected" };
+  return { kind: "none" };
+}
+
+/** The strongest caution among several items (blocked items are left out by the caller). */
+export function strongest(disk: Disk, ids: number[]): Caution["kind"] {
+  const kinds = ids.map((id) => cautionFor(disk, id).kind);
+  return kinds.includes("osFolder") ? "osFolder" : kinds.includes("protected") ? "protected" : "none";
+}

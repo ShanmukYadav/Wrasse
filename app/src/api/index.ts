@@ -57,3 +57,4 @@ export function mockMode(): boolean {
 export const api: WrasseApi = mockMode() ? mockApi : tauriApi;
 
 export * from "./types";
+export * from "./caution";

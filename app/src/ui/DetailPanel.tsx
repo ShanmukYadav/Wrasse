@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, type CSSProperties } from "react";
-import type { DiskNode } from "../api";
+import { cautionFor, type DiskNode } from "../api";
 import { Icon } from "../design/icons/Icon";
 import { iconFor } from "../design/icons/semantic";
 import { categories } from "../design/tokens";
@@ -60,7 +60,8 @@ function Detail({ id }: { id: number }) {
   const units = useApp((s) => s.info?.units ?? "decimal");
   const fileManager = useApp((s) => s.info?.fileManager ?? "Finder");
   const scheme = useScheme();
-  const { closeDetail, addToTray, deleteNow, freeGhost, notify, setFocus, openUninstall } = useApp.getState();
+  const { closeDetail, addToTray, deleteNow, freeGhost, notify, setFocus, openUninstall, requestDelete } = useApp.getState();
+  const blocked = cautionFor(disk, id).kind === "blocked";
   const n = disk.nodes[id];
   const ghost = n.kind === "ghost";
   const size = formatBytes(n.size, units);
@@ -124,9 +125,9 @@ function Detail({ id }: { id: number }) {
                 <Icon name="tray" size={16} /> {t("detail.remove", { size: sizeText })}
               </motion.button>
             ) : (
-              n.safety !== "keep" && (
-                <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => addToTray([n.id])} {...pressable}>
-                  <Icon name="tray" size={16} /> {t("detail.quarantineSize", { size: sizeText })}
+              !blocked && (
+                <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => requestDelete([n.id])} {...pressable}>
+                  <Icon name="trash" size={16} /> {t("delete.button", { size: sizeText })}
                 </motion.button>
               )
             )}
@@ -143,7 +144,7 @@ function Detail({ id }: { id: number }) {
             <button type="button" className="link detail-link focus-ring" onClick={() => notify(t("detail.revealToast", { app: fileManager }))}>
               {t("detail.reveal", { app: fileManager })}
             </button>
-            {n.safety === "keep" && <p className="text-caption text-muted">{t("detail.keepNote")}</p>}
+            {blocked && <p className="text-caption text-muted">{t("detail.keepNote")}</p>}
           </>
         )}
       </div>

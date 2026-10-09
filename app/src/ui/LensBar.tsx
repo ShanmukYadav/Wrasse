@@ -14,6 +14,7 @@ export function LensBar() {
   const pills = useRef<Record<string, HTMLButtonElement | null>>({});
   const [box, setBox] = useState<{ left: number; width: number } | null>(null);
   const active = plan ? null : lens;
+  const selecting = useApp((s) => s.checked.length > 0);
 
   useLayoutEffect(() => {
     const measure = () => {
@@ -25,6 +26,7 @@ export function LensBar() {
     return () => window.removeEventListener("resize", measure);
   }, [active]);
 
+  if (selecting) return null; // the selection bar takes its place
   return (
     <div className="lens-bar" role="radiogroup" aria-label={t("lens.label")}>
       {box && (

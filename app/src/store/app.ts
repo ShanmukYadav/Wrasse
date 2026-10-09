@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { api, attached, categoryForLens, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { api, attached, cautionFor, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -48,6 +48,10 @@ type State = {
   motion: MotionPref;
   /** The app whose uninstall sheet is open. */
   uninstall: number | null;
+  /** Tiles ticked for a bulk action. */
+  checked: number[];
+  /** Items waiting on the delete caution sheet. */
+  confirmDelete: number[] | null;
 };
 
 type Actions = {
@@ -58,7 +62,13 @@ type Actions = {
   setLens: (lens: LensId) => void;
   select: (id: number | null, open?: boolean) => void;
   closeDetail: () => void;
-  addToTray: (ids: number[]) => void;
+  addToTray: (ids: number[], confirmed?: boolean) => void;
+  toggleCheck: (id: number) => void;
+  clearChecks: () => void;
+  /** Delete (to the tray): goes straight through, or asks first for OS folders and protected data. */
+  requestDelete: (ids: number[]) => void;
+  confirmDeleteRequest: () => void;
+  cancelDelete: () => void;
   deleteNow: (ids: number[]) => void;
   emptyTray: () => void;
   restoreTray: () => void;
@@ -158,6 +168,8 @@ export const useApp = create<State & Actions>((set, get) => {
     theme: "light", // Day reef first; night comes after the light theme is approved
     motion: "system",
     uninstall: null,
+    checked: [],
+    confirmDelete: null,
 
     setInfo: (info) => set({ info }),
     setSystemScheme: (systemScheme) => set({ systemScheme }),
@@ -167,7 +179,7 @@ export const useApp = create<State & Actions>((set, get) => {
       if (!n || (n.children.length === 0 && n.kind !== "volume")) return;
       const focus = throughSingles(get().disk, id);
       // The lens bar follows the category you open (AI Models → AI Models, Files → All).
-      set({ focus, lens: lensForFocus(get().disk, focus), plan: null, selected: null, detailOpen: false });
+      set({ focus, lens: lensForFocus(get().disk, focus), plan: null, selected: null, detailOpen: false, checked: [] });
     },
     zoomOut: () => {
       const { disk, focus, viewMode } = get();
@@ -176,7 +188,7 @@ export const useApp = create<State & Actions>((set, get) => {
       // Skip back over single-child folders too, so going up always changes the view.
       let parent = disk.nodes[focus].parent;
       while (parent >= 0 && disk.nodes[parent].children.length === 1 && disk.nodes[parent].parent >= 0) parent = disk.nodes[parent].parent;
-      if (parent >= 0) set({ focus: parent, lens: lensForFocus(disk, parent), plan: null, selected: null, detailOpen: false });
+      if (parent >= 0) set({ focus: parent, lens: lensForFocus(disk, parent), plan: null, selected: null, detailOpen: false, checked: [] });
     },
 
     setLens: (lens) =>
@@ -186,16 +198,19 @@ export const useApp = create<State & Actions>((set, get) => {
         // Large & Old and Grew stay highlight filters over the current view.
         const target = lens === "all" ? s.disk.root : categoryForLens(s.disk, lens);
         if (target === null) return { lens, plan: null };
-        return { lens, plan: null, focus: target, viewMode: "map", selected: null, detailOpen: false };
+        return { lens, plan: null, focus: target, viewMode: "map", selected: null, detailOpen: false, checked: [] };
       }),
 
     select: (id, open = true) => set({ selected: id, detailOpen: id !== null && open }),
     closeDetail: () => set({ detailOpen: false, selected: null }),
 
-    addToTray: (ids) => {
+    addToTray: (ids, confirmed = false) => {
       if (readOnly()) return;
       const { disk, focus } = get();
-      const items = ids.map((id) => disk.nodes[id]).filter((n) => n && n.safety !== "keep" && n.kind !== "ghost" && n.parent >= 0);
+      // Keep items only move after the user confirmed the caution sheet; blocked ones never.
+      const items = ids
+        .map((id) => disk.nodes[id])
+        .filter((n) => n && cautionFor(disk, n.id).kind !== "blocked" && (confirmed || n.safety !== "keep"));
       if (!items.length) return;
       // One flight per tile involved (many files can share a tile).
       const flights: Flight[] = [];
@@ -217,6 +232,7 @@ export const useApp = create<State & Actions>((set, get) => {
         flights: [...s.flights, ...flights],
         selected: null,
         detailOpen: false,
+        checked: s.checked.filter((c) => !items.some((n) => n.id === c)),
         plan: remainingPlan(s.plan, items.map((n) => n.id)),
       }));
       for (const n of items) log(t("audit.quarantined"), n.path, n.size);
@@ -225,6 +241,27 @@ export const useApp = create<State & Actions>((set, get) => {
         ascendIfEmpty();
       });
     },
+
+    toggleCheck: (id) => set((s) => ({ checked: s.checked.includes(id) ? s.checked.filter((c) => c !== id) : [...s.checked, id] })),
+    clearChecks: () => set({ checked: [] }),
+    requestDelete: (ids) => {
+      const { disk } = get();
+      const ok = ids.filter((id) => cautionFor(disk, id).kind !== "blocked");
+      if (!ok.length) return get().notify(t("delete.blockedToast"));
+      if (strongest(disk, ok) === "none") {
+        get().addToTray(ok);
+        if (!get().info?.readOnly) get().notify(t("delete.toast"));
+        return;
+      }
+      set({ confirmDelete: ok, detailOpen: false });
+    },
+    confirmDeleteRequest: () => {
+      const ids = get().confirmDelete ?? [];
+      set({ confirmDelete: null });
+      get().addToTray(ids, true);
+      if (!get().info?.readOnly) get().notify(t("delete.toast"));
+    },
+    cancelDelete: () => set({ confirmDelete: null }),
 
     deleteNow: (ids) => {
       if (readOnly()) return;

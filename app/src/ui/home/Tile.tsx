@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import type { CSSProperties } from "react";
-import { api, type Disk, type DiskNode } from "../../api";
+import { api, cautionFor, type Disk, type DiskNode } from "../../api";
+import { useApp } from "../../store/app";
 import { Icon } from "../../design/icons/Icon";
 import { iconFor } from "../../design/icons/semantic";
 import { categories, d1, type LensId, type Scheme } from "../../design/tokens";
@@ -78,6 +79,10 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
       ? t("home.apps", { count })
       : "";
   const insights = api.insights(disk, node.id);
+  // Ticks for bulk delete: shown on hover, and on every tile once something is ticked.
+  const checked = useApp((s) => s.checked.includes(node.id));
+  const selecting = useApp((s) => s.checked.length > 0);
+  const tickable = cautionFor(disk, node.id).kind !== "blocked" && widthPx >= 120;
   const dimmed = !lensMatch(node, lens);
 
   const style = {
@@ -97,7 +102,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
       type="button"
       layout
       data-tile-id={node.id}
-      className={`tile focus-ring ${selected ? "is-selected" : ""} ${dimmed ? "is-dimmed" : ""}`}
+      className={`tile focus-ring ${selected || checked ? "is-selected" : ""} ${dimmed ? "is-dimmed" : ""} ${tickable ? "has-tick" : ""} ${tickable && (selecting || checked) ? "is-ticking" : ""}`}
       style={style}
       aria-label={`${node.name}, ${size.value} ${size.unit}`}
       onClick={() => onOpen(node)}
@@ -171,9 +176,23 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
           )}
         </span>
       )}
-      {selected && (
+      {selected && !checked && (
         <span className="tile-check" aria-hidden>
           <Icon name="check" tone="white" size={16} />
+        </span>
+      )}
+      {tickable && (
+        <span
+          role="checkbox"
+          aria-checked={checked}
+          aria-label={t("select.tick", { name: node.name })}
+          className={`tile-tick ${checked ? "is-on" : ""} ${selecting ? "is-visible" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            useApp.getState().toggleCheck(node.id);
+          }}
+        >
+          {checked && <Icon name="check" tone="white" size={16} />}
         </span>
       )}
       {pulseKey !== null && <span key={pulseKey} className="tile-pulse" aria-hidden />}

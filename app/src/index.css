@@ -395,7 +395,7 @@ button {
   background: linear-gradient(160deg, var(--from) 0%, var(--to) 100%);
   border: 1px solid var(--tint);
   box-shadow: var(--d1-tile-shadow);
-  overflow: hidden;
+  overflow: clip; /* clip, not hidden: a hidden box can be scrolled by focus/clicks inside it */
   text-align: left;
   cursor: pointer;
   min-width: 0;
@@ -606,6 +606,42 @@ button {
   background: var(--acc);
   display: grid;
   place-items: center;
+}
+/* Tick for bulk delete: appears on hover, stays on every tile while something is ticked. */
+.tile-tick {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--c-glass-strong);
+  border: 1.5px solid var(--tint);
+  opacity: 0;
+  transition: opacity var(--d-fast) cubic-bezier(0.22, 1, 0.36, 1);
+  cursor: pointer;
+  z-index: 2;
+}
+.tile:hover .tile-tick,
+.tile:focus-visible .tile-tick,
+.tile-tick.is-visible,
+.tile-tick.is-on {
+  opacity: 1;
+}
+/* The tick takes the top-right corner, so the meta line steps aside while it shows. */
+.tile .tile-meta {
+  transition: opacity var(--d-fast) cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tile.has-tick:hover .tile-meta,
+.tile.has-tick:focus-visible .tile-meta,
+.tile.is-ticking .tile-meta {
+  opacity: 0;
+}
+.tile-tick.is-on {
+  background: var(--acc);
+  border-color: var(--acc);
 }
 .tile-pulse {
   position: absolute;
@@ -1061,6 +1097,76 @@ button {
   border-radius: var(--d1-tile-radius);
   display: flex;
   flex-direction: column;
+}
+.selection-bar {
+  align-items: center;
+  gap: 12px;
+  padding-left: 16px;
+}
+.selection-count {
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+}
+.caution {
+  gap: 14px;
+}
+.caution-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.caution-icon {
+  display: grid;
+  place-items: center;
+  width: var(--d1-tile-badge);
+  height: var(--d1-tile-badge);
+  border-radius: var(--d1-tile-badge-radius);
+  background: var(--chip-amber-bg);
+}
+.caution-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.caution-item {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: var(--d1-row-gap);
+  padding: 8px 10px;
+  border-radius: var(--d1-row-radius);
+  background: var(--d1-row-surface);
+}
+.caution-item .text-caption {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.caution-name {
+  font-size: var(--t-label);
+  font-weight: var(--w-name);
+  color: var(--c-text);
+}
+.caution-size {
+  font-size: var(--t-label);
+  font-weight: var(--w-size);
+  color: var(--c-text);
+}
+.caution-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.caution-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.btn[disabled] {
+  opacity: var(--d1-dimmed);
+  pointer-events: none;
 }
 .onboarding {
   gap: 16px;
