@@ -1,8 +1,11 @@
-import type { Disk, DiskNode } from "../api";
+import type { Disk, DiskNode, FreeWhy } from "../api";
 import { t } from "../i18n";
 
 /** Why the planner picked an item, in one short line. */
-export function planReason(disk: Disk, n: DiskNode): string {
+export function planReason(disk: Disk, n: DiskNode, why?: FreeWhy): string {
+  if (why === "neverOpened") return t("plan.why.neverOpened");
+  if (why === "unusedApp") return t("plan.why.unusedApp", { count: n.lastOpenedDays });
+  if (why === "appRemoved") return t("plan.why.appRemoved");
   // A file inside a duplicated folder (one shard of a duplicate model) is a duplicate too.
   for (let d: DiskNode | undefined = n; d && d.parent >= 0; d = disk.nodes[d.parent]) {
     if (d.duplicateOf === undefined) continue;

@@ -12,6 +12,7 @@ use tauri::{AppHandle, Manager, State};
 use wrasse_core::apps::uninstall;
 use wrasse_core::platform;
 use wrasse_core::quarantine;
+use wrasse_core::rank;
 use wrasse_core::safety::{self, Context, Delegated, Mode, Request, Safety};
 use wrasse_core::scan::cache;
 use wrasse_core::session;
@@ -335,4 +336,30 @@ pub async fn uninstall_app(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// Free Up Space: what to remove to free `target` bytes, best first (`wrasse_core::rank`). Ranks
+/// the last saved scan (the one the UI shows), minus `gone` (nodes already removed this session),
+/// never offering Documents, Desktop, iCloud Drive or Never touch items. Read-only.
+#[tauri::command]
+pub fn plan_free(
+    app: AppHandle,
+    state: State<'_, CleanupState>,
+    target: u64,
+    gone: Vec<u32>,
+) -> Result<rank::Plan, String> {
+    let dir = cache::data_dir(&app.config().identifier).ok_or("no data folder")?;
+    let (disk, _) = cache::load(&dir).ok_or("scan first")?;
+    let home = platform::home_dir().ok_or("no home folder")?;
+    let never_touch = with_ctx(&state, |ctx| Ok(ctx.exclusions.paths.clone()))?;
+    let limits = rank::Limits {
+        gone: gone.into_iter().collect(),
+        hand_pick_only: platform::protected_paths(&home, &dir)
+            .into_iter()
+            .filter(|p| p.protection == platform::Protection::HandPickOnly)
+            .map(|p| p.path)
+            .collect(),
+        never_touch,
+    };
+    Ok(rank::plan(&disk, target, &limits))
 }

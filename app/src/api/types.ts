@@ -103,6 +103,32 @@ export type LeftoverMeta = {
   defaultOff: boolean;
 };
 
+/** Why Free Up Space picked something. */
+export type FreeWhy = "rebuilds" | "unusedApp" | "neverOpened" | "appRemoved" | "largeAndOld" | "unused";
+
+export type FreeCandidate = {
+  /** The node shown (an app, a folder, a file). */
+  id: number;
+  /** What goes: the node, or an app's bundle and its default leftovers. */
+  parts: number[];
+  bytes: number;
+  lastUsedDays: number;
+  why: FreeWhy;
+};
+
+/** Free Up Space: the best candidates until the target, and what was held back. */
+export type FreePlan = {
+  target: number;
+  items: FreeCandidate[];
+  total: number;
+  /** Missing bytes when the target can't be reached. */
+  shortfall: number;
+  /** Left out only because used in the last 7 days. */
+  heldRecent: number;
+  /** Left out because their app is open. */
+  heldRunning: number;
+};
+
 /** What uninstalling did. */
 export type UninstallOutcome = {
   disk: Disk;

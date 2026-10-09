@@ -38,6 +38,15 @@ export function reattach(disk: Disk, ids: number[]) {
   }
 }
 
+/** Nodes removed this session (detached from their parent); their subtrees are gone too. */
+export function detachedRoots(disk: Disk): number[] {
+  const out: number[] = [];
+  for (const n of disk.nodes) {
+    if (n.parent >= 0 && !disk.nodes[n.parent].children.includes(n.id)) out.push(n.id);
+  }
+  return out;
+}
+
 /** Empties a node in place (used for the snapshot ghost after "Free now"). */
 export function zeroOut(disk: Disk, id: number) {
   const n = disk.nodes[id];

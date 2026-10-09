@@ -4,7 +4,7 @@
 import { inTauri, type AppInfo } from "../lib/backend";
 import { mockApi } from "../mock/api";
 import { tauriApi } from "./tauri";
-import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome } from "./types";
+import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -53,6 +53,9 @@ export interface WrasseApi {
   thinSnapshots(disk: Disk): Promise<Disk>;
   /** Asks a running app to quit (before uninstalling it); waits up to 10 s. */
   quitApp(disk: Disk, appId: number): Promise<{ disk: Disk; quit: boolean }>;
+  /** Free Up Space: what to remove to free `target` bytes, best first. `gone` are nodes
+   *  already removed this session. Read-only. */
+  planFree(disk: Disk, target: number): Promise<FreePlan>;
   /** Uninstalls an app: the bundle goes by its route (tray, Homebrew, Finder Trash), the chosen
    *  leftovers go to the tray. The core looks the app up again and checks it isn't running. */
   uninstall(disk: Disk, appId: number, leftoverIds: number[]): Promise<UninstallOutcome>;

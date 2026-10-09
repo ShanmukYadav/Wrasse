@@ -3,6 +3,7 @@ import { insights } from "../api/insights";
 import type { Disk, RemoveOptions, ScanProgress, SkipReason } from "../api/types";
 import { deletable, handPickOnly } from "../api/caution";
 import { generateDisk } from "./disk";
+import { planFree } from "./rank";
 import { detach, reattach, zeroOut } from "../api/tree";
 
 const progressListeners = new Set<(p: ScanProgress) => void>();
@@ -120,6 +121,9 @@ export const mockApi: WrasseApi = {
   async quitApp(disk, appId) {
     disk.nodes[appId].running = false;
     return { disk, quit: true };
+  },
+  async planFree(disk, target) {
+    return planFree(disk, target);
   },
   async uninstall(disk, appId, leftoverIds) {
     const app = disk.nodes[appId];

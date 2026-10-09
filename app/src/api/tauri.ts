@@ -5,8 +5,8 @@ import { listen } from "@tauri-apps/api/event";
 import type { WrasseApi } from ".";
 import type { AppInfo } from "../lib/backend";
 import { insights } from "./insights";
-import { detach, reattach } from "./tree";
-import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute } from "./types";
+import { detach, detachedRoots, reattach } from "./tree";
+import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan } from "./types";
 
 type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean };
 type CoreReport = { done: { path: string; bytes: number; entry: string | null }[]; skipped: { path: string; reason: SkipReason }[]; bytes: number; dryRun: boolean };
@@ -119,6 +119,7 @@ export const tauriApi: WrasseApi = {
     if (r.quit) app.running = false;
     return { disk, quit: r.quit };
   },
+  planFree: (disk, target) => invoke<FreePlan>("plan_free", { target, gone: detachedRoots(disk) }),
   async uninstall(disk, appId, leftoverIds): Promise<UninstallOutcome> {
     const app = disk.nodes[appId];
     const bundle = app.children.map((c) => disk.nodes[c]).find((c) => c.appBundle);

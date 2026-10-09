@@ -108,7 +108,8 @@ pub fn run() {
             cleanup::never_touch_list,
             cleanup::audit_recent,
             cleanup::quit_app,
-            cleanup::uninstall_app
+            cleanup::uninstall_app,
+            cleanup::plan_free
         ])
         .run(tauri::generate_context!())
         .expect("error while running Wrasse");

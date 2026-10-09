@@ -357,6 +357,51 @@ button {
   border-radius: var(--r-pill);
   background: var(--c-accent);
 }
+/* Free Up Space: freed for good (solid), pending in the tray (striped), picked (light). */
+.plan-track {
+  display: flex;
+}
+.plan-seg {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+.plan-seg.is-freed,
+.plan-dot.is-freed {
+  background: var(--c-accent);
+}
+.plan-seg.is-pending,
+.plan-dot.is-pending {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--c-accent) 0 4px,
+    color-mix(in srgb, var(--c-accent) 45%, transparent) 4px 8px
+  );
+}
+.plan-seg.is-picked {
+  background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+}
+.plan-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  color: var(--c-text-muted);
+}
+.plan-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.plan-tick.is-sheet {
+  border-style: dashed;
+}
+.plan-uninstall {
+  white-space: nowrap;
+  padding: 0 6px;
+}
 
 /* ---- Home grid and tiles --------------------------------------------------------------- */
 

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type DiskNode, type TrayItem, api, handPickOnly, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { type DiskNode, type FreeWhy, type TrayItem, api, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -41,7 +41,29 @@ export type ConfirmKind =
 /** A short message; with `action`, a button (e.g. Undo) and a longer stay. */
 export type Toast = { key: number; text: string; action?: { label: string; run: () => void } };
 
-export type Plan = { target: number; ids: number[]; total: number; off: number[] };
+export type Plan = {
+  target: number;
+  /** Candidates, best first: the node shown for each (an app, a folder, a file). */
+  ids: number[];
+  /** What goes for each candidate (for an app: its bundle and the leftovers ticked by default). */
+  parts: Record<number, number[]>;
+  bytes: Record<number, number>;
+  why: Record<number, FreeWhy>;
+  total: number;
+  off: number[];
+  /** Missing bytes when the target can't be reached. */
+  shortfall: number;
+  /** Left out because used in the last 7 days. */
+  heldRecent: number;
+  /** Left out because their app is open. */
+  heldRunning: number;
+  /** When the plan was made: tray items since then count as "pending in tray". */
+  startedAt: number;
+  /** Freed for good since then (Delete now, emptied tray or Trash, Homebrew uninstalls). */
+  freed: number;
+  /** Moved to the Trash by Finder since then (frees once the Trash is emptied). */
+  inTrash: number;
+};
 export type Flight = { key: number; id: number; from: Rect; color: string; delay: number };
 
 type State = {
@@ -306,6 +328,11 @@ export const useApp = create<State & Actions>((set, get) => {
       selected: null,
       detailOpen: false,
       lastMove: trayItems.length ? trayItems : s.lastMove,
+      plan: countFreed(
+        remainingPlan(s.plan, [appId, ...parts.map((n) => n.id)]),
+        r.bundleRemoved && r.route.kind === "homebrew" ? r.bundleBytes : 0,
+        r.bundleRemoved && r.route.kind === "finderTrash" ? r.bundleBytes : 0,
+      ),
     }));
     record(toTray, "inTray", entries);
     if (r.bundleRemoved && bundle && !r.bundleEntry) record([bundle], "deleted");
@@ -344,7 +371,8 @@ export const useApp = create<State & Actions>((set, get) => {
     const result = await api.emptyTrash(disk, id).catch(failed);
     if (!result) return;
     if (result.dryRun) return get().notify(t("dryRun.trashToast", { size: fmtBytes(result.bytes) }));
-    set((s) => ({ disk: result.disk, diskVersion: s.diskVersion + 1, selected: null, detailOpen: false }));
+    // What Finder moved to the Trash for this plan is freed now too.
+    set((s) => ({ disk: result.disk, diskVersion: s.diskVersion + 1, selected: null, detailOpen: false, plan: s.plan ? { ...s.plan, freed: s.plan.freed + result.bytes, inTrash: 0 } : null }));
     if (n) {
       log(t("audit.deleted"), n.path, result.bytes);
       record([n], "deleted");
@@ -484,7 +512,7 @@ export const useApp = create<State & Actions>((set, get) => {
         // Fade and collapse (no flight: nothing goes to the tray).
         set({ deleting: gone.map((n) => n.id), selected: null, detailOpen: false });
         setTimeout(() => {
-          set((s) => ({ disk: result.disk, deleting: [], diskVersion: s.diskVersion + 1 }));
+          set((s) => ({ disk: result.disk, deleting: [], diskVersion: s.diskVersion + 1, plan: countFreed(remainingPlan(s.plan, gone.map((n) => n.id)), result.bytes) }));
           ascendIfEmpty();
         }, 260);
         for (const n of gone) log(t("audit.deleted"), n.path, n.size);
@@ -502,6 +530,8 @@ export const useApp = create<State & Actions>((set, get) => {
         if (result.dryRun) return get().notify(t("dryRun.emptyTrayToast", { size: fmtBytes(result.bytes) }));
         set((s) => ({
           tray: [],
+          lastMove: [],
+          plan: countFreed(s.plan, result.bytes),
           batches: s.batches.map((b) => (b.state === "inTray" ? { ...b, state: "emptied" } : b)),
           deleted: s.deleted.map((d) => (d.status === "inTray" ? { ...d, status: "deleted" } : d)),
         }));
@@ -541,20 +571,28 @@ export const useApp = create<State & Actions>((set, get) => {
     },
 
     planFree: (bytes) => {
-      const { disk } = get();
-      const ranked = disk.nodes
-        // Never pre-select Documents, Desktop or iCloud Drive items, or anything that can't go.
-        .filter((n) => n.children.length === 0 && n.size > 0 && n.safety !== "keep" && n.kind !== "ghost" && n.parent >= 0 && attached(disk, n.id) && deletable(disk, n.id) && !handPickOnly(n))
-        .map((n) => ({ n, score: n.size * unusedFactor(n.lastOpenedDays) * (n.safety === "safe" ? 1 : 0.7) }))
-        .sort((a, b) => b.score - a.score);
-      const ids: number[] = [];
-      let total = 0;
-      for (const { n } of ranked) {
-        if (total >= bytes) break;
-        ids.push(n.id);
-        total += n.size;
-      }
-      set({ plan: { target: bytes, ids, total, off: [] }, lens: "all" });
+      void (async () => {
+        const r = await api.planFree(get().disk, bytes).catch(failed);
+        if (!r) return;
+        set({
+          plan: {
+            target: bytes,
+            ids: r.items.map((c) => c.id),
+            parts: Object.fromEntries(r.items.map((c) => [c.id, c.parts])),
+            bytes: Object.fromEntries(r.items.map((c) => [c.id, c.bytes])),
+            why: Object.fromEntries(r.items.map((c) => [c.id, c.why])),
+            total: r.total,
+            off: [],
+            shortfall: r.shortfall,
+            heldRecent: r.heldRecent,
+            heldRunning: r.heldRunning,
+            startedAt: Date.now(),
+            freed: 0,
+            inTrash: 0,
+          },
+          lens: "all",
+        });
+      })();
     },
     clearPlan: () => set({ plan: null }),
     togglePlanItem: (id) =>
@@ -674,17 +712,18 @@ export function boot() {
 }
 
 /** Drops tray-bound candidates from the plan; the plan ends once nothing is left. */
+/** Drops candidates that are gone (all their parts removed). The plan stays, so the meter keeps
+ *  showing what was freed and what's pending in the tray. */
 function remainingPlan(plan: Plan | null, removed: number[]): Plan | null {
   if (!plan) return null;
-  const ids = plan.ids.filter((id) => !removed.includes(id));
-  return ids.length ? { ...plan, ids, off: plan.off.filter((id) => ids.includes(id)) } : null;
+  const gone = new Set(removed);
+  const ids = plan.ids.filter((id) => !gone.has(id) && !(plan.parts[id] ?? [id]).every((p) => gone.has(p)));
+  return { ...plan, ids, off: plan.off.filter((id) => ids.includes(id)) };
 }
 
-export function unusedFactor(days: number): number {
-  if (days <= 0) return 0.1;
-  if (days <= 30) return 0.1 + (0.4 * days) / 30;
-  if (days <= 180) return 0.5 + (0.5 * (days - 30)) / 150;
-  return 1;
+/** Adds to the plan's "freed now" (or "in the Trash") total. */
+function countFreed(plan: Plan | null, freed: number, inTrash = 0): Plan | null {
+  return plan ? { ...plan, freed: plan.freed + freed, inTrash: plan.inTrash + inTrash } : null;
 }
 
 export function usedBytes(disk: Disk): number {

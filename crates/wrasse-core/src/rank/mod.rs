@@ -1,1 +1,228 @@
-//! See PLAN.md. Implemented in a later phase.
+//! Free Up Space (PLAN.md §6.5, docs/phase3-plan.md §4): ranks what could go to reach a target,
+//! by `reclaimable bytes × unused factor × safety weight`. Source-agnostic: it works on the scan's
+//! items (junk rule matches, whole apps, large and old files, leftovers of removed apps), so each
+//! phase's new sources take part without changes here. Read-only: it only proposes.
+
+use crate::scan::breakdown::{NodeKind, Safety, UiDisk, UiNode};
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+
+/// Things used more recently than this are never offered (docs/phase3-plan.md decision 8).
+pub const RECENT_DAYS: u32 = 7;
+
+/// 0 days → 0.1, 30 → 0.5, 180 and more → 1.0, linear in between.
+pub fn unused_factor(days: u32) -> f64 {
+    let d = f64::from(days);
+    if d <= 0.0 {
+        0.1
+    } else if d <= 30.0 {
+        0.1 + 0.4 * d / 30.0
+    } else if d < 180.0 {
+        0.5 + 0.5 * (d - 30.0) / 150.0
+    } else {
+        1.0
+    }
+}
+
+pub fn safety_weight(s: Safety) -> f64 {
+    match s {
+        Safety::Safe => 1.0,
+        Safety::YourCall => 0.7,
+        Safety::Keep => 0.0,
+    }
+}
+
+/// What the ranker must leave out besides what the tree says.
+#[derive(Debug, Clone, Default)]
+pub struct Limits {
+    /// Nodes already removed in this session (the UI detaches them; the tree here is the scan's).
+    pub gone: HashSet<u32>,
+    /// Places whose items are only ever picked by hand (Documents, Desktop, iCloud Drive).
+    pub hand_pick_only: Vec<PathBuf>,
+    /// The user's Never touch list.
+    pub never_touch: Vec<PathBuf>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum Why {
+    /// A cache or other item that rebuilds itself.
+    Rebuilds,
+    /// An app not opened for a while (with its data).
+    UnusedApp,
+    /// An app that was never opened.
+    NeverOpened,
+    /// Data of an app that's no longer installed.
+    AppRemoved,
+    /// A large file or folder not used for a long time.
+    LargeAndOld,
+    /// Anything else, ranked by size and age.
+    Unused,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Candidate {
+    /// The node the user sees (an app, a folder, a file).
+    pub id: u32,
+    /// What actually goes: the node itself, or an app's bundle plus its default leftovers.
+    pub parts: Vec<u32>,
+    pub bytes: u64,
+    pub last_used_days: u32,
+    pub safety: Safety,
+    pub score: f64,
+    pub why: Why,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Plan {
+    pub target: u64,
+    /// Chosen, best first, until the target is reached.
+    pub items: Vec<Candidate>,
+    pub total: u64,
+    /// How much is missing when the target can't be reached.
+    pub shortfall: u64,
+    /// Bytes left out only because they were used in the last [`RECENT_DAYS`] days.
+    pub held_recent: u64,
+    /// Bytes left out because their app is open.
+    pub held_running: u64,
+}
+
+fn under(path: &str, places: &[PathBuf]) -> bool {
+    let p = Path::new(path);
+    places.iter().any(|d| p.starts_with(d))
+}
+
+/// Every candidate, best first, with what was held back.
+pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) {
+    let nodes = &disk.nodes;
+    let attached = |n: &UiNode| {
+        let mut cur = Some(n);
+        while let Some(c) = cur {
+            if limits.gone.contains(&c.id) {
+                return false;
+            }
+            cur = (c.parent >= 0).then(|| &nodes[c.parent as usize]);
+        }
+        true
+    };
+    let allowed = |n: &UiNode| {
+        n.size > 0
+            && n.safety != Safety::Keep
+            && !n.read_only
+            && !n.aggregate
+            && !n.delegate
+            && n.kind != NodeKind::Ghost
+            && n.kind != NodeKind::Volume
+            && n.depth > 1
+            && n.note.as_deref() != Some("In iCloud only")
+            && !under(&n.path, &limits.hand_pick_only)
+            && !under(&n.path, &limits.never_touch)
+            && attached(n)
+    };
+    let mut out = Vec::new();
+    let (mut held_recent, mut held_running) = (0u64, 0u64);
+    let mut push = |c: Candidate| {
+        if c.last_used_days < RECENT_DAYS {
+            held_recent += c.bytes;
+        } else {
+            out.push(c);
+        }
+    };
+    for n in nodes {
+        // Whole apps: the bundle and the leftovers that start ticked, as one choice.
+        if n.kind == NodeKind::App {
+            let Some(meta) = &n.app else { continue };
+            if meta.route == crate::apps::uninstall::Route::NotRemovable || !attached(n) {
+                continue;
+            }
+            let parts: Vec<&UiNode> = n
+                .children
+                .iter()
+                .map(|&c| &nodes[c as usize])
+                .filter(|c| {
+                    allowed(c)
+                        && (c.app_bundle
+                            || c.leftover_meta.as_ref().is_some_and(|m| !m.default_off))
+                })
+                .collect();
+            if !parts.iter().any(|p| p.app_bundle) {
+                continue; // the bundle is gone or can't go: nothing to uninstall
+            }
+            let bytes: u64 = parts.iter().map(|p| p.size).sum();
+            if n.running {
+                held_running += bytes;
+                continue;
+            }
+            push(Candidate {
+                id: n.id,
+                parts: parts.iter().map(|p| p.id).collect(),
+                bytes,
+                last_used_days: n.last_opened_days,
+                safety: Safety::YourCall,
+                score: bytes as f64 * unused_factor(n.last_opened_days) * 0.7,
+                why: if meta.never_opened {
+                    Why::NeverOpened
+                } else {
+                    Why::UnusedApp
+                },
+            });
+            continue;
+        }
+        // Everything else: single items (leaves), not inside an app (apps go whole, above).
+        if !n.children.is_empty() || !allowed(n) {
+            continue;
+        }
+        let parent = &nodes[n.parent as usize];
+        if parent.kind == NodeKind::App {
+            continue;
+        }
+        let why = if n.orphan {
+            Why::AppRemoved
+        } else if n.rebuildable || n.rule_id.is_some() && n.safety == Safety::Safe {
+            Why::Rebuilds
+        } else if n.size >= 1_000_000_000 && n.last_opened_days >= 180 {
+            Why::LargeAndOld
+        } else {
+            Why::Unused
+        };
+        push(Candidate {
+            id: n.id,
+            parts: vec![n.id],
+            bytes: n.size,
+            last_used_days: n.last_opened_days,
+            safety: n.safety,
+            score: n.size as f64 * unused_factor(n.last_opened_days) * safety_weight(n.safety),
+            why,
+        });
+    }
+    out.sort_by(|a, b| b.score.total_cmp(&a.score).then(a.id.cmp(&b.id)));
+    (out, held_recent, held_running)
+}
+
+/// The best candidates until `target` bytes are reached.
+pub fn plan(disk: &UiDisk, target: u64, limits: &Limits) -> Plan {
+    let (all, held_recent, held_running) = candidates(disk, limits);
+    let mut items = Vec::new();
+    let mut total = 0u64;
+    for c in all {
+        if total >= target {
+            break;
+        }
+        total += c.bytes;
+        items.push(c);
+    }
+    Plan {
+        target,
+        items,
+        total,
+        shortfall: target.saturating_sub(total),
+        held_recent,
+        held_running,
+    }
+}
+
+#[cfg(test)]
+mod tests;
