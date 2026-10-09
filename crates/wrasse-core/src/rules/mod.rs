@@ -359,7 +359,7 @@ pub fn find(
                 regenerates: rule.regenerates,
                 custom: rule.custom,
                 bytes: 0,
-                delegate: rule.delegate,
+                delegate: rule.delegate.clone(),
             };
             if rule.delegate.is_some() {
                 let bytes = size_of(root);

@@ -10,6 +10,8 @@
 //!                          the same safety checks as the app; prints the report as JSON
 //!   wrasse restore <entry-id>...   put tray items back
 //!   wrasse tray            list what's in the tray
+//!   wrasse apps [--orphans] list installed apps with source, owner, last use and leftovers (JSON);
+//!                          with --orphans, data folders whose app is gone. Read-only.
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -45,6 +47,16 @@ fn main() {
                 .map(|(_, e)| e)
                 .collect::<Vec<_>>()))
         }),
+        Some("apps") => {
+            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let apps = wrasse_core::platform::installed_apps(&home);
+            let v = if args.get(1).map(String::as_str) == Some("--orphans") {
+                serde_json::json!(wrasse_core::platform::orphaned_leftovers(&home, &apps))
+            } else {
+                serde_json::json!(apps)
+            };
+            println!("{}", serde_json::to_string_pretty(&v).unwrap());
+        }
         _ => println!(
             "wrasse {}\nusage: wrasse scan [folder]",
             wrasse_core::VERSION

@@ -34,17 +34,28 @@ pub fn scan_volume(control: &ScanControl, cache_dir: Option<&Path>) -> io::Resul
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
+    // Apps and the data they left (read-only; Spotlight for last use).
+    let home = platform::home_dir();
+    let apps = home
+        .as_deref()
+        .map(platform::installed_apps)
+        .unwrap_or_default();
+    let orphans = home
+        .as_deref()
+        .map(|h| platform::orphaned_leftovers(h, &apps))
+        .unwrap_or_default();
     let input = Input {
         tree: &tree,
         display_prefix: prefix,
-        home: platform::home_dir(),
+        home,
         volumes,
         volume_name: platform::volume_name(),
         previous,
         running: platform::running_executables(),
         today: (now / 86_400) as u32,
         env,
-        bundle_id: &platform::bundle_id,
+        apps: &apps,
+        orphans: &orphans,
         hf_models: &crate::scan::hf::hf_models,
     };
     let mut disk = breakdown::build(&input);

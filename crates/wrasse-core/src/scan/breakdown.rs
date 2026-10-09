@@ -50,15 +50,41 @@ pub enum Safety {
     Keep,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// What kind of app leftover a node is (Caches, Containers, …).
+pub use crate::apps::LeftoverKind as Leftover;
+
+/// For an app node: where it came from and how it can be removed (docs/phase3-plan.md §2–3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Leftover {
-    Caches,
-    Support,
-    Containers,
-    Logs,
-    Preferences,
-    SavedState,
+pub struct AppMeta {
+    pub source: crate::apps::Source,
+    pub owner: crate::apps::Owner,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub bundle_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub version: Option<String>,
+    /// Spotlight has no last-used date and it has been installed over 30 days.
+    #[serde(default)]
+    pub never_opened: bool,
+    /// Spotlight's last-used date is known (otherwise `last_opened_days` is the newest file date).
+    #[serde(default)]
+    pub last_used_known: bool,
+    pub route: crate::apps::uninstall::Route,
+    /// Leftovers in the system Library: shown as "Needs admin", not removable by Wrasse.
+    #[serde(default)]
+    pub admin_leftovers: Vec<String>,
+}
+
+/// For an app's leftover: how sure Wrasse is it belongs to the app.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LeftoverMeta {
+    pub matched_by: crate::apps::MatchedBy,
+    #[serde(default)]
+    pub shared_with: Vec<String>,
+    /// Not ticked by default in the uninstall sheet (matched by name only, or shared).
+    #[serde(default)]
+    pub default_off: bool,
 }
 
 /// Lens bits, as `LENS_BIT` in `app/src/api/types.ts`.
@@ -135,6 +161,13 @@ pub struct UiNode {
     pub app_bundle: bool,
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub leftover: Option<Leftover>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub leftover_meta: Option<LeftoverMeta>,
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub app: Option<AppMeta>,
+    /// Data left by an app that's no longer installed.
+    #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+    pub orphan: bool,
     /// Labels beyond the UI's type: iCloud-only, unreadable, shares blocks with clones.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub note: Option<String>,
@@ -201,8 +234,10 @@ pub struct Input<'a> {
     pub today: u32,
     /// Environment overrides for model folders (`OLLAMA_MODELS`, `HF_HOME`, `HF_HUB_CACHE`).
     pub env: HashMap<String, String>,
-    /// Reads an app's bundle identifier (Info.plist); injected so tests need no real apps.
-    pub bundle_id: &'a dyn Fn(&Path) -> Option<String>,
+    /// Installed apps (`platform::installed_apps`); injected so tests need no real apps.
+    pub apps: &'a [crate::apps::App],
+    /// Data folders whose app is gone (`platform::orphaned_leftovers`).
+    pub orphans: &'a [crate::apps::Orphan],
     /// Lists the models in a Hugging Face hub folder with their real sizes (scan/hf.rs).
     pub hf_models: &'a dyn Fn(&Path) -> Vec<super::hf::HfModel>,
 }
@@ -273,7 +308,8 @@ pub fn build(input: &Input) -> UiDisk {
     // Models anywhere else on the Mac (a project's own cache, downloaded weights).
     let found = b.discover_models(&home_display);
     let dev = b.claim_all(&dev_sources(&home_display));
-    let apps = b.claim_apps(&home_display);
+    let apps = b.claim_apps();
+    let orphans = b.claim_orphans();
     let trash = b.claim(&format!("{home_display}/.Trash"));
     let library = b.claim(&format!("{home_display}/Library"));
     let home_id = b.claim(&home_display);
@@ -396,9 +432,39 @@ pub fn build(input: &Input) -> UiDisk {
         Safety::YourCall,
         "Apps in your Applications folders, with the caches and data they keep in your Library.",
     );
+    let mut folders: Vec<(String, u32)> = Vec::new();
     for app in apps {
-        b.emit_app(app, apps_node);
+        let parent = match app
+            .info
+            .folder
+            .as_ref()
+            .map(|f| f.to_string_lossy().into_owned())
+        {
+            None => apps_node,
+            Some(f) => match folders.iter().find(|(p, _)| *p == f) {
+                Some(&(_, id)) => id,
+                None => {
+                    let name = Path::new(&f)
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    let id = b.virtual_node(
+                        &name,
+                        &f,
+                        Some(apps_node),
+                        Category::Apps,
+                        NodeKind::Dir,
+                        Safety::YourCall,
+                        "A folder of apps.",
+                    );
+                    folders.push((f, id));
+                    id
+                }
+            },
+        };
+        b.emit_app(app, parent);
     }
+    b.emit_orphans(orphans, apps_node);
 
     // Library & caches (the Junk tile): ~/Library and the Trash.
     let junk = b.virtual_node(
@@ -798,10 +864,9 @@ fn is_model_file(name: &str) -> bool {
 struct App {
     /// The `.app` bundle in the arena.
     bundle: u32,
-    name: String,
-    leftovers: Vec<(Leftover, &'static str, u32)>,
-    /// A plain folder of apps (e.g. "Adobe Creative Cloud"): (folder, apps inside).
-    folder: Option<(u32, Vec<App>)>,
+    info: crate::apps::App,
+    /// Leftovers found in the scan: (arena node, what discovery knows about it).
+    leftovers: Vec<(u32, crate::apps::Leftover)>,
 }
 
 impl Builder<'_> {
@@ -1006,173 +1071,207 @@ impl Builder<'_> {
             .collect()
     }
 
-    /// Apps in /Applications and ~/Applications, with leftovers claimed from ~/Library.
-    fn claim_apps(&mut self, home: &str) -> Vec<App> {
+    /// The installed apps' bundles and leftovers, claimed so their bytes show under Apps.
+    fn claim_apps(&mut self) -> Vec<App> {
         let mut out = Vec::new();
-        for dir in ["/Applications".to_string(), format!("{home}/Applications")] {
-            if let Some(id) = self.tree.find(&self.arena_path(&dir)) {
-                out.extend(self.apps_in(id, home, 0));
-            }
+        for info in self.input.apps {
+            let Some(bundle) = self.claim(&info.bundle.to_string_lossy()) else {
+                continue;
+            };
+            let leftovers = info
+                .leftovers
+                .iter()
+                .filter(|l| !l.needs_admin)
+                .filter_map(|l| {
+                    self.claim(&l.path.to_string_lossy())
+                        .map(|id| (id, l.clone()))
+                })
+                .collect();
+            out.push(App {
+                bundle,
+                info: info.clone(),
+                leftovers,
+            });
         }
         out
     }
 
-    fn apps_in(&mut self, dir: u32, home: &str, depth: u32) -> Vec<App> {
-        let kids: Vec<u32> = self.tree.children(dir).collect();
+    /// Orphaned leftovers in the scan: (orphan, its items' arena nodes).
+    fn claim_orphans(&mut self) -> Vec<(crate::apps::Orphan, Vec<(u32, crate::apps::Leftover)>)> {
         let mut out = Vec::new();
-        for c in kids {
-            let name = self.tree.name(c).to_string();
-            if self.tree.node(c).kind != Kind::Dir {
-                continue;
-            }
-            if let Some(stem) = name.strip_suffix(".app") {
-                let display = self.display(&self.tree.path(c));
-                let Some(bundle) = self.claim(&display) else {
-                    continue;
-                };
-                let id = (self.input.bundle_id)(Path::new(&self.tree.path(c)));
-                let leftovers = self.claim_leftovers(home, stem, id.as_deref());
-                out.push(App {
-                    bundle,
-                    name: stem.to_string(),
-                    leftovers,
-                    folder: None,
-                });
-            } else if depth == 0 {
-                let display = self.display(&self.tree.path(c));
-                let inner = self.apps_in(c, home, depth + 1);
-                if !inner.is_empty() {
-                    if let Some(folder) = self.claim(&display) {
-                        out.push(App {
-                            bundle: folder,
-                            name,
-                            leftovers: Vec::new(),
-                            folder: Some((folder, inner)),
-                        });
-                    }
-                }
-            }
-        }
-        out
-    }
-
-    fn claim_leftovers(
-        &mut self,
-        home: &str,
-        name: &str,
-        id: Option<&str>,
-    ) -> Vec<(Leftover, &'static str, u32)> {
-        let lib = format!("{home}/Library");
-        let mut candidates: Vec<(Leftover, &'static str, String)> = Vec::new();
-        if let Some(id) = id {
-            candidates.push((Leftover::Caches, "Caches", format!("{lib}/Caches/{id}")));
-            candidates.push((
-                Leftover::Support,
-                "Application Support",
-                format!("{lib}/Application Support/{id}"),
-            ));
-            candidates.push((
-                Leftover::Containers,
-                "Containers",
-                format!("{lib}/Containers/{id}"),
-            ));
-            candidates.push((Leftover::Logs, "Logs", format!("{lib}/Logs/{id}")));
-            candidates.push((
-                Leftover::Preferences,
-                "Preferences",
-                format!("{lib}/Preferences/{id}.plist"),
-            ));
-            candidates.push((
-                Leftover::SavedState,
-                "Saved Application State",
-                format!("{lib}/Saved Application State/{id}.savedState"),
-            ));
-        }
-        candidates.push((
-            Leftover::Support,
-            "Application Support",
-            format!("{lib}/Application Support/{name}"),
-        ));
-        candidates.push((Leftover::Logs, "Logs", format!("{lib}/Logs/{name}")));
-        candidates.push((Leftover::Caches, "Caches", format!("{lib}/Caches/{name}")));
-        let mut out = Vec::new();
-        for (kind, label, path) in candidates {
-            if out.iter().any(|(k, _, _)| *k == kind) {
-                continue;
-            }
-            if let Some(nid) = self.claim(&path) {
-                out.push((kind, label, nid));
+        for o in self.input.orphans {
+            let items: Vec<(u32, crate::apps::Leftover)> = o
+                .items
+                .iter()
+                .filter_map(|l| {
+                    self.claim(&l.path.to_string_lossy())
+                        .map(|id| (id, l.clone()))
+                })
+                .collect();
+            if !items.is_empty() {
+                out.push((o.clone(), items));
             }
         }
         out
     }
 
     fn emit_app(&mut self, app: App, parent: u32) {
-        if let Some((folder, inner)) = app.folder {
-            let ctx = Ctx {
-                category: Category::Apps,
-                safety: Safety::YourCall,
-                rebuildable: false,
-                leftover: None,
-            };
-            let path = self.display(&self.tree.path(folder));
-            let f = self.virtual_node(
-                &app.name,
-                &path,
-                Some(parent),
-                Category::Apps,
-                NodeKind::Dir,
-                ctx.safety,
-                "A folder of apps.",
-            );
-            for a in inner {
-                self.emit_app(a, f);
-            }
-            return;
-        }
+        use crate::apps::{uninstall::route, Source};
+        let info = &app.info;
         let bundle_path = self.tree.path(app.bundle);
         let display = self.display(&bundle_path);
         let running = self
             .input
             .running
             .iter()
-            .any(|p| p.starts_with(&bundle_path));
-        let last_day = self.tree.node(app.bundle).last_used_day;
+            .any(|p| p.starts_with(&bundle_path) || p.starts_with(&info.bundle));
+        let system = info.source == Source::System;
         let a = self.virtual_node(
-            &app.name,
+            &info.name,
             &display,
             Some(parent),
             Category::Apps,
             NodeKind::App,
-            Safety::YourCall,
-            "An app and the data it keeps in your Library.",
+            if system {
+                Safety::Keep
+            } else {
+                Safety::YourCall
+            },
+            if system {
+                "Part of macOS. It can't be removed."
+            } else {
+                "An app and the data it keeps in your Library."
+            },
         );
-        self.nodes[a as usize].running = running;
-        self.nodes[a as usize].last_opened_days = self.input.today.saturating_sub(last_day);
+        let last_day = self.tree.node(app.bundle).last_used_day;
+        let n = &mut self.nodes[a as usize];
+        n.running = running;
+        n.last_opened_days = info
+            .last_used_days
+            .unwrap_or_else(|| self.input.today.saturating_sub(last_day));
+        n.app = Some(AppMeta {
+            source: info.source.clone(),
+            owner: info.owner,
+            bundle_id: info.id.clone(),
+            version: info.version.clone(),
+            never_opened: info.never_opened(),
+            last_used_known: info.last_used_days.is_some(),
+            route: route(info),
+            admin_leftovers: info
+                .leftovers
+                .iter()
+                .filter(|l| l.needs_admin)
+                .map(|l| l.path.to_string_lossy().into_owned())
+                .collect(),
+        });
         // The bundle itself: one item, not a folder to open.
         let bctx = Ctx {
             category: Category::Apps,
-            safety: Safety::YourCall,
+            safety: if system {
+                Safety::Keep
+            } else {
+                Safety::YourCall
+            },
             rebuildable: false,
             leftover: None,
         };
+        let last_used = self.nodes[a as usize].last_opened_days;
         let b = self.leaf_from(app.bundle, a, bctx, NodeKind::Dir);
         self.nodes[b as usize].app_bundle = true;
-        self.nodes[b as usize].why = format!("The {} app itself.", app.name);
-        for (kind, label, id) in app.leftovers {
-            let safe = matches!(
-                kind,
-                Leftover::Caches | Leftover::Logs | Leftover::SavedState
-            );
+        // The app's parts were last used when the app was (PLAN.md §6.5: caches use their app's).
+        self.nodes[b as usize].last_opened_days = last_used;
+        self.nodes[b as usize].why = format!("The {} app itself.", info.name);
+        if system {
+            self.nodes[b as usize].safety = Safety::Keep;
+        }
+        for (id, l) in app.leftovers {
             let ctx = Ctx {
                 category: Category::Apps,
-                safety: if safe { Safety::Safe } else { Safety::YourCall },
-                rebuildable: kind == Leftover::Caches,
-                leftover: Some(kind),
+                safety: if l.kind.regenerates() {
+                    Safety::Safe
+                } else {
+                    Safety::YourCall
+                },
+                rebuildable: l.kind == Leftover::Caches,
+                leftover: Some(l.kind),
             };
             let n = self.leaf_from(id, a, ctx, NodeKind::Dir);
-            self.nodes[n as usize].name = label.into();
-            self.nodes[n as usize].why = leftover_why(kind, &app.name);
+            let node = &mut self.nodes[n as usize];
+            node.name = l.kind.label().into();
+            node.why = leftover_why(&l, &info.name);
+            node.last_opened_days = last_used;
+            node.leftover_meta = Some(LeftoverMeta {
+                matched_by: l.matched_by,
+                shared_with: l.shared_with.clone(),
+                default_off: !l.ticked_by_default(),
+            });
+        }
+    }
+
+    /// "Leftovers from removed apps": one node per bundle id, its folders as items.
+    fn emit_orphans(
+        &mut self,
+        orphans: Vec<(crate::apps::Orphan, Vec<(u32, crate::apps::Leftover)>)>,
+        parent: u32,
+    ) {
+        if orphans.is_empty() {
+            return;
+        }
+        let home = self
+            .input
+            .home
+            .as_ref()
+            .map(|h| h.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let group = self.virtual_node(
+            "Leftovers from removed apps",
+            &format!("{home}/Library"),
+            Some(parent),
+            Category::Apps,
+            NodeKind::Dir,
+            Safety::YourCall,
+            "Data apps left behind after they were removed. No installed app uses these folders.",
+        );
+        self.nodes[group as usize].orphan = true;
+        for (o, items) in orphans {
+            let first = self.display(&self.tree.path(items[0].0));
+            let node = self.virtual_node(
+                &o.id,
+                &first,
+                Some(group),
+                Category::Apps,
+                NodeKind::Dir,
+                Safety::YourCall,
+                &format!(
+                    "Left by an app with the id {}, which isn't installed on this Mac. Nothing here changed in {} days.",
+                    o.id, o.untouched_days
+                ),
+            );
+            self.nodes[node as usize].orphan = true;
+            self.nodes[node as usize].last_opened_days = o.untouched_days;
+            for (id, l) in items {
+                let ctx = Ctx {
+                    category: Category::Apps,
+                    safety: Safety::YourCall,
+                    rebuildable: false,
+                    leftover: Some(l.kind),
+                };
+                let n = self.leaf_from(id, node, ctx, NodeKind::Dir);
+                let item = &mut self.nodes[n as usize];
+                item.orphan = true;
+                item.name = l.kind.label().into();
+                item.why = format!(
+                    "{} of an app that's no longer installed ({}).",
+                    l.kind.label(),
+                    o.id
+                );
+                item.last_opened_days = o.untouched_days;
+                item.leftover_meta = Some(LeftoverMeta {
+                    matched_by: l.matched_by,
+                    shared_with: Vec::new(),
+                    default_off: true,
+                });
+            }
         }
     }
 
@@ -1217,6 +1316,9 @@ impl Builder<'_> {
             running: false,
             app_bundle: false,
             leftover: None,
+            leftover_meta: None,
+            app: None,
+            orphan: false,
             note: None,
             rule_id: None,
             rule_root: None,
@@ -1480,14 +1582,31 @@ fn item_safety(name: &str, flags: u8, ctx: Ctx) -> (Safety, String) {
     (safety, why.into())
 }
 
-fn leftover_why(kind: Leftover, app: &str) -> String {
-    match kind {
+fn leftover_why(l: &crate::apps::Leftover, app: &str) -> String {
+    let what = match l.kind {
         Leftover::Caches => format!("{app}'s caches. It rebuilds them when needed."),
         Leftover::Support => format!("Data {app} keeps: settings, downloads, libraries."),
         Leftover::Containers => format!("{app}'s sandbox: its documents and data."),
+        Leftover::GroupContainers => format!("Data {app} shares with its helpers or extensions."),
         Leftover::Logs => format!("{app}'s logs."),
         Leftover::Preferences => format!("{app}'s settings."),
         Leftover::SavedState => format!("Windows {app} restores at launch."),
+        Leftover::HttpStorages => format!("Cookies and web data {app} stored."),
+        Leftover::WebKit => format!("Web content {app} cached."),
+        Leftover::LaunchAgents => format!("Starts part of {app} when you log in."),
+        Leftover::LaunchDaemons | Leftover::HelperTools => {
+            format!("A background helper {app} installed for all users.")
+        }
+    };
+    if !l.shared_with.is_empty() {
+        format!(
+            "{what} Also matches {}, so check before removing it.",
+            l.shared_with.join(", ")
+        )
+    } else if l.matched_by == crate::apps::MatchedBy::Name {
+        format!("{what} Matched by the app's name, so check it's really {app}'s.")
+    } else {
+        what
     }
 }
 
@@ -1553,6 +1672,24 @@ mod tests {
         let tree = scan(&root, &ScanControl::default()).unwrap();
         let prefix = root.to_string_lossy().into_owned();
         let scanned = tree.node(0).size;
+        let apps = [crate::apps::App {
+            id: Some("com.example.App".into()),
+            name: "Example".into(),
+            bundle: PathBuf::from("/Applications/Example.app"),
+            version: None,
+            folder: None,
+            source: crate::apps::Source::Folder,
+            owner: crate::apps::Owner::User,
+            last_used_days: Some(12),
+            added_days: Some(100),
+            leftovers: vec![crate::apps::Leftover {
+                path: PathBuf::from("/Users/me/Library/Caches/com.example.App"),
+                kind: Leftover::Caches,
+                matched_by: crate::apps::MatchedBy::BundleId,
+                shared_with: vec![],
+                needs_admin: false,
+            }],
+        }];
         let input = Input {
             tree: &tree,
             display_prefix: &prefix,
@@ -1568,10 +1705,8 @@ mod tests {
             today: 20_000,
             env: HashMap::new(),
             hf_models: &|_: &Path| Vec::new(),
-            bundle_id: &|p: &Path| {
-                p.ends_with("Example.app")
-                    .then(|| "com.example.App".to_string())
-            },
+            apps: &apps,
+            orphans: &[],
         };
         let disk = build(&input);
         let n = |name: &str| {
@@ -1589,6 +1724,11 @@ mod tests {
         assert!(n("Developer").size >= 20_000_000);
         let app = disk.nodes.iter().find(|n| n.kind == NodeKind::App).unwrap();
         assert_eq!(app.name, "Example");
+        assert_eq!(app.last_opened_days, 12, "from Spotlight");
+        assert_eq!(
+            app.app.as_ref().unwrap().route,
+            crate::apps::uninstall::Route::Tray
+        );
         let caches = disk
             .nodes
             .iter()
@@ -1647,7 +1787,8 @@ mod tests {
             running: vec![],
             today: 20_000,
             env: HashMap::new(),
-            bundle_id: &|_: &Path| None,
+            apps: &[],
+            orphans: &[],
             hf_models: &crate::scan::hf::hf_models,
         };
         let disk = build(&input);

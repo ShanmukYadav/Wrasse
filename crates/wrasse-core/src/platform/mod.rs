@@ -465,23 +465,137 @@ pub fn is_excluded_from_backups(dir: &Path) -> bool {
     }
 }
 
-/// Delegated OS actions (PLAN.md §4.1). Only `safety::delegate` calls this.
-pub fn run_delegated(action: crate::safety::Delegated) -> io::Result<()> {
-    // Tests exercise `safety::delegate` with temporary homes; they must never reach the real OS
-    // action (emptying the user's actual Trash).
+/// Delegated OS actions (PLAN.md §4.1). Only `safety::delegate` calls this, after validating the
+/// action (`brew` must be one of [`brew_binaries`] and owned by the user, and so on).
+pub fn run_delegated(action: &crate::safety::Delegated, brew: Option<&Path>) -> io::Result<()> {
+    // Tests exercise `safety::delegate` with temporary homes; they must never reach a real OS
+    // action (emptying the user's actual Trash, uninstalling a real app).
     #[cfg(test)]
     {
-        let _ = action;
+        let _ = (action, brew);
         return Err(io::Error::other("delegated actions don't run in tests"));
     }
     #[allow(unreachable_code)]
-    match action {
-        crate::safety::Delegated::EmptyTrash => {
-            #[cfg(target_os = "macos")]
-            return macos::commands::empty_trash_via_finder();
-            #[allow(unreachable_code)]
+    {
+        #[cfg(target_os = "macos")]
+        use crate::safety::Delegated;
+        #[cfg(target_os = "macos")]
+        return match action {
+            Delegated::EmptyTrash => macos::commands::empty_trash_via_finder(),
+            Delegated::BrewUninstallCask { token, .. } => match brew {
+                Some(b) => macos::commands::brew_uninstall_cask(b, token),
+                None => Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Homebrew isn't installed",
+                )),
+            },
+            Delegated::FinderMoveToTrash { path } => macos::commands::finder_move_to_trash(path),
+        };
+        #[allow(unreachable_code)]
+        {
+            let _ = (action, brew);
             Err(io::Error::from(io::ErrorKind::Unsupported))
         }
+    }
+}
+
+/// Whether a Homebrew cask token is well formed (lowercase letters, digits, `-@._+`).
+pub fn valid_cask_token(token: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::apps::valid_token(token);
+    #[allow(unreachable_code)]
+    {
+        let _ = token;
+        false
+    }
+}
+
+/// Where Homebrew may live; only these are ever run, and only when owned by the current user.
+pub fn brew_binaries() -> &'static [&'static str] {
+    &["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+}
+
+/// Homebrew's Caskrooms, next to the binaries above.
+pub fn caskrooms() -> Vec<PathBuf> {
+    vec![
+        PathBuf::from("/opt/homebrew/Caskroom"),
+        PathBuf::from("/usr/local/Caskroom"),
+    ]
+}
+
+/// Folders apps are installed into: (`/Applications`, `~/Applications`).
+pub fn app_dirs(home: &Path) -> Vec<PathBuf> {
+    if cfg!(target_os = "macos") {
+        vec![PathBuf::from("/Applications"), home.join("Applications")]
+    } else {
+        Vec::new()
+    }
+}
+
+/// Installed apps with their leftovers (PLAN.md §6.4). Read-only.
+pub fn installed_apps(home: &Path) -> Vec<crate::apps::App> {
+    #[cfg(target_os = "macos")]
+    return macos::apps::discover(&macos::apps::Places::system(home), &macos::apps::System);
+    #[allow(unreachable_code)]
+    {
+        let _ = home;
+        Vec::new()
+    }
+}
+
+/// The app at `bundle`, discovered fresh.
+pub fn app_at(home: &Path, bundle: &Path) -> Option<crate::apps::App> {
+    #[cfg(target_os = "macos")]
+    return macos::apps::app_at(
+        &macos::apps::Places::system(home),
+        &macos::apps::System,
+        bundle,
+    );
+    #[allow(unreachable_code)]
+    {
+        let _ = (home, bundle);
+        None
+    }
+}
+
+/// Data folders whose app is gone (docs/phase3-plan.md decision 5).
+pub fn orphaned_leftovers(home: &Path, apps: &[crate::apps::App]) -> Vec<crate::apps::Orphan> {
+    #[cfg(target_os = "macos")]
+    return macos::apps::orphans(
+        &macos::apps::Places::system(home),
+        &macos::apps::System,
+        apps,
+        &running_bundle_ids(),
+    );
+    #[allow(unreachable_code)]
+    {
+        let _ = (home, apps);
+        Vec::new()
+    }
+}
+
+/// The cask token that installed this app bundle, if any.
+pub fn cask_of(app: &Path) -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        let name = app.file_name()?.to_string_lossy().into_owned();
+        return macos::apps::cask_apps(&caskrooms()).remove(&name);
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = app;
+        None
+    }
+}
+
+/// Politely asks an app to quit (never forces it). Returns once asked; the caller waits.
+pub fn quit_app(bundle_id: &str) -> io::Result<()> {
+    #[cfg(target_os = "macos")]
+    return macos::commands::quit_app(bundle_id);
+    #[allow(unreachable_code)]
+    {
+        let _ = bundle_id;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
     }
 }
 

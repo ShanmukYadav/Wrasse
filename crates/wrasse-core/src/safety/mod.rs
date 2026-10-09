@@ -79,6 +79,8 @@ pub enum Reason {
     /// It changed between the preview and the action (different file, now a link, or edited).
     Changed,
     InUse,
+    /// An app that's open (its bundle, while a process runs from it).
+    AppRunning,
     /// "Delete now" is only for items labeled Safe.
     NotSafeForDeleteNow,
     Failed,
@@ -331,6 +333,9 @@ fn vet(ctx: &Context, req: &Request, mode: Mode) -> Result<(Identity, Vec<Warnin
     if req.safety == Safety::YourCall && !id.is_dir && platform::is_open(&req.path) {
         return Err(Reason::InUse);
     }
+    if is_app_bundle(&path) && app_running(&req.path, &path) {
+        return Err(Reason::AppRunning);
+    }
     let mut warnings = Vec::new();
     if ctx.synced.iter().any(|s| path.starts_with(s)) {
         warnings.push(Warning::SyncedToICloud);
@@ -556,50 +561,184 @@ pub fn purge(ctx: &Context, ids: &[String], dry_run: bool) -> io::Result<u64> {
     Ok(bytes)
 }
 
-/// Delegated OS actions (PLAN.md §4.1): the OS or a tool deletes on Wrasse's behalf.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+fn is_app_bundle(path: &Path) -> bool {
+    path.extension().is_some_and(|e| e == "app")
+}
+
+fn app_running(given: &Path, resolved: &Path) -> bool {
+    platform::running_executables()
+        .iter()
+        .any(|e| e.starts_with(given) || e.starts_with(resolved))
+}
+
+/// Delegated OS actions (PLAN.md §4.1): the OS or a tool deletes on Wrasse's behalf. This is the
+/// whole allowlist; each is validated in [`delegate`] before anything runs.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Delegated {
     /// Empty the Trash (Finder on macOS). Not undoable.
     EmptyTrash,
+    /// `brew uninstall --cask <token>` for the app that cask installed. Not undoable.
+    #[serde(rename_all = "camelCase")]
+    BrewUninstallCask { token: String, app: PathBuf },
+    /// Move an app the user can't move themselves (root-owned) to their Trash through Finder,
+    /// which asks for the password. Put Back works.
+    #[serde(rename_all = "camelCase")]
+    FinderMoveToTrash { path: PathBuf },
+}
+
+/// Why a delegated action was refused before running.
+fn refuse(why: impl Into<String>) -> io::Error {
+    io::Error::new(io::ErrorKind::PermissionDenied, why.into())
+}
+
+/// Checks an app bundle a delegated action would remove: an `.app` directly in (or one folder
+/// inside) an Applications folder, on the startup disk, not protected, not on the never-touch
+/// list, not part of the OS, and not running. Returns its size.
+fn check_app_target(ctx: &Context, app: &Path) -> io::Result<u64> {
+    let md = fs::symlink_metadata(app).map_err(|_| refuse("the app isn't there"))?;
+    if md.file_type().is_symlink() || !md.is_dir() || !is_app_bundle(app) {
+        return Err(refuse("not an app bundle"));
+    }
+    let path = resolve(app).ok_or_else(|| refuse("the app isn't there"))?;
+    let dirs: Vec<PathBuf> = platform::app_dirs(&ctx.home)
+        .iter()
+        .filter_map(|d| resolve_dir(d).ok())
+        .collect();
+    let parent = path.parent().unwrap_or(Path::new("/"));
+    let in_dirs = dirs
+        .iter()
+        .any(|d| parent == d || parent.parent() == Some(d.as_path()));
+    if !in_dirs {
+        return Err(refuse("only apps in an Applications folder"));
+    }
+    if matches!(protection_of(ctx, &path), Some(Protection::Hard)) {
+        return Err(refuse("protected"));
+    }
+    if ctx.exclusions.contains(&path) || ctx.exclusions.contains(app) {
+        return Err(refuse(format!(
+            "{} is on your never-touch list",
+            app.display()
+        )));
+    }
+    if platform::file_identity(&md).0 != ctx.startup_dev {
+        return Err(refuse("not on the startup disk"));
+    }
+    let system = platform::bundle_id(app).is_some_and(|id| id.starts_with("com.apple."))
+        && !app.join("Contents/_MASReceipt/receipt").is_file();
+    if system {
+        return Err(refuse("part of the system"));
+    }
+    if app_running(app, &path) {
+        return Err(io::Error::other("the app is open; quit it first"));
+    }
+    Ok(crate::quarantine::size_on_disk(app))
+}
+
+/// The Homebrew binary to run: one of the fixed places, a file owned by the current user.
+fn brew_binary(ctx: &Context) -> Option<PathBuf> {
+    platform::brew_binaries()
+        .iter()
+        .map(PathBuf::from)
+        .find(|b| {
+            fs::metadata(b).is_ok_and(|m| {
+                m.is_file() && (ctx.uid.is_none() || platform::owner_uid(&m) == ctx.uid)
+            })
+        })
+}
+
+/// A cask token and app pair is valid when the token is well formed and that cask's metadata
+/// lists this app.
+pub fn cask_matches(token: &str, app: &Path, cask_of: &dyn Fn(&Path) -> Option<String>) -> bool {
+    platform::valid_cask_token(token) && cask_of(app).as_deref() == Some(token)
 }
 
 pub fn delegate(ctx: &Context, action: Delegated, dry_run: bool) -> io::Result<u64> {
+    delegate_with(ctx, action, dry_run, &platform::cask_of)
+}
+
+/// [`delegate`] with the cask lookup injected (tests use a fixture Caskroom).
+pub fn delegate_with(
+    ctx: &Context,
+    action: Delegated,
+    dry_run: bool,
+    cask_of: &dyn Fn(&Path) -> Option<String>,
+) -> io::Result<u64> {
     let _one = OPERATION
         .lock()
         .map_err(|_| io::Error::other("another cleanup is running"))?;
     let _awake = platform::keep_awake("Wrasse is cleaning up");
-    let (target, place) = match action {
-        Delegated::EmptyTrash => ("empty Trash", platform::trash_dir(&ctx.home)),
+    let checked: io::Result<(String, u64, Option<PathBuf>)> = match &action {
+        Delegated::EmptyTrash => {
+            let place = platform::trash_dir(&ctx.home);
+            match &place {
+                // The never-touch list applies here too: the OS would delete everything in there.
+                Some(p) if ctx.exclusions.contains(p) => Err(refuse(format!(
+                    "{} is on your never-touch list",
+                    p.display()
+                ))),
+                _ => Ok((
+                    "empty Trash".to_string(),
+                    place.map_or(0, |t| crate::quarantine::size_on_disk(&t)),
+                    None,
+                )),
+            }
+        }
+        Delegated::BrewUninstallCask { token, app } => {
+            if !cask_matches(token, app, cask_of) {
+                Err(refuse(format!(
+                    "{} wasn't installed by the cask \"{token}\"",
+                    app.display()
+                )))
+            } else {
+                check_app_target(ctx, app).and_then(|bytes| {
+                    let brew = brew_binary(ctx);
+                    if brew.is_none() && !dry_run {
+                        return Err(io::Error::new(
+                            io::ErrorKind::NotFound,
+                            "Homebrew isn't installed",
+                        ));
+                    }
+                    Ok((
+                        format!("brew uninstall --cask {token} ({})", app.display()),
+                        bytes,
+                        brew,
+                    ))
+                })
+            }
+        }
+        Delegated::FinderMoveToTrash { path } => check_app_target(ctx, path).map(|bytes| {
+            (
+                format!("Finder: move {} to the Trash", path.display()),
+                bytes,
+                None,
+            )
+        }),
     };
-    // The never-touch list applies here too: the OS would delete everything in that place.
-    if let Some(p) = &place {
-        if ctx.exclusions.contains(p) {
+    let (target, bytes, brew) = match checked {
+        Ok(c) => c,
+        Err(e) => {
             log(
                 ctx,
                 "delegate",
-                target,
+                &format!("{action:?}"),
                 0,
                 None,
                 dry_run,
-                "refused: on the never-touch list",
+                &format!("refused: {e}"),
             );
-            return Err(io::Error::new(
-                io::ErrorKind::PermissionDenied,
-                format!("{} is on your never-touch list", p.display()),
-            ));
+            return Err(e);
         }
-    }
-    let bytes = place.map_or(0, |t| crate::quarantine::size_on_disk(&t));
+    };
     if dry_run {
-        log(ctx, "delegate", target, bytes, None, true, "ok");
+        log(ctx, "delegate", &target, bytes, None, true, "ok");
         return Ok(bytes);
     }
-    let result = platform::run_delegated(action);
+    let result = platform::run_delegated(&action, brew.as_deref());
     log(
         ctx,
         "delegate",
-        target,
+        &target,
         bytes,
         None,
         false,

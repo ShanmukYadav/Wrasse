@@ -1,3 +1,4 @@
+pub mod apps;
 pub mod awake;
 pub mod commands;
 mod fs;
@@ -5,6 +6,7 @@ pub mod fsevents;
 pub mod power;
 pub mod protect;
 mod settings;
+pub mod spotlight;
 
 pub use fs::{
     clone_shared_bytes, container_space, full_disk_access, is_dataless, lower_thread_priority,

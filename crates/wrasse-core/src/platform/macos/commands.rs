@@ -1,7 +1,10 @@
 //! The only external programs Wrasse runs on macOS (PLAN.md §4.1). Read-only programs go through
-//! `run_readonly`, which refuses anything not on its allowlist. The two that change state
-//! (Time Machine exclusion of Wrasse's own folders, emptying the Trash through Finder) have their
-//! own narrowly named functions; emptying the Trash is reachable only through `safety::delegate`.
+//! `run_readonly`, which refuses anything not on its allowlist. Those that change state have their
+//! own narrowly named functions, with arguments passed as argv (never through a shell):
+//! - Time Machine exclusion of Wrasse's own folders;
+//! - asking an app to quit (before uninstalling it);
+//! - delegated removals, reachable only through `safety::delegate`, which validates them first:
+//!   emptying the Trash and moving an app to the Trash (Finder), `brew uninstall --cask`.
 
 use std::io;
 use std::path::Path;
@@ -58,6 +61,84 @@ pub fn is_excluded_from_backups(dir: &Path) -> bool {
 pub fn empty_trash_via_finder() -> io::Result<()> {
     let out = Command::new("/usr/bin/osascript")
         .args(["-e", "tell application \"Finder\" to empty trash"])
+        .output()?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ))
+    }
+}
+
+/// Moves one item to the Trash through Finder, which asks for an administrator password when the
+/// item is root-owned (App Store and package installs). Put Back works. The path goes in as an
+/// argument to the script, so it can't change the script.
+pub fn finder_move_to_trash(path: &Path) -> io::Result<()> {
+    let Some(p) = path.to_str() else {
+        return Err(io::Error::from(io::ErrorKind::InvalidInput));
+    };
+    let out = Command::new("/usr/bin/osascript")
+        .args([
+            "-e",
+            "on run argv",
+            "-e",
+            "tell application \"Finder\" to delete (POSIX file (item 1 of argv) as alias)",
+            "-e",
+            "end run",
+            "--",
+            p,
+        ])
+        .output()?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ))
+    }
+}
+
+/// `brew uninstall --cask <token>` with a validated brew binary and token. No `--zap`: Wrasse
+/// sends the leftovers to the tray itself, so they stay restorable (docs/phase3-plan.md decision 2).
+pub fn brew_uninstall_cask(brew: &Path, token: &str) -> io::Result<()> {
+    let out = Command::new(brew)
+        .args(["uninstall", "--cask", "--", token])
+        .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+        .env("HOMEBREW_NO_ANALYTICS", "1")
+        .env("HOMEBREW_NO_ENV_HINTS", "1")
+        .output()?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ))
+    }
+}
+
+/// Asks an app to quit, the way the Dock's Quit does (it may ask to save documents). Never forces.
+pub fn quit_app(bundle_id: &str) -> io::Result<()> {
+    if !crate::apps::is_bundle_id(bundle_id) && bundle_id.split('.').count() < 2 {
+        return Err(io::Error::from(io::ErrorKind::InvalidInput));
+    }
+    if !bundle_id
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+    {
+        return Err(io::Error::from(io::ErrorKind::InvalidInput));
+    }
+    let out = Command::new("/usr/bin/osascript")
+        .args([
+            "-e",
+            "on run argv",
+            "-e",
+            "tell application id (item 1 of argv) to quit",
+            "-e",
+            "end run",
+            "--",
+            bundle_id,
+        ])
         .output()?;
     if out.status.success() {
         Ok(())
