@@ -240,6 +240,7 @@ export const en = {
   "select.clear": "Clear",
   "delete.button": "Delete · {size}",
   "delete.toast": "Moved to the tray. Restore it any time before you empty the tray.",
+  "delete.categoryToast": "Open it to choose what to delete.",
   "delete.blockedToast": "macOS manages this. It can't be deleted from Wrasse.",
   "caution.titleOne": "Delete “{name}”?",
   "caution.titleMany": "Delete {count} items?",

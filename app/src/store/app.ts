@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type DiskNode, api, attached, cautionFor, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { type DiskNode, api, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -238,7 +238,7 @@ export const useApp = create<State & Actions>((set, get) => {
       // Keep items only move after the user confirmed the caution sheet; blocked ones never.
       const items = ids
         .map((id) => disk.nodes[id])
-        .filter((n) => n && cautionFor(disk, n.id).kind !== "blocked" && (confirmed || n.safety !== "keep"));
+        .filter((n) => n && deletable(disk, n.id) && (confirmed || n.safety !== "keep"));
       if (!items.length) return;
       // One flight per tile involved (many files can share a tile).
       const flights: Flight[] = [];
@@ -275,8 +275,8 @@ export const useApp = create<State & Actions>((set, get) => {
     clearChecks: () => set({ checked: [] }),
     requestDelete: (ids) => {
       const { disk } = get();
-      const ok = ids.filter((id) => cautionFor(disk, id).kind !== "blocked");
-      if (!ok.length) return get().notify(t("delete.blockedToast"));
+      const ok = ids.filter((id) => deletable(disk, id));
+      if (!ok.length) return get().notify(ids.some((id) => cautionFor(disk, id).kind === "category") ? t("delete.categoryToast") : t("delete.blockedToast"));
       if (strongest(disk, ok) === "none") {
         get().addToTray(ok);
         if (!get().info?.readOnly) get().notify(t("delete.toast"));

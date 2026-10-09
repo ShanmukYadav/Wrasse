@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import type { CSSProperties } from "react";
-import { api, cautionFor, type Disk, type DiskNode } from "../../api";
+import { api, deletable, type Disk, type DiskNode } from "../../api";
 import { useApp } from "../../store/app";
 import { Icon } from "../../design/icons/Icon";
 import { iconFor } from "../../design/icons/semantic";
@@ -82,7 +82,8 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
   // Ticks for bulk delete: shown on hover, and on every tile once something is ticked.
   const checked = useApp((s) => s.checked.includes(node.id));
   const selecting = useApp((s) => s.checked.length > 0);
-  const tickable = cautionFor(disk, node.id).kind !== "blocked" && widthPx >= 120;
+  // Whole home categories (Your Files, Apps, …) and macOS itself have no tick: open them to choose.
+  const tickable = deletable(disk, node.id) && widthPx >= 120;
   const dimmed = !lensMatch(node, lens);
 
   const style = {

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, type CSSProperties } from "react";
-import { cautionFor, type DiskNode } from "../api";
+import { deletable, type DiskNode } from "../api";
 import { Icon } from "../design/icons/Icon";
 import { iconFor } from "../design/icons/semantic";
 import { categories } from "../design/tokens";
@@ -61,7 +61,7 @@ function Detail({ id }: { id: number }) {
   const fileManager = useApp((s) => s.info?.fileManager ?? "Finder");
   const scheme = useScheme();
   const { closeDetail, addToTray, deleteNow, freeGhost, notify, setFocus, openUninstall, requestDelete } = useApp.getState();
-  const blocked = cautionFor(disk, id).kind === "blocked";
+  const blocked = !deletable(disk, id);
   const n = disk.nodes[id];
   const ghost = n.kind === "ghost";
   const size = formatBytes(n.size, units);
