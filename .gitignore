@@ -5,3 +5,12 @@ target/
 .DS_Store
 dist/
 app/src-tauri/gen/
+# Local caches, logs and editor/OS files
+*.log
+.vite/
+app/public/
+.env
+.env.*
+.idea/
+.vscode/
+*.swp
