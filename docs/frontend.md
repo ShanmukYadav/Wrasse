@@ -172,6 +172,7 @@ Actions take the UI's current tree and resolve to the updated tree. The mock edi
 
 ### Types (`src/api/types.ts`)
 
+- **AI Models (real scans)** include the known tool folders (Ollama, LM Studio, Hugging Face, Jan, GPT4All) and models found anywhere: Hugging Face hub caches (one tile per model, sized by the blobs its snapshots link to), Ollama stores, and weight files (.gguf, .safetensors, .ckpt, .pt, .onnx … from 50 MB), grouped by the project folder they sit in.
 - **`Disk`**: `{ nodes: DiskNode[], root, capacity, ghostId, leafCount, summary? }`. Nodes are an arena indexed by id. `summary` (real scans) carries `capacity, available, osUsed, scanned, unaccounted, home, files, dirs, unreadableDirs, datalessItems, hardlinksDeduped, cloneSharedBytes, cancelled`. The real tree is pruned: per folder, items under 10 MB fold into "Smaller items".
 - **`DiskNode`**: `id, name, path, size` (bytes on disk), `parent` (-1 for root), `children, depth, category` (files, aiModels, developer, apps, system, junk, other), `kind` (volume, dir, file, app, model, ghost), `lastOpenedDays, safety` (safe, yourCall, keep), `why` (one-line explanation), `lenses` / `deep` (lens bitmasks), `matchBytes` (bytes per lens), `grewBy, shade`. Optional: `duplicateOf, readOnly, rebuildable, running, appBundle, leftover` (caches, support, containers, logs, preferences, savedState), `note` ("In iCloud only", "Couldn't read", "Shares space with clones").
 - **`Insight`**: `{ tone: "amber" | "green" | "violet" | "protected", text }`.

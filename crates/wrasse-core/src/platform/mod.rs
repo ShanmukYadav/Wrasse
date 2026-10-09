@@ -211,3 +211,20 @@ pub fn bundle_id(app: &Path) -> Option<String> {
         None
     }
 }
+
+/// Tests only: removes a scratch folder a test created under the OS temp dir. Refuses anything
+/// else, so it can't be pointed at real data.
+#[cfg(test)]
+pub fn remove_test_dir(path: &Path) {
+    let tmp = std::env::temp_dir();
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    assert!(
+        path.starts_with(&tmp) && name.starts_with("wrasse-"),
+        "not a test folder: {}",
+        path.display()
+    );
+    let _ = fs::remove_dir_all(path);
+}

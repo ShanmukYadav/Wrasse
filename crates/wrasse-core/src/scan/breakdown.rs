@@ -189,6 +189,24 @@ pub struct Input<'a> {
     pub env: HashMap<String, String>,
     /// Reads an app's bundle identifier (Info.plist); injected so tests need no real apps.
     pub bundle_id: &'a dyn Fn(&Path) -> Option<String>,
+    /// Lists the models in a Hugging Face hub folder with their real sizes (scan/hf.rs).
+    pub hf_models: &'a dyn Fn(&Path) -> Vec<super::hf::HfModel>,
+}
+
+/// AI model data found outside the known tool folders, grouped by the project it sits in.
+struct Found {
+    group: String,
+    group_path: String,
+    item: FoundItem,
+}
+
+enum FoundItem {
+    /// A Hugging Face hub cache (has `models--org--name` folders).
+    Hub(u32),
+    /// An Ollama model store (`models/` with `blobs/` and `manifests/`).
+    Ollama(u32),
+    /// A model weights file (.gguf, .safetensors, …).
+    Weights(u32),
 }
 
 #[derive(Clone, Copy)]
@@ -238,6 +256,8 @@ pub fn build(input: &Input) -> UiDisk {
 
     // Claim special folders first, so each byte shows up in exactly one place.
     let ai = b.claim_all(&ai_sources(&home_display, &input.env));
+    // Models anywhere else on the Mac (a project's own cache, downloaded weights).
+    let found = b.discover_models(&home_display);
     let dev = b.claim_all(&dev_sources(&home_display));
     let apps = b.claim_apps(&home_display);
     let trash = b.claim(&format!("{home_display}/.Trash"));
@@ -273,8 +293,56 @@ pub fn build(input: &Input) -> UiDisk {
             rebuildable: false,
             leftover: None,
         };
-        let n = b.emit(id, ai_node, ctx);
-        b.nodes[n as usize].name = label;
+        match b.find_hub(id) {
+            Some(hub) => {
+                b.emit_hf(&label, id, hub, ai_node);
+            }
+            None => {
+                let n = b.emit(id, ai_node, ctx);
+                b.nodes[n as usize].name = label;
+            }
+        }
+    }
+    let ai_ctx = Ctx {
+        category: Category::AiModels,
+        safety: Safety::YourCall,
+        rebuildable: false,
+        leftover: None,
+    };
+    let mut groups: Vec<(String, u32)> = Vec::new();
+    for f in found {
+        let group = match groups.iter().find(|(g, _)| *g == f.group) {
+            Some(&(_, id)) => id,
+            None => {
+                let id = b.virtual_node(
+                    &f.group,
+                    &f.group_path,
+                    Some(ai_node),
+                    Category::AiModels,
+                    NodeKind::Dir,
+                    Safety::YourCall,
+                    "AI models found in this folder.",
+                );
+                groups.push((f.group.clone(), id));
+                id
+            }
+        };
+        match f.item {
+            FoundItem::Hub(id) => {
+                b.emit_hf("Hugging Face cache", id, id, group);
+            }
+            FoundItem::Ollama(id) => {
+                let n = b.emit(id, group, ai_ctx);
+                b.nodes[n as usize].name = "Ollama models".into();
+            }
+            FoundItem::Weights(id) => {
+                let n = b.emit(id, group, ai_ctx);
+                let parent = b.tree.name(b.tree.node(id).parent).to_string();
+                let file = b.tree.name(id).to_string();
+                b.nodes[n as usize].name = format!("{parent} · {file}");
+                b.nodes[n as usize].kind = NodeKind::Model;
+            }
+        }
     }
 
     // Developer.
@@ -617,6 +685,74 @@ fn is_read_only_library(name: &str) -> bool {
         || name.ends_with(".logicx")
 }
 
+/// Model weights worth listing on their own: common weight formats from 50 MB, and generic
+/// `.bin` files only when they're named like weights or are large.
+fn is_weights_file(name: &str, size: u64) -> bool {
+    let n = name.to_ascii_lowercase();
+    let weights = [
+        ".gguf",
+        ".safetensors",
+        ".ckpt",
+        ".pt",
+        ".pth",
+        ".onnx",
+        ".mlmodel",
+        ".tflite",
+        ".h5",
+    ];
+    if weights.iter().any(|e| n.ends_with(e)) {
+        return size >= 50_000_000;
+    }
+    n.ends_with(".bin")
+        && (size >= MODEL_FILE
+            || ((n.starts_with("pytorch_model") || n.starts_with("model")) && size >= 50_000_000))
+}
+
+/// Groups found models by project: the first folder under home that isn't a generic container
+/// (Documents, Desktop, …), e.g. `~/Documents/vyakta/env/hf_cache/hub` → "vyakta".
+fn model_group(display: &str, home: &str) -> (String, String) {
+    // Containers, not projects: a model in ~/Library/Mobile Documents/com~apple~CloudDocs/Backup/…
+    // groups under "Backup", one in ~/Library/Application Support/SomeApp/… under "SomeApp".
+    const GENERIC: [&str; 20] = [
+        "Documents",
+        "Desktop",
+        "Downloads",
+        "Developer",
+        "Projects",
+        "projects",
+        "Code",
+        "code",
+        "src",
+        "repos",
+        "workspace",
+        "dev",
+        "git",
+        "GitHub",
+        "Library",
+        "Mobile Documents",
+        "com~apple~CloudDocs",
+        "Application Support",
+        "Containers",
+        "Caches",
+    ];
+    let Some(rel) = (!home.is_empty())
+        .then(|| display.strip_prefix(home))
+        .flatten()
+    else {
+        return ("Elsewhere on this Mac".into(), "/".into());
+    };
+    let parts: Vec<&str> = rel.split('/').filter(|p| !p.is_empty()).collect();
+    let mut path = home.to_string();
+    for (i, p) in parts.iter().enumerate() {
+        path.push('/');
+        path.push_str(p);
+        if i + 1 < parts.len() && !GENERIC.contains(p) {
+            return ((*p).to_string(), path);
+        }
+    }
+    ("Your folders".into(), home.to_string())
+}
+
 fn is_model_file(name: &str) -> bool {
     let n = name.to_ascii_lowercase();
     n.ends_with(".gguf")
@@ -668,6 +804,10 @@ impl Builder<'_> {
             return None;
         }
         let id = self.tree.find(&self.arena_path(display))?;
+        self.claim_id(id)
+    }
+
+    fn claim_id(&mut self, id: u32) -> Option<u32> {
         if self.carved.contains(&id) || self.inside_carved(id) {
             return None;
         }
@@ -690,6 +830,135 @@ impl Builder<'_> {
             p = self.tree.node(p).parent;
         }
         false
+    }
+
+    /// A Hugging Face hub: a folder holding `models--org--name` folders.
+    fn is_hf_hub(&self, id: u32) -> bool {
+        self.tree
+            .children(id)
+            .any(|c| self.tree.name(c).starts_with("models--"))
+    }
+
+    /// The hub inside a folder: the folder itself, or its `hub/` child (`~/.cache/huggingface`).
+    fn find_hub(&self, id: u32) -> Option<u32> {
+        if self.is_hf_hub(id) {
+            return Some(id);
+        }
+        self.tree
+            .children(id)
+            .find(|&c| self.tree.name(c) == "hub" && self.is_hf_hub(c))
+    }
+
+    /// Walks the scan for model data outside the known tool folders and claims it for AI Models.
+    fn discover_models(&mut self, home: &str) -> Vec<Found> {
+        let mut hits: Vec<(u32, FoundItem)> = Vec::new();
+        let mut stack = vec![self.tree.root()];
+        while let Some(id) = stack.pop() {
+            if self.carved.contains(&id) {
+                continue;
+            }
+            let node = self.tree.node(id);
+            let name = self.tree.name(id);
+            if node.kind == Kind::File {
+                if is_weights_file(name, node.size) {
+                    hits.push((id, FoundItem::Weights(id)));
+                }
+                continue;
+            }
+            if name.ends_with(".app") {
+                continue;
+            }
+            if self.is_hf_hub(id) {
+                hits.push((id, FoundItem::Hub(id)));
+                continue;
+            }
+            let has = |n: &str| self.tree.children(id).any(|c| self.tree.name(c) == n);
+            if name == "models" && has("blobs") && has("manifests") {
+                hits.push((id, FoundItem::Ollama(id)));
+                continue;
+            }
+            stack.extend(self.tree.children(id));
+        }
+        let mut out = Vec::new();
+        for (id, item) in hits {
+            let display = self.display(&self.tree.path(id));
+            if self.claim_id(id).is_none() {
+                continue;
+            }
+            let (group, group_path) = model_group(&display, home);
+            out.push(Found {
+                group,
+                group_path,
+                item,
+            });
+        }
+        out.sort_by(|a, b| a.group.cmp(&b.group));
+        out
+    }
+
+    /// A Hugging Face cache as one tile per model, sized by the blobs its snapshots link to.
+    fn emit_hf(&mut self, label: &str, src: u32, hub: u32, parent: u32) -> u32 {
+        let size = self.size(src);
+        let path = self.display(&self.tree.path(src));
+        let last = self
+            .input
+            .today
+            .saturating_sub(self.tree.node(src).last_used_day);
+        let node = self.virtual_node(
+            label,
+            &path,
+            Some(parent),
+            Category::AiModels,
+            NodeKind::Dir,
+            Safety::YourCall,
+            "Models downloaded from Hugging Face.",
+        );
+        let models = (self.input.hf_models)(Path::new(&self.tree.path(hub)));
+        let mut left = size;
+        for m in models {
+            let bytes = m.bytes.min(left);
+            if bytes < MIN_ITEM {
+                continue;
+            }
+            left -= bytes;
+            let name = m.repo.rsplit('/').next().unwrap_or(&m.repo).to_string();
+            let mp = self.display(&m.dir.to_string_lossy());
+            let id = self.virtual_node(
+                &name,
+                &mp,
+                Some(node),
+                Category::AiModels,
+                NodeKind::Model,
+                Safety::YourCall,
+                &format!(
+                    "{} from Hugging Face. Downloads again if a project needs it.",
+                    m.repo
+                ),
+            );
+            self.nodes[id as usize].size = bytes;
+            self.nodes[id as usize].last_opened_days = last;
+        }
+        // Leftover bytes (configs, partial downloads) stay with the cache, as one tile when big
+        // enough to matter, otherwise on the cache tile itself.
+        if left >= MIN_ITEM {
+            let id = self.virtual_node(
+                "Other cache files",
+                &path,
+                Some(node),
+                Category::AiModels,
+                NodeKind::File,
+                Safety::YourCall,
+                "Small models, partial downloads and other files in this cache.",
+            );
+            self.nodes[id as usize].size = left;
+            self.nodes[id as usize].last_opened_days = last;
+        } else if left > 0 && self.nodes[node as usize].children.is_empty() {
+            self.nodes[node as usize].size = left;
+        } else if left > 0 {
+            let biggest = self.nodes[node as usize].children[0];
+            self.nodes[biggest as usize].size += left;
+        }
+        node
     }
 
     fn claim_all(&mut self, sources: &[(String, String)]) -> Vec<(String, u32)> {
@@ -1261,6 +1530,7 @@ mod tests {
             running: vec![],
             today: 20_000,
             env: HashMap::new(),
+            hf_models: &|_: &Path| Vec::new(),
             bundle_id: &|p: &Path| {
                 p.ends_with("Example.app")
                     .then(|| "com.example.App".to_string())
@@ -1301,5 +1571,72 @@ mod tests {
         assert!(disk.nodes[0].match_bytes.ai_models >= 40_000_000);
         assert!(disk.nodes[0].match_bytes.dev >= 20_000_000);
         assert!(disk.nodes[0].match_bytes.junk >= 12_000_000);
+        crate::platform::remove_test_dir(&root);
+    }
+
+    #[test]
+    fn models_are_found_anywhere_and_grouped_by_project() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("wrasse-models-{nanos}"));
+        let proj = root.join("Users/me/Documents/vyakta");
+        write(&proj.join("env/hf_cache/hub/blobs/w1"), 60_000_000);
+        let snap = proj.join("env/hf_cache/hub/models--mlx-community--Mistral-7B/snapshots/rev");
+        fs::create_dir_all(&snap).unwrap();
+        std::os::unix::fs::symlink("../../../blobs/w1", snap.join("model.safetensors")).unwrap();
+        write(
+            &proj.join("models/checkpoint-1/adapter_model.safetensors"),
+            55_000_000,
+        );
+        write(&proj.join("notes/readme.bin"), 2_000_000);
+        write(&root.join("Users/me/Documents/report.pdf"), 30_000_000);
+
+        let tree = scan(&root, &ScanControl::default()).unwrap();
+        let prefix = root.to_string_lossy().into_owned();
+        let scanned = tree.node(0).size;
+        let input = Input {
+            tree: &tree,
+            display_prefix: &prefix,
+            home: Some(PathBuf::from("/Users/me")),
+            volumes: Volumes {
+                capacity: scanned * 4,
+                available: scanned * 2,
+                os_used: 0,
+            },
+            volume_name: "Test HD".into(),
+            previous: None,
+            running: vec![],
+            today: 20_000,
+            env: HashMap::new(),
+            bundle_id: &|_: &Path| None,
+            hf_models: &crate::scan::hf::hf_models,
+        };
+        let disk = build(&input);
+        let n = |name: &str| {
+            disk.nodes
+                .iter()
+                .find(|n| n.name == name && n.size > 0)
+                .unwrap_or_else(|| panic!("no {name}"))
+        };
+        let ai = n("AI Models");
+        let group = n("vyakta");
+        assert_eq!(group.parent, i64::from(ai.id));
+        let mistral = n("Mistral-7B");
+        assert_eq!(mistral.kind, NodeKind::Model);
+        assert!(mistral.size >= 60_000_000);
+        let ckpt = n("checkpoint-1 · adapter_model.safetensors");
+        assert_eq!(ckpt.kind, NodeKind::Model);
+        // Claimed bytes leave Your Files, and nothing is counted twice.
+        assert!(n("Your Files").size < 30_000_000 + 5_000_000);
+        let cats: u64 = disk.nodes[0]
+            .children
+            .iter()
+            .map(|&c| disk.nodes[c as usize].size)
+            .sum();
+        assert_eq!(cats, disk.nodes[0].size);
+        assert!(disk.nodes[0].match_bytes.ai_models >= 115_000_000);
+        crate::platform::remove_test_dir(&root);
     }
 }

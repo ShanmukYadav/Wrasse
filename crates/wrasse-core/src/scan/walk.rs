@@ -375,7 +375,7 @@ mod tests {
     use super::*;
     use std::io::Write;
 
-    // Test folders live under the OS temp dir and are left for the OS to clean
+    // Test folders live under the OS temp dir; platform::remove_test_dir cleans them up
     // (deleting is only allowed in safety/, quarantine/ and platform/).
     fn temp_dir(tag: &str) -> PathBuf {
         let nanos = SystemTime::now()
@@ -429,6 +429,7 @@ mod tests {
         let b = tree.find(&format!("{}/a/b", root.display())).unwrap();
         assert!(tree.node(b).small_count >= 2);
         assert_eq!(tree.stats.files, 4);
+        crate::platform::remove_test_dir(&root);
     }
 
     #[test]
@@ -442,6 +443,7 @@ mod tests {
         let locked = tree.find(&format!("{}/locked", root.display())).unwrap();
         assert_ne!(tree.node(locked).flags & flag::UNREADABLE, 0);
         assert_eq!(tree.stats.unreadable_dirs, 1);
+        crate::platform::remove_test_dir(&root);
     }
 
     #[test]
@@ -453,5 +455,6 @@ mod tests {
         let tree = scan(&root, &control).unwrap();
         assert!(tree.stats.cancelled);
         assert_eq!(tree.nodes.len(), 1);
+        crate::platform::remove_test_dir(&root);
     }
 }

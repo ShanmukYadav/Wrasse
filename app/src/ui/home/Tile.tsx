@@ -68,12 +68,14 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
   }
   const maxKid = Math.max(1, ...kids.map((k) => k.size));
   const large = rows.length > 0;
+  // Models are counted wherever they sit (a project folder can hold several), apps likewise.
+  const count = node.depth === 1 && (node.category === "aiModels" || node.category === "apps") ? countKind(disk, node.id, node.category === "aiModels" ? "model" : "app") : kids.length;
   const meta = large
     ? unitKey
-      ? t("home.metaCount", { share: share < 1 ? "<1" : share, count: kids.length, unit: t(unitKey) })
+      ? t("home.metaCount", { share: share < 1 ? "<1" : share, count, unit: t(unitKey) })
       : t("home.metaShare", { share: share < 1 ? "<1" : share })
     : node.category === "apps" && node.depth === 1
-      ? t("home.apps", { count: kids.length })
+      ? t("home.apps", { count })
       : "";
   const insights = api.insights(disk, node.id);
   const dimmed = !lensMatch(node, lens);
@@ -200,6 +202,19 @@ function SizeBar({ fraction }: { fraction: number }) {
       <span className="size-bar-fill" style={{ transform: `scaleX(${Math.max(0.02, Math.min(1, fraction))})` }} />
     </span>
   );
+}
+
+/** Items of a kind anywhere under a node (models inside project folders, apps inside app folders). */
+function countKind(disk: Disk, id: number, kind: DiskNode["kind"]): number {
+  let n = 0;
+  const stack = [...disk.nodes[id].children];
+  while (stack.length) {
+    const k = disk.nodes[stack.pop()!];
+    if (k.size <= 0) continue;
+    if (k.kind === kind) n++;
+    else stack.push(...k.children);
+  }
+  return n;
 }
 
 function fmt(bytes: number, units: UnitSystem) {

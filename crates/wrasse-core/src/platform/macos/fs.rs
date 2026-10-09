@@ -166,5 +166,6 @@ mod tests {
         if let Some(shared) = clone_shared_bytes(&clone, allocated) {
             assert!(shared > 0 && shared <= allocated);
         }
+        crate::platform::remove_test_dir(&dir);
     }
 }

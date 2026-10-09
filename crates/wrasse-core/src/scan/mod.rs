@@ -3,6 +3,7 @@
 
 pub mod breakdown;
 pub mod cache;
+pub mod hf;
 pub mod tree;
 pub mod walk;
 

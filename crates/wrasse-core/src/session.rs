@@ -42,6 +42,7 @@ pub fn scan_volume(control: &ScanControl, cache_dir: Option<&Path>) -> io::Resul
         today: (now / 86_400) as u32,
         env,
         bundle_id: &platform::bundle_id,
+        hf_models: &crate::scan::hf::hf_models,
     };
     let disk = breakdown::build(&input);
     drop(tree);
