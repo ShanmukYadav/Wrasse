@@ -768,4 +768,85 @@ mod tests {
         assert_eq!(plan.skipped[0].reason, Reason::Excluded);
         crate::platform::remove_test_dir(&base);
     }
+
+    /// PLAN.md Phase 2 checkpoint: clean a fixture home with every bundled rule (all to quarantine),
+    /// check protected and personal files are untouched, restore everything, compare byte for byte.
+    #[test]
+    fn fixture_home_clean_and_restore_is_byte_identical() {
+        fn snapshot(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+            let mut out = Vec::new();
+            let mut stack = vec![root.to_path_buf()];
+            while let Some(p) = stack.pop() {
+                for e in fs::read_dir(&p).unwrap().flatten() {
+                    let md = fs::symlink_metadata(e.path()).unwrap();
+                    if md.is_dir() {
+                        stack.push(e.path());
+                    } else {
+                        out.push((
+                            e.path().strip_prefix(root).unwrap().to_path_buf(),
+                            fs::read(e.path()).unwrap(),
+                        ));
+                    }
+                }
+            }
+            out.sort();
+            out
+        }
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let base = std::env::temp_dir().join(format!("wrasse-safety-e2e-{nanos}"));
+        let home = base.join("home");
+        fs::create_dir_all(&home).unwrap();
+        wrasse_fixtures::mac_home(&home).unwrap();
+        let ctx = Context::new(home, base.join("data")).unwrap();
+        let h = ctx.home.clone();
+        let before = snapshot(&h);
+
+        let (rules, errors) =
+            crate::rules::load(crate::rules::bundled_text(), false, &h, &ctx.protected);
+        assert!(errors.is_empty(), "{errors:?}");
+        let (found, _) = crate::rules::find(&rules, &[], &|p| crate::quarantine::size_on_disk(p));
+        let requests: Vec<Request> = found
+            .iter()
+            .filter(|m| m.delegate.is_none())
+            .map(|m| Request {
+                path: m.path.clone(),
+                safety: m.safety,
+                rule_id: Some(m.rule_id.clone()),
+                root: Some(m.root.clone()),
+                hand_picked: false,
+            })
+            .collect();
+        assert_eq!(requests.len(), 9, "{found:#?}");
+        let plan = prepare(&ctx, &requests, Mode::Quarantine);
+        assert!(plan.skipped.is_empty(), "{:?}", plan.skipped);
+        let report = remove(&ctx, &plan, false).unwrap();
+        assert_eq!(report.done.len(), 9);
+
+        // Personal and protected files are all still there; the junk is gone.
+        for keep in [
+            "Documents/thesis.docx",
+            "Desktop/todo.txt",
+            "Library/Keychains/login.keychain-db",
+            "Library/Mail/V10/mailbox",
+            "Pictures/Photos Library.photoslibrary/database/Photos.sqlite",
+            "Downloads/Recent.dmg",
+            "Downloads/notes.txt",
+            ".Trash/deleted-file.txt",
+        ] {
+            assert!(h.join(keep).exists(), "{keep} must not be touched");
+        }
+        assert!(!h.join("Downloads/OldInstaller.dmg").exists());
+        assert!(!h.join("Library/Caches/com.spotify.client").exists());
+
+        // After "relaunching", everything restores byte for byte.
+        let reopened = Context::new(h.clone(), ctx.data_dir.clone()).unwrap();
+        let ids: Vec<String> = report.done.iter().filter_map(|d| d.entry.clone()).collect();
+        let back = restore(&reopened, &ids).unwrap();
+        assert_eq!(back.len(), 9);
+        assert_eq!(snapshot(&h), before);
+        crate::platform::remove_test_dir(&base);
+    }
 }

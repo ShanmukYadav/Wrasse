@@ -1,0 +1,198 @@
+# macOS junk rules (PLAN.md §6.2). Each rule matches the entries directly inside its roots.
+# Every rule has a test in crates/wrasse-core/src/rules (`each_macos_rule_matches_its_fixture`).
+schema_version = 1
+
+[[rule]]
+id = "app-caches"
+name = "App caches"
+platform = "macos"
+category = "app-cache"
+roots = ["~/Library/Caches"]
+include = ["**"]
+# Browser caches have their own rules; iCloud and account caches are left alone.
+exclude = ["Google", "Firefox", "com.apple.Safari", "Arc", "BraveSoftware", "Microsoft Edge", "com.apple.bird", "CloudKit", "com.apple.akd", "FamilyCircle", "com.apple.ap.adprivacyd", "com.apple.homed"]
+safety = "safe"
+regenerates = true
+min_age_days = 0
+explanation = "Files apps keep to start faster. Each app rebuilds its cache when it needs it; nothing you made is stored here."
+
+[[rule]]
+id = "app-logs"
+name = "App logs"
+platform = "macos"
+category = "logs"
+roots = ["~/Library/Logs"]
+include = ["**"]
+exclude = ["DiagnosticReports"]
+safety = "safe"
+regenerates = true
+min_age_days = 0
+explanation = "Activity logs apps write for troubleshooting. Apps start new ones as needed."
+
+[[rule]]
+id = "crash-reports"
+name = "Crash reports"
+platform = "macos"
+category = "crash-reports"
+roots = ["~/Library/Logs/DiagnosticReports"]
+include = ["**"]
+safety = "safe"
+regenerates = false
+min_age_days = 0
+explanation = "Reports from apps that crashed. Useful only if you're sending them to a developer."
+
+[[rule]]
+id = "chrome-cache"
+name = "Chrome cache"
+platform = "macos"
+category = "browser"
+roots = ["~/Library/Caches/Google/Chrome"]
+include = ["**"]
+safety = "safe"
+regenerates = true
+requires_app_closed = "com.google.Chrome"
+explanation = "Web pages and images Chrome saved to load sites faster. Bookmarks, passwords and history are kept elsewhere."
+
+[[rule]]
+id = "firefox-cache"
+name = "Firefox cache"
+platform = "macos"
+category = "browser"
+roots = ["~/Library/Caches/Firefox"]
+include = ["**"]
+safety = "safe"
+regenerates = true
+requires_app_closed = "org.mozilla.firefox"
+explanation = "Web pages and images Firefox saved to load sites faster. Your profile, bookmarks and passwords are kept elsewhere."
+
+[[rule]]
+id = "safari-cache"
+name = "Safari cache"
+platform = "macos"
+category = "browser"
+roots = ["~/Library/Caches/com.apple.Safari"]
+include = ["**"]
+safety = "safe"
+regenerates = true
+requires_app_closed = "com.apple.Safari"
+explanation = "Web pages and images Safari saved to load sites faster. Bookmarks, history and Reading List are kept elsewhere."
+
+[[rule]]
+id = "arc-cache"
+name = "Arc cache"
+platform = "macos"
+category = "browser"
+roots = ["~/Library/Caches/Arc"]
+include = ["**"]
+safety = "safe"
+regenerates = true
+requires_app_closed = "company.thebrowser.Browser"
+explanation = "Web pages and images Arc saved to load sites faster."
+
+[[rule]]
+id = "brave-cache"
+name = "Brave cache"
+platform = "macos"
+category = "browser"
+roots = ["~/Library/Caches/BraveSoftware"]
+include = ["**"]
+safety = "safe"
+regenerates = true
+requires_app_closed = "com.brave.Browser"
+explanation = "Web pages and images Brave saved to load sites faster."
+
+[[rule]]
+id = "edge-cache"
+name = "Edge cache"
+platform = "macos"
+category = "browser"
+roots = ["~/Library/Caches/Microsoft Edge"]
+include = ["**"]
+safety = "safe"
+regenerates = true
+requires_app_closed = "com.microsoft.edgemac"
+explanation = "Web pages and images Edge saved to load sites faster."
+
+[[rule]]
+id = "xcode-derived-data"
+name = "Xcode build data"
+platform = "macos"
+category = "dev"
+roots = ["~/Library/Developer/Xcode/DerivedData"]
+include = ["**"]
+safety = "safe"
+regenerates = true
+requires_app_closed = "com.apple.dt.Xcode"
+explanation = "Intermediate build files Xcode recreates the next time you build. Your projects aren't touched."
+
+[[rule]]
+id = "xcode-old-archives"
+name = "Old Xcode archives"
+platform = "macos"
+category = "dev"
+roots = ["~/Library/Developer/Xcode/Archives"]
+include = ["**"]
+safety = "your-call"
+regenerates = false
+min_age_days = 90
+explanation = "App builds you archived more than 90 days ago. Keep any you might need to resubmit or debug a crash."
+
+[[rule]]
+id = "xcode-device-support"
+name = "Old iOS device support"
+platform = "macos"
+category = "dev"
+roots = ["~/Library/Developer/Xcode/iOS DeviceSupport"]
+include = ["**"]
+safety = "your-call"
+regenerates = true
+min_age_days = 180
+explanation = "Debug symbols for iOS versions you haven't connected in six months. Xcode downloads them again when you plug in a device."
+
+[[rule]]
+id = "ios-backups"
+name = "iPhone and iPad backups"
+platform = "macos"
+category = "device-backup"
+roots = ["~/Library/Application Support/MobileSync/Backup"]
+include = ["**"]
+safety = "your-call"
+regenerates = false
+min_age_days = 0
+explanation = "Local backups of your iPhone or iPad. Remove only backups you no longer need, for example of a device you've replaced."
+
+[[rule]]
+id = "mail-downloads"
+name = "Mail attachments"
+platform = "macos"
+category = "mail"
+roots = ["~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads"]
+include = ["**"]
+safety = "your-call"
+regenerates = true
+min_age_days = 0
+explanation = "Copies of attachments you opened in Mail. The originals stay in your mail."
+
+[[rule]]
+id = "old-installers"
+name = "Old installers in Downloads"
+platform = "macos"
+category = "installer"
+roots = ["~/Downloads"]
+include = ["*.dmg", "*.pkg", "*.zip", "*.xip"]
+safety = "your-call"
+regenerates = false
+min_age_days = 30
+explanation = "Installer files downloaded more than 30 days ago. Once an app is installed, the installer isn't needed."
+
+[[rule]]
+id = "trash"
+name = "Trash"
+platform = "macos"
+category = "trash"
+roots = ["~/.Trash"]
+include = ["**"]
+safety = "safe"
+regenerates = false
+delegate = "empty-trash"
+explanation = "Files you already moved to the Trash. Emptying it frees their space for good."
