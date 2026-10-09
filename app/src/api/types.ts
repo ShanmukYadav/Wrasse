@@ -51,6 +51,9 @@ export type DiskNode = {
   app?: AppMeta;
   /** Data left by an app that's no longer installed ("Leftovers from removed apps"). */
   orphan?: boolean;
+  /** "Smaller items": many small files shown together, with the folder's path. Never removable
+   *  as one item (that would remove the whole folder); open the folder instead. */
+  aggregate?: boolean;
   /** Extra label from the scanner: "In iCloud only", "Couldn't read", "Shares space with clones". */
   note?: string;
   /** The junk rule covering this item; `why` then holds its explanation ("Why is this safe?"). */

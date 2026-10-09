@@ -168,6 +168,10 @@ pub struct UiNode {
     /// Data left by an app that's no longer installed.
     #[serde(skip_serializing_if = "std::ops::Not::not", default)]
     pub orphan: bool,
+    /// "Smaller items": many small files shown together. Its path is the folder they're in, so
+    /// it can never be removed as one item (that would remove the whole folder).
+    #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+    pub aggregate: bool,
     /// Labels beyond the UI's type: iCloud-only, unreadable, shares blocks with clones.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub note: Option<String>,
@@ -1319,6 +1323,7 @@ impl Builder<'_> {
             leftover_meta: None,
             app: None,
             orphan: false,
+            aggregate: false,
             note: None,
             rule_id: None,
             rule_root: None,
@@ -1445,6 +1450,7 @@ impl Builder<'_> {
         n.size = size;
         n.last_opened_days = self.input.today.saturating_sub(last_day);
         n.rebuildable = ctx.rebuildable;
+        n.aggregate = true;
     }
 
     /// Sizes, lens bits and lens bytes, bottom-up; "what grew" against the previous scan.
@@ -1663,6 +1669,8 @@ mod tests {
             15_000_000,
         );
         write(&home.join("Library/Caches/other/blob"), 12_000_000);
+        write(&home.join("Library/Caches/other/tiny-1"), 5_000);
+        write(&home.join("Library/Caches/other/tiny-2"), 5_000);
         write(
             &root.join("Applications/Example.app/Contents/MacOS/Example"),
             25_000_000,
@@ -1725,6 +1733,18 @@ mod tests {
         let app = disk.nodes.iter().find(|n| n.kind == NodeKind::App).unwrap();
         assert_eq!(app.name, "Example");
         assert_eq!(app.last_opened_days, 12, "from Spotlight");
+        // "Smaller items" carries its folder's path, so it must be marked as an aggregate (the UI
+        // and the ranker never remove it as one item).
+        let smaller: Vec<&UiNode> = disk
+            .nodes
+            .iter()
+            .filter(|n| n.name == "Smaller items")
+            .collect();
+        assert!(!smaller.is_empty());
+        for n in smaller {
+            assert!(n.aggregate);
+            assert_eq!(n.path, disk.nodes[n.parent as usize].path);
+        }
         assert_eq!(
             app.app.as_ref().unwrap().route,
             crate::apps::uninstall::Route::Tray

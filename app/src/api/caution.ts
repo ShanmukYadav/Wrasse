@@ -34,6 +34,9 @@ export function handPickOnly(n: DiskNode): boolean {
 export function cautionFor(disk: Disk, id: number): Caution {
   const n = disk.nodes[id];
   if (!n || n.parent < 0 || n.kind === "ghost" || n.kind === "volume" || n.category === "system" || n.readOnly) return { kind: "blocked" };
+  // "Smaller items" carries its folder's path: removing it would remove the whole folder.
+  // Older saved scans lack the flag: a leaf with its parent's path can only be such an aggregate.
+  if (n.aggregate || (n.children.length === 0 && n.path === disk.nodes[n.parent]?.path)) return { kind: "blocked" };
   // In iCloud only (0 bytes here): nothing to free, and removing it would remove it from iCloud.
   if (n.note === "In iCloud only") return { kind: "blocked" };
   // A whole category can't go in one click: open it and choose what to delete inside.
