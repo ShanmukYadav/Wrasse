@@ -25,6 +25,9 @@ jobs:
       - name: Forbidden-API check
         run: scripts/check-forbidden-apis.sh
 
+      - name: SECURITY_AUDIT.md sync check
+        run: scripts/check-security-audit.sh
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt

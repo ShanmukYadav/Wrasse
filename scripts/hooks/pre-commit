@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Local pre-commit checks (nothing is pushed yet, so CI alone isn't enough).
+# Enable once per clone:  git config core.hooksPath scripts/hooks
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+scripts/check-forbidden-apis.sh
+scripts/check-security-audit.sh

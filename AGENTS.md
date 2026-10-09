@@ -26,10 +26,15 @@ cd app && ../dev.sh npm install && ../dev.sh npm run tauri dev
 
 `./clean.sh` removes the dev app's data from `~/Library` (identifier `com.shanmukyadav.wrasse`).
 
+## Git hook
+
+Enable the local pre-commit checks once per clone: `git config core.hooksPath scripts/hooks`.
+
 ## Before you finish
 
 ```sh
 scripts/check-forbidden-apis.sh
+scripts/check-security-audit.sh   # SECURITY_AUDIT.md matches the code
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
 ./dev.sh cargo test --workspace
