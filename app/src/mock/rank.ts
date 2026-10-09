@@ -1,5 +1,5 @@
 // Mock mode's copy of the core ranker (crates/wrasse-core/src/rank): same rules, so the browser
-// preview behaves like the app. The app itself always ranks in the core.
+// preview behaves like the app. The app itself always ranks in the core. Keep the two in step.
 import { attached, type Disk, type DiskNode, type FreeCandidate, type FreePlan, type FreeWhy } from "../api/types";
 
 const RECENT_DAYS = 7;
@@ -33,25 +33,53 @@ export function planFree(disk: Disk, target: number): FreePlan {
   let heldRecent = 0;
   let heldRunning = 0;
   const push = (c: FreeCandidate & { score: number }) => {
-    if (c.lastUsedDays < RECENT_DAYS) heldRecent += c.bytes;
+    if (c.lastUsedDays < RECENT_DAYS && c.why !== "rebuilds") heldRecent += c.bytes;
     else out.push(c);
   };
-  for (const n of disk.nodes) {
-    if (n.kind === "app") {
-      if (!n.app || n.app.route.kind === "notRemovable" || !attached(disk, n.id)) continue;
-      const parts = n.children.map((c) => disk.nodes[c]).filter((c) => allowed(disk, c) && (c.appBundle || (c.leftoverMeta && !c.leftoverMeta.defaultOff)));
-      if (!parts.some((p) => p.appBundle)) continue;
-      const bytes = parts.reduce((s, p) => s + p.size, 0);
-      if (n.running) {
-        heldRunning += bytes;
-        continue;
-      }
-      push({ id: n.id, parts: parts.map((p) => p.id), bytes, lastUsedDays: n.lastOpenedDays, why: n.app.neverOpened ? "neverOpened" : "unusedApp", score: bytes * unusedFactor(n.lastOpenedDays) * 0.7 });
-      continue;
-    }
-    if (n.children.length || !allowed(disk, n) || disk.nodes[n.parent].kind === "app") continue;
-    const why: FreeWhy = n.orphan ? "appRemoved" : n.rebuildable || (n.ruleId && n.safety === "safe") ? "rebuilds" : n.size >= 1e9 && n.lastOpenedDays >= 180 ? "largeAndOld" : "unused";
-    push({ id: n.id, parts: [n.id], bytes: n.size, lastUsedDays: n.lastOpenedDays, why, score: n.size * unusedFactor(n.lastOpenedDays) * (n.safety === "safe" ? 1 : 0.7) });
+  const single = (n: DiskNode, why: FreeWhy) => ({
+    id: n.id,
+    parts: [n.id],
+    bytes: n.size,
+    lastUsedDays: n.lastOpenedDays,
+    why,
+    score: n.size * unusedFactor(n.lastOpenedDays) * (n.safety === "safe" ? 1 : 0.7),
+  });
+  const stack = [disk.root];
+  while (stack.length) {
+    const n = disk.nodes[stack.pop()!];
+    if (!attached(disk, n.id)) continue;
+    const descend = () => stack.push(...n.children);
+    if ((n.category === "system" || n.category === "other") && n.depth >= 1) continue;
+    if (n.category === "apps") {
+      if (n.kind === "app") {
+        if (!n.app || n.app.route.kind === "notRemovable") continue;
+        const parts = n.children.map((c) => disk.nodes[c]).filter((c) => allowed(disk, c) && (c.appBundle || (c.leftoverMeta && !c.leftoverMeta.defaultOff)));
+        if (!parts.some((p) => p.appBundle)) continue;
+        const bytes = parts.reduce((s, p) => s + p.size, 0);
+        if (n.running) {
+          heldRunning += bytes;
+          continue;
+        }
+        push({ id: n.id, parts: parts.map((p) => p.id), bytes, lastUsedDays: n.lastOpenedDays, why: n.app.neverOpened ? "neverOpened" : "unusedApp", score: bytes * unusedFactor(n.lastOpenedDays) * 0.7 });
+      } else if (n.orphan && n.kind === "dir" && n.depth >= 3) {
+        const parts = n.children.map((c) => disk.nodes[c]).filter((c) => allowed(disk, c));
+        const bytes = parts.reduce((s, p) => s + p.size, 0);
+        if (parts.length) push({ id: n.id, parts: parts.map((p) => p.id), bytes, lastUsedDays: n.lastOpenedDays, why: "appRemoved", score: bytes * unusedFactor(n.lastOpenedDays) * 0.7 });
+      } else descend();
+    } else if (n.category === "junk") {
+      if (n.ruleId && allowed(disk, n)) push(single(n, n.safety === "safe" ? "rebuilds" : "unused"));
+      else descend();
+    } else if (n.category === "developer") {
+      if (n.rebuildable && allowed(disk, n)) push(single(n, "rebuilds"));
+      else descend();
+    } else if (n.category === "aiModels") {
+      if (n.kind === "model" && allowed(disk, n)) push(single(n, n.size >= 1e9 && n.lastOpenedDays >= 180 ? "largeAndOld" : "unused"));
+      else descend();
+    } else if (n.category === "files") {
+      if (n.children.length === 0) {
+        if (allowed(disk, n)) push(single(n, n.size >= 1e9 && n.lastOpenedDays >= 180 ? "largeAndOld" : "unused"));
+      } else descend();
+    } else descend();
   }
   out.sort((a, b) => b.score - a.score || a.id - b.id);
   const items: FreeCandidate[] = [];

@@ -250,6 +250,7 @@ fn fixture() -> Fixture {
         "yourCall",
         json!({ "kind": "dir", "category": "apps", "orphan": true }),
     );
+    ids.insert("orphanGroup", o);
     ids.insert(
         "orphan",
         t.add(
@@ -321,6 +322,122 @@ fn fixture() -> Fixture {
             json!({ "readOnly": true }),
         ),
     );
+    // Library internals no rule covers (an app's database, a search index): never offered.
+    ids.insert(
+        "libraryDb",
+        t.add(
+            j,
+            "globalKnowledge.db",
+            "/Users/me/Library/IntelligencePlatform/globalKnowledge.db",
+            3 * GB,
+            400,
+            "yourCall",
+            json!({ "category": "junk" }),
+        ),
+    );
+    // A rule match with children: offered whole, its parts never on their own.
+    let chrome = t.add(
+        j,
+        "Chrome",
+        "/Users/me/Library/Caches/Google/Chrome/Default",
+        0,
+        30,
+        "safe",
+        json!({ "kind": "dir", "category": "junk", "ruleId": "chrome-cache" }),
+    );
+    ids.insert("chrome", chrome);
+    ids.insert(
+        "chromePart",
+        t.add(
+            chrome as i64,
+            "Cache",
+            "/Users/me/Library/Caches/Google/Chrome/Default/Cache",
+            GB,
+            30,
+            "safe",
+            json!({ "category": "junk" }),
+        ),
+    );
+    let dev = t.add(
+        root as i64,
+        "Developer",
+        "/Users/me/Library/Developer",
+        0,
+        0,
+        "yourCall",
+        json!({ "kind": "dir", "category": "developer" }),
+    );
+    let nm = t.add(
+        dev as i64,
+        "node_modules",
+        "/Users/me/Projects/web/node_modules",
+        0,
+        1,
+        "safe",
+        json!({ "kind": "dir", "category": "developer", "rebuildable": true }),
+    );
+    ids.insert("nodeModules", nm);
+    ids.insert(
+        "nmPart",
+        t.add(
+            nm as i64,
+            "react",
+            "/Users/me/Projects/web/node_modules/react",
+            GB,
+            1,
+            "safe",
+            json!({ "category": "developer" }),
+        ),
+    );
+    ids.insert(
+        "toolchain",
+        t.add(
+            dev as i64,
+            "Xcode toolchain",
+            "/Users/me/Library/Developer/Toolchains/x",
+            2 * GB,
+            400,
+            "yourCall",
+            json!({ "category": "developer" }),
+        ),
+    );
+    let sys = t.add(
+        root as i64,
+        "System",
+        "/System",
+        0,
+        0,
+        "keep",
+        json!({ "kind": "dir", "category": "system" }),
+    );
+    ids.insert(
+        "sysFile",
+        t.add(
+            sys as i64,
+            "swapfile",
+            "/private/var/vm/swapfile0",
+            2 * GB,
+            400,
+            "yourCall",
+            json!({ "category": "system" }),
+        ),
+    );
+    // Folder sizes are the sum of their children (the ranker reads each node's own size).
+    for i in (0..t.nodes.len()).rev() {
+        let kids: Vec<usize> = t.nodes[i]["children"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c.as_u64().unwrap() as usize)
+            .collect();
+        if !kids.is_empty() {
+            let sum: u64 = kids
+                .iter()
+                .map(|&c| t.nodes[c]["size"].as_u64().unwrap())
+                .sum();
+            t.nodes[i]["size"] = json!(sum);
+        }
+    }
     Fixture {
         disk: t.disk(),
         ids,
@@ -356,11 +473,11 @@ fn reaches_a_10_gb_target_with_only_what_may_go() {
     assert!(p.total >= 10 * GB && p.shortfall == 0, "{p:#?}");
     let chosen: Vec<u32> = p.items.iter().map(|c| c.id).collect();
     let id = |k: &str| f.ids[k];
-    // Score order: big.iso and OldApp (4 GB, unused, your call) tie, then the orphan, then the
-    // safe cache used 10 days ago.
+    // Score order: big.iso and OldApp (4 GB, unused, your call) tie, then the removed app's
+    // leftovers, then the Chrome cache (a rule match, whole, used 30 days ago).
     assert_eq!(
         chosen,
-        [id("iso"), id("oldApp"), id("orphan"), id("caches")]
+        [id("iso"), id("oldApp"), id("orphanGroup"), id("chrome")]
     );
     let old = p.items.iter().find(|c| c.id == id("oldApp")).unwrap();
     assert_eq!(
@@ -370,11 +487,15 @@ fn reaches_a_10_gb_target_with_only_what_may_go() {
     );
     assert_eq!(old.bytes, 4 * GB);
     assert_eq!(
-        p.items.iter().find(|c| c.id == id("orphan")).unwrap().why,
+        p.items
+            .iter()
+            .find(|c| c.id == id("orphanGroup"))
+            .unwrap()
+            .why,
         Why::AppRemoved
     );
     assert_eq!(
-        p.items.iter().find(|c| c.id == id("caches")).unwrap().why,
+        p.items.iter().find(|c| c.id == id("chrome")).unwrap().why,
         Why::Rebuilds
     );
     assert_eq!(
@@ -395,6 +516,11 @@ fn reaches_a_10_gb_target_with_only_what_may_go() {
         "keep",
         "readOnly",
         "oldSupport",
+        "libraryDb",
+        "chromePart",
+        "nmPart",
+        "toolchain",
+        "sysFile",
     ] {
         assert!(
             !all.iter()
@@ -410,9 +536,14 @@ fn reaches_a_10_gb_target_with_only_what_may_go() {
 fn shortfall_gone_items_and_never_touch() {
     let f = fixture();
     let p = plan(&f.disk, 20 * GB, &limits());
-    assert_eq!(p.total, 23 * GB / 2);
-    assert_eq!(p.shortfall, 20 * GB - 23 * GB / 2);
-    assert_eq!(p.held_recent, 5 * GB);
+    // Everything offerable: 4 + 4 + 1.5 + 1 (Chrome) + 2 (Spotify) + 1 (node_modules).
+    assert_eq!(p.total, 27 * GB / 2);
+    assert_eq!(p.shortfall, 20 * GB - 27 * GB / 2);
+    assert_eq!(
+        p.held_recent,
+        5 * GB,
+        "the movie used two days ago; rebuilding caches aren't held"
+    );
 
     let mut l = limits();
     l.gone.insert(f.ids["iso"]);
@@ -421,12 +552,8 @@ fn shortfall_gone_items_and_never_touch() {
         .push(PathBuf::from("/Users/me/Library/Caches"));
     let p = plan(&f.disk, 10 * GB, &l);
     let chosen: Vec<u32> = p.items.iter().map(|c| c.id).collect();
-    assert!(chosen.is_empty() || !chosen.contains(&f.ids["iso"]));
-    assert!(
-        !chosen.contains(&f.ids["oldApp"])
-            && !chosen.contains(&f.ids["caches"])
-            && !chosen.contains(&f.ids["orphan"])
-    );
-    assert_eq!(p.total, 0);
-    assert_eq!(p.shortfall, 10 * GB);
+    // Only node_modules is left: the rest is gone or under the never-touch Caches folder.
+    assert_eq!(chosen, [f.ids["nodeModules"]]);
+    assert_eq!(p.total, GB);
+    assert_eq!(p.shortfall, 9 * GB);
 }

@@ -254,10 +254,13 @@ export function generateDisk(seed = 7): Disk {
   fill(caches, 18 * GB, ["Google Chrome", "Spotify", "Slack", "Figma", "Xcode", "Arc", "Zoom", "Discord", "Photos", "Music", "Safari"], { lastOpenedDays: 5 });
   const logs = dir(junk, "Logs", { path: "~/Library/Logs", why: WHY.logs });
   fill(logs, 4 * GB, ["DiagnosticReports", "Docker", "Xcode", "CoreSimulator", "install.log"], { lastOpenedDays: 200 });
+  // Junk rules cover these (as the core's annotate() does on real scans).
+  for (const [parent, rule] of [[caches, "app-caches"], [logs, "app-logs"]] as const) for (const c of nodes[parent].children) nodes[c].ruleId = rule;
   const trash = dir(junk, "Trash", { path: "~/.Trash", why: WHY.trash });
   fill(trash, 6 * GB, ["Old renders", "Screen Recording 2023.mov", "archive.zip", "Untitled.psd"], { lastOpenedDays: 30 });
   const mail = dir(junk, "Mail Downloads", { path: "~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads", why: WHY.mail });
   fill(mail, 3 * GB, ["Attachments 2024", "Attachments 2023", "Attachments 2022"], { lastOpenedDays: 300 });
+  for (const c of nodes[mail].children) nodes[c].ruleId = "mail-downloads";
 
   // ---- Snapshot ghost ---------------------------------------------------------------------
   const ghostId = add(root, "Held by snapshots", "ghost", { path: "/", safety: "keep", category: "other", why: "Space from files you already deleted. macOS keeps it in local Time Machine snapshots until they expire." }, Math.round(6.1 * GB));

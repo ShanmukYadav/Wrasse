@@ -13,6 +13,10 @@
 //!   wrasse large [MB]      the biggest files in the home folder (default 500 MB), from the last
 //!                          saved scan of the app, with last use. Read-only.
 //!   wrasse dupes           identical files of 10 MB or more in the home folder. Read-only.
+//!   wrasse uninstall [--dry-run] [--all-leftovers] <app bundle>
+//!                          uninstall like the app does (route by source and owner; leftovers
+//!                          ticked by default, or all with --all-leftovers, go to the tray)
+//!   wrasse free <GB>       what Free Up Space would pick on the app's last saved scan. Read-only.
 //!   wrasse apps [--orphans] list installed apps with source, owner, last use and leftovers (JSON);
 //!                          with --orphans, data folders whose app is gone. Read-only.
 
@@ -92,6 +96,67 @@ fn main() {
             };
             println!("{}", serde_json::to_string_pretty(&v).unwrap());
             eprintln!("{:.2}s", started.elapsed().as_secs_f64());
+        }
+        Some("uninstall") => {
+            let flag = |f: &str| args.iter().any(|a| a == f);
+            let (dry_run, all) = (flag("--dry-run"), flag("--all-leftovers"));
+            let bundle = args[1..]
+                .iter()
+                .find(|a| !a.starts_with("--"))
+                .map(PathBuf::from)
+                .expect("usage: wrasse uninstall [--dry-run] [--all-leftovers] <app bundle>");
+            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let app =
+                wrasse_core::platform::app_at(&home, &bundle).expect("that app isn't installed");
+            let leftovers: Vec<PathBuf> = app
+                .leftovers
+                .iter()
+                .filter(|l| all || l.ticked_by_default())
+                .map(|l| l.path.clone())
+                .collect();
+            let running = wrasse_core::apps::uninstall::runs_from(
+                &app.bundle,
+                &wrasse_core::platform::running_executables(),
+            );
+            with_ctx(|ctx| {
+                wrasse_core::apps::uninstall::uninstall(ctx, &app, &leftovers, running, dry_run)
+                    .map(|o| serde_json::json!(o))
+            });
+        }
+        Some("free") => {
+            let gb: f64 = args
+                .get(1)
+                .and_then(|a| a.parse().ok())
+                .expect("usage: wrasse free <GB>");
+            let dir = wrasse_core::scan::cache::data_dir(APP_ID).expect("no data folder");
+            let (disk, _) = wrasse_core::scan::cache::load(&dir).expect("scan in the app first");
+            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let limits = wrasse_core::rank::Limits {
+                hand_pick_only: wrasse_core::platform::protected_paths(&home, &dir)
+                    .into_iter()
+                    .filter(|p| p.protection == wrasse_core::platform::Protection::HandPickOnly)
+                    .map(|p| p.path)
+                    .collect(),
+                ..Default::default()
+            };
+            let plan = wrasse_core::rank::plan(&disk, (gb * 1e9) as u64, &limits);
+            for c in &plan.items {
+                let n = &disk.nodes[c.id as usize];
+                println!(
+                    "{:>8.2} GB  {:>5} d  {:?}  {}",
+                    c.bytes as f64 / 1e9,
+                    c.last_used_days,
+                    c.why,
+                    n.path
+                );
+            }
+            println!(
+                "total {:.2} GB, short {:.2} GB, held back: used this week {:.2} GB, open apps {:.2} GB",
+                plan.total as f64 / 1e9,
+                plan.shortfall as f64 / 1e9,
+                plan.held_recent as f64 / 1e9,
+                plan.held_running as f64 / 1e9
+            );
         }
         Some("apps") => {
             let home = wrasse_core::platform::home_dir().expect("no home folder");

@@ -1,9 +1,15 @@
 //! Free Up Space (PLAN.md §6.5, docs/phase3-plan.md §4): ranks what could go to reach a target,
-//! by `reclaimable bytes × unused factor × safety weight`. Source-agnostic: it works on the scan's
-//! items (junk rule matches, whole apps, large and old files, leftovers of removed apps), so each
-//! phase's new sources take part without changes here. Read-only: it only proposes.
+//! by `reclaimable bytes × unused factor × safety weight`. It works on the scan's items, taking
+//! each source as a whole where the parts only make sense together:
+//! - Library: only what a junk rule covers (the rule's match, whole);
+//! - Apps: whole apps (bundle plus default leftovers) and removed apps' leftovers;
+//! - Developer: folders the tools rebuild; AI Models: whole models;
+//! - Your Files: single items as shown (never Documents, Desktop or iCloud Drive);
+//! - never System or Other.
+//!
+//! Read-only: it only proposes.
 
-use crate::scan::breakdown::{NodeKind, Safety, UiDisk, UiNode};
+use crate::scan::breakdown::{Category, NodeKind, Safety, UiDisk, UiNode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -125,78 +131,150 @@ pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) 
     let mut out = Vec::new();
     let (mut held_recent, mut held_running) = (0u64, 0u64);
     let mut push = |c: Candidate| {
-        if c.last_used_days < RECENT_DAYS {
+        // Recent use holds back what the user made or chose; rebuilding caches can always go.
+        if c.last_used_days < RECENT_DAYS && c.why != Why::Rebuilds {
             held_recent += c.bytes;
         } else {
             out.push(c);
         }
     };
-    for n in nodes {
-        // Whole apps: the bundle and the leftovers that start ticked, as one choice.
-        if n.kind == NodeKind::App {
-            let Some(meta) = &n.app else { continue };
-            if meta.route == crate::apps::uninstall::Route::NotRemovable || !attached(n) {
-                continue;
+    let single = |n: &UiNode, why: Why| Candidate {
+        id: n.id,
+        parts: vec![n.id],
+        bytes: n.size,
+        last_used_days: n.last_opened_days,
+        safety: n.safety,
+        score: n.size as f64 * unused_factor(n.last_opened_days) * safety_weight(n.safety),
+        why,
+    };
+    // Walk the tree; a node taken whole (an app, a rule match, a rebuildable folder, a model, an
+    // orphan) is not looked into further.
+    let mut stack: Vec<u32> = vec![disk.root];
+    while let Some(id) = stack.pop() {
+        let n = &nodes[id as usize];
+        if !attached(n) {
+            continue;
+        }
+        let descend = |stack: &mut Vec<u32>| stack.extend(n.children.iter().copied());
+        match n.category {
+            // macOS and other people's folders: never.
+            Category::System | Category::Other if n.depth >= 1 => continue,
+            Category::Apps if n.kind == NodeKind::App => {
+                // Whole apps: the bundle and the leftovers that start ticked, as one choice.
+                let Some(meta) = &n.app else { continue };
+                if meta.route == crate::apps::uninstall::Route::NotRemovable {
+                    continue;
+                }
+                let parts: Vec<&UiNode> = n
+                    .children
+                    .iter()
+                    .map(|&c| &nodes[c as usize])
+                    .filter(|c| {
+                        allowed(c)
+                            && (c.app_bundle
+                                || c.leftover_meta.as_ref().is_some_and(|m| !m.default_off))
+                    })
+                    .collect();
+                if !parts.iter().any(|p| p.app_bundle) {
+                    continue; // the bundle is gone or can't go: nothing to uninstall
+                }
+                let bytes: u64 = parts.iter().map(|p| p.size).sum();
+                if n.running {
+                    held_running += bytes;
+                    continue;
+                }
+                push(Candidate {
+                    id: n.id,
+                    parts: parts.iter().map(|p| p.id).collect(),
+                    bytes,
+                    last_used_days: n.last_opened_days,
+                    safety: Safety::YourCall,
+                    score: bytes as f64 * unused_factor(n.last_opened_days) * 0.7,
+                    why: if meta.never_opened {
+                        Why::NeverOpened
+                    } else {
+                        Why::UnusedApp
+                    },
+                });
             }
-            let parts: Vec<&UiNode> = n
-                .children
-                .iter()
-                .map(|&c| &nodes[c as usize])
-                .filter(|c| {
-                    allowed(c)
-                        && (c.app_bundle
-                            || c.leftover_meta.as_ref().is_some_and(|m| !m.default_off))
-                })
-                .collect();
-            if !parts.iter().any(|p| p.app_bundle) {
-                continue; // the bundle is gone or can't go: nothing to uninstall
+            // An orphan (one removed app's folders) goes whole.
+            Category::Apps if n.orphan && n.kind == NodeKind::Dir && n.depth >= 3 => {
+                let parts: Vec<&UiNode> = n
+                    .children
+                    .iter()
+                    .map(|&c| &nodes[c as usize])
+                    .filter(|c| allowed(c))
+                    .collect();
+                if parts.is_empty() {
+                    continue;
+                }
+                let bytes: u64 = parts.iter().map(|p| p.size).sum();
+                push(Candidate {
+                    id: n.id,
+                    parts: parts.iter().map(|p| p.id).collect(),
+                    bytes,
+                    last_used_days: n.last_opened_days,
+                    safety: Safety::YourCall,
+                    score: bytes as f64 * unused_factor(n.last_opened_days) * 0.7,
+                    why: Why::AppRemoved,
+                });
             }
-            let bytes: u64 = parts.iter().map(|p| p.size).sum();
-            if n.running {
-                held_running += bytes;
-                continue;
-            }
-            push(Candidate {
-                id: n.id,
-                parts: parts.iter().map(|p| p.id).collect(),
-                bytes,
-                last_used_days: n.last_opened_days,
-                safety: Safety::YourCall,
-                score: bytes as f64 * unused_factor(n.last_opened_days) * 0.7,
-                why: if meta.never_opened {
-                    Why::NeverOpened
+            Category::Apps => descend(&mut stack),
+            // The Library: only what a junk rule covers (vetted, with "Why is this safe?").
+            Category::Junk => {
+                if n.rule_id.is_some() && allowed(n) {
+                    push(single(
+                        n,
+                        if n.safety == Safety::Safe {
+                            Why::Rebuilds
+                        } else {
+                            Why::Unused
+                        },
+                    ));
                 } else {
-                    Why::UnusedApp
-                },
-            });
-            continue;
+                    descend(&mut stack);
+                }
+            }
+            // Developer: folders the tools rebuild (node_modules, build products), whole.
+            Category::Developer => {
+                if n.rebuildable && allowed(n) {
+                    push(single(n, Why::Rebuilds));
+                } else {
+                    descend(&mut stack);
+                }
+            }
+            // AI models, whole.
+            Category::AiModels => {
+                if n.kind == NodeKind::Model && allowed(n) {
+                    push(single(
+                        n,
+                        if n.size >= 1_000_000_000 && n.last_opened_days >= 180 {
+                            Why::LargeAndOld
+                        } else {
+                            Why::Unused
+                        },
+                    ));
+                } else {
+                    descend(&mut stack);
+                }
+            }
+            // Your Files: single items as shown.
+            Category::Files => {
+                if n.children.is_empty() {
+                    if allowed(n) {
+                        let why = if n.size >= 1_000_000_000 && n.last_opened_days >= 180 {
+                            Why::LargeAndOld
+                        } else {
+                            Why::Unused
+                        };
+                        push(single(n, why));
+                    }
+                } else {
+                    descend(&mut stack);
+                }
+            }
+            _ => descend(&mut stack),
         }
-        // Everything else: single items (leaves), not inside an app (apps go whole, above).
-        if !n.children.is_empty() || !allowed(n) {
-            continue;
-        }
-        let parent = &nodes[n.parent as usize];
-        if parent.kind == NodeKind::App {
-            continue;
-        }
-        let why = if n.orphan {
-            Why::AppRemoved
-        } else if n.rebuildable || n.rule_id.is_some() && n.safety == Safety::Safe {
-            Why::Rebuilds
-        } else if n.size >= 1_000_000_000 && n.last_opened_days >= 180 {
-            Why::LargeAndOld
-        } else {
-            Why::Unused
-        };
-        push(Candidate {
-            id: n.id,
-            parts: vec![n.id],
-            bytes: n.size,
-            last_used_days: n.last_opened_days,
-            safety: n.safety,
-            score: n.size as f64 * unused_factor(n.last_opened_days) * safety_weight(n.safety),
-            why,
-        });
     }
     out.sort_by(|a, b| b.score.total_cmp(&a.score).then(a.id.cmp(&b.id)));
     (out, held_recent, held_running)
