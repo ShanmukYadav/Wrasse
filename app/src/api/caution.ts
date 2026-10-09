@@ -44,6 +44,10 @@ export function cautionFor(disk: Disk, id: number): Caution {
   if (n.aggregate || (n.children.length === 0 && n.path === disk.nodes[n.parent]?.path)) return { kind: "blocked" };
   // In iCloud only (0 bytes here): nothing to free, and removing it would remove it from iCloud.
   if (n.note === "In iCloud only") return { kind: "blocked" };
+  // Apps go through their uninstall route (Homebrew, Finder, or not at all for macOS's own):
+  // no bulk tick for them or their bundle. Apps Wrasse moves itself can be ticked.
+  const app = n.kind === "app" ? n : n.appBundle ? disk.nodes[n.parent] : undefined;
+  if (app?.app && app.app.route.kind !== "tray") return { kind: "blocked" };
   // A whole category can't go in one click: open it and choose what to delete inside.
   if (n.depth === 1) return { kind: "category" };
   if (isOsFolder(n)) return { kind: "osFolder" };

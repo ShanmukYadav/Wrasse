@@ -169,6 +169,7 @@ function AppActions({ appId }: { appId: number }) {
         </p>
       )}
       {app.running && <p className="detail-note">{t("detail.runningNote", { name: app.name })}</p>}
+      {meta && meta.adminLeftovers.length > 0 && <p className="text-caption text-muted">{t("app.adminNote", { count: meta.adminLeftovers.length })}</p>}
       <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => openUninstall(appId)} {...pressable}>
         <Icon name="trash" size={16} /> {t("detail.uninstall", { name: app.name })}
       </motion.button>

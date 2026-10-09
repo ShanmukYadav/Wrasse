@@ -77,7 +77,13 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
       : t("home.metaShare", { share: share < 1 ? "<1" : share })
     : node.category === "apps" && node.depth === 1
       ? t("home.apps", { count })
-      : "";
+      : node.kind === "app" && node.app && widthPx >= 340
+        ? node.app.neverOpened
+          ? t("app.neverOpened")
+          : node.lastOpenedDays === 0
+            ? t("app.openedToday")
+            : t("app.opened", { when: t("detail.daysAgo", { count: node.lastOpenedDays }) })
+        : "";
   const insights = api.insights(disk, node.id);
   // Ticks for bulk delete: shown on hover, and on every tile once something is ticked.
   const checked = useApp((s) => s.checked.includes(node.id));
