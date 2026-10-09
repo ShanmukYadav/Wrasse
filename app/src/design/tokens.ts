@@ -139,7 +139,10 @@ export const d1 = {
   command: { maxWidth: 520, height: 40, radius: 12, padX: 14, gap: 10, iconSize: 16, fontSize: 14, kbdSize: 12, shadow: "0 4px 18px rgba(11, 26, 46, 0.06)" },
   free: { size: 30, unitSize: 14 },
   button: { height: 40, padX: 18, radius: 12, fontSize: 14 },
-  grid: { cols: 12, rows: 8, gap: 12, padX: 24, padBottom: 92, emphasis: 1.2, maxTiles: 12 }, // emphasis: size^1.2 reproduces the D1 proportions
+  // Tile area follows size^emphasis: 0.5 (square root) keeps the biggest block biggest without
+  // squeezing the rest. maxShare caps the biggest block's share of the grid; minCells is the
+  // smallest tile (2 × 3 cells), enough for badge, name, size and a chip.
+  grid: { cols: 12, rows: 8, gap: 12, padX: 24, padBottom: 92, emphasis: 0.5, maxShare: 0.4, minCells: 6, maxTiles: 12 },
   tile: {
     radius: 20,
     padding: "16px 16px 14px 16px",

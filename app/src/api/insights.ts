@@ -28,7 +28,10 @@ export function insights(disk: Disk, id: number): Insight[] {
   let oldVideoBytes = 0;
   let unusedApps = 0;
   let rebuildable = 0;
+  // "All safe" only when every item underneath is safe (real Library folders mix in protected data).
+  let allSafe = true;
   walk(disk, id, (m) => {
+    if (m.children.length === 0 && m.size > 0 && m.safety !== "safe") allSafe = false;
     if (m.rebuildable) rebuildable += m.size;
     if (m.duplicateOf !== undefined) {
       dupCount++;
@@ -49,7 +52,7 @@ export function insights(disk: Disk, id: number): Insight[] {
   }
   if (n.leftover) return n.safety === "safe" ? [{ tone: "green", text: t("insight.safeToClear") }] : [];
   if (n.category === "system" || (n.safety === "keep" && n.depth > 1)) return [{ tone: "protected", text: t("insight.protected") }];
-  if (n.category === "junk") return [{ tone: "green", text: t("insight.allSafe") }];
+  if (n.category === "junk") return allSafe ? [{ tone: "green", text: t("insight.allSafe") }] : [];
   if (n.category === "aiModels" && dupCount > 0) out.push({ tone: "violet", text: t("insight.modelDuplicates", { count: dupCount, size: fmt(dupBytes) }) });
   if (oldVideoBytes >= 1 * GB) out.push({ tone: "amber", text: t("insight.oldVideos", { size: fmt(oldVideoBytes) }) });
   if (n.category !== "aiModels" && dupCount > 0) out.push({ tone: "amber", text: t("insight.duplicates", { count: dupCount }) });

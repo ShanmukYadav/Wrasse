@@ -91,6 +91,8 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
         d1.grid.cols,
         d1.grid.rows,
         d1.grid.emphasis,
+        d1.grid.minCells,
+        d1.grid.maxShare,
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [focus, shown.map((k) => `${k.id}:${k.size}`).join(","), restSize],

@@ -16,7 +16,7 @@ export function onSystemSchemeChange(listener: (scheme: Scheme) => void): () => 
   return () => query.removeEventListener("change", handler);
 }
 
-const UNITLESS = new Set(["dimmed", "emphasis", "cols", "rows", "maxTiles", "hoverLift"]);
+const UNITLESS = new Set(["dimmed", "emphasis", "maxShare", "minCells", "cols", "rows", "maxTiles", "hoverLift"]);
 
 /** Publishes nested tokens as --prefix-path variables; numbers become px unless unitless. */
 function flatten(prefix: string, obj: object, vars: Record<string, string>) {
