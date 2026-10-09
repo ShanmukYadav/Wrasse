@@ -281,6 +281,18 @@ pub fn prepare(ctx: &Context, requests: &[Request], mode: Mode) -> Plan {
 }
 
 fn check(ctx: &Context, req: &Request, mode: Mode) -> Result<Planned, Reason> {
+    let (identity, warnings) = vet(ctx, req, mode)?;
+    Ok(Planned {
+        request: req.clone(),
+        identity,
+        bytes: crate::quarantine::size_on_disk(&req.path),
+        warnings,
+    })
+}
+
+/// Every check except sizing; run when planning and again right before acting, so an item that
+/// became protected, excluded, open or iCloud-only after the preview is still refused.
+fn vet(ctx: &Context, req: &Request, mode: Mode) -> Result<(Identity, Vec<Warning>), Reason> {
     let md = fs::symlink_metadata(&req.path).map_err(|_| Reason::NotFound)?;
     let path = resolve(&req.path).ok_or(Reason::NotFound)?;
     match protection_of(ctx, &path) {
@@ -323,12 +335,7 @@ fn check(ctx: &Context, req: &Request, mode: Mode) -> Result<Planned, Reason> {
     if ctx.synced.iter().any(|s| path.starts_with(s)) {
         warnings.push(Warning::SyncedToICloud);
     }
-    Ok(Planned {
-        request: req.clone(),
-        identity: id,
-        bytes: crate::quarantine::size_on_disk(&req.path),
-        warnings,
-    })
+    Ok((id, warnings))
 }
 
 /// Same file as planned? Safe cache folders may change size; "your call" items must not change.
@@ -372,10 +379,15 @@ pub fn remove(ctx: &Context, plan: &Plan, dry_run: bool) -> io::Result<Report> {
     for item in &plan.items {
         let req = &item.request;
         let target = req.path.to_string_lossy();
-        if !still_same(item) {
+        let refused = match vet(ctx, req, plan.mode) {
+            Err(reason) => Some(reason),
+            Ok(_) if !still_same(item) => Some(Reason::Changed),
+            Ok(_) => None,
+        };
+        if let Some(reason) = refused {
             report.skipped.push(Skipped {
                 path: req.path.clone(),
-                reason: Reason::Changed,
+                reason,
             });
             log(
                 ctx,
@@ -384,7 +396,11 @@ pub fn remove(ctx: &Context, plan: &Plan, dry_run: bool) -> io::Result<Report> {
                 item.bytes,
                 req.rule_id.as_deref(),
                 dry_run,
-                "changed since preview",
+                if reason == Reason::Changed {
+                    "changed since preview"
+                } else {
+                    "refused at the last moment"
+                },
             );
             continue;
         }
@@ -553,12 +569,28 @@ pub fn delegate(ctx: &Context, action: Delegated, dry_run: bool) -> io::Result<u
         .lock()
         .map_err(|_| io::Error::other("another cleanup is running"))?;
     let _awake = platform::keep_awake("Wrasse is cleaning up");
-    let (target, bytes) = match action {
-        Delegated::EmptyTrash => (
-            "empty Trash",
-            platform::trash_dir(&ctx.home).map_or(0, |t| crate::quarantine::size_on_disk(&t)),
-        ),
+    let (target, place) = match action {
+        Delegated::EmptyTrash => ("empty Trash", platform::trash_dir(&ctx.home)),
     };
+    // The never-touch list applies here too: the OS would delete everything in that place.
+    if let Some(p) = &place {
+        if ctx.exclusions.contains(p) {
+            log(
+                ctx,
+                "delegate",
+                target,
+                0,
+                None,
+                dry_run,
+                "refused: on the never-touch list",
+            );
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                format!("{} is on your never-touch list", p.display()),
+            ));
+        }
+    }
+    let bytes = place.map_or(0, |t| crate::quarantine::size_on_disk(&t));
     if dry_run {
         log(ctx, "delegate", target, bytes, None, true, "ok");
         return Ok(bytes);
@@ -581,6 +613,7 @@ pub fn delegate(ctx: &Context, action: Delegated, dry_run: bool) -> io::Result<u
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
     use std::time::SystemTime;
 
     fn setup(tag: &str) -> (PathBuf, Context) {
@@ -720,6 +753,198 @@ mod tests {
         assert!(report.done.is_empty());
         assert_eq!(report.skipped[0].reason, Reason::Changed);
         assert_eq!(fs::read(&file).unwrap(), b"something else");
+        crate::platform::remove_test_dir(&base);
+    }
+
+    fn skip_logged(ctx: &Context, path: &Path, result: &str) -> bool {
+        ctx.audit.recent(50).iter().any(|r| {
+            r["action"] == "skip"
+                && r["target"] == path.to_string_lossy().as_ref()
+                && r["result"] == result
+        })
+    }
+
+    #[test]
+    fn edited_items_are_skipped_and_reported() {
+        let (base, ctx) = setup("edited");
+        let file = ctx.home.join("Downloads/old.dmg");
+        // Same file (same inode), new contents.
+        let plan = prepare(
+            &ctx,
+            &[req(file.clone(), Safety::YourCall)],
+            Mode::Quarantine,
+        );
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&file)
+            .unwrap()
+            .write_all(b"more")
+            .unwrap();
+        let report = remove(&ctx, &plan, false).unwrap();
+        assert!(report.done.is_empty());
+        assert_eq!(report.skipped[0].reason, Reason::Changed);
+        assert!(skip_logged(&ctx, &file, "changed since preview"));
+        // Same size, only the modified date moved: still "changed".
+        let plan = prepare(
+            &ctx,
+            &[req(file.clone(), Safety::YourCall)],
+            Mode::Quarantine,
+        );
+        fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(SystemTime::now() - std::time::Duration::from_secs(86_400 * 3))
+            .unwrap();
+        let report = remove(&ctx, &plan, false).unwrap();
+        assert_eq!(report.skipped[0].reason, Reason::Changed);
+        assert_eq!(
+            fs::metadata(&file).unwrap().len(),
+            3004,
+            "left exactly as it was"
+        );
+        crate::platform::remove_test_dir(&base);
+    }
+
+    #[test]
+    fn items_swapped_for_a_link_are_skipped_and_reported() {
+        let (base, ctx) = setup("swapped");
+        let h = ctx.home.clone();
+        // A "your call" file becomes a link to a private file.
+        let file = h.join("Downloads/old.dmg");
+        let plan = prepare(
+            &ctx,
+            &[req(file.clone(), Safety::YourCall)],
+            Mode::Quarantine,
+        );
+        crate::platform::remove_test_file(&file);
+        std::os::unix::fs::symlink(h.join("Documents/report.pdf"), &file).unwrap();
+        let report = remove(&ctx, &plan, false).unwrap();
+        assert!(report.done.is_empty());
+        assert_eq!(report.skipped[0].reason, Reason::Changed);
+        assert!(skip_logged(&ctx, &file, "changed since preview"));
+        assert!(fs::symlink_metadata(&file)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        // A safe cache folder becomes a link to the Keychains folder.
+        let cache = h.join("Library/Caches/app");
+        let mut r = req(cache.clone(), Safety::Safe);
+        r.root = Some(h.join("Library/Caches"));
+        let plan = prepare(&ctx, &[r], Mode::DeleteNow);
+        assert_eq!(plan.items.len(), 1);
+        crate::platform::remove_test_file(&cache.join("blob"));
+        fs::remove_dir(&cache).unwrap();
+        std::os::unix::fs::symlink(h.join("Library/Keychains"), &cache).unwrap();
+        let report = remove(&ctx, &plan, false).unwrap();
+        assert!(report.done.is_empty());
+        assert_eq!(report.skipped[0].reason, Reason::Changed);
+        assert_eq!(
+            fs::read(h.join("Library/Keychains/login.keychain-db")).unwrap(),
+            b"secret"
+        );
+        assert_eq!(fs::read(h.join("Documents/report.pdf")).unwrap(), b"report");
+        crate::platform::remove_test_dir(&base);
+    }
+
+    #[test]
+    fn never_touch_is_refused_by_remove_and_delegate() {
+        let (base, mut ctx) = setup("nevertouch");
+        let h = ctx.home.clone();
+        // Added to the list after the preview: remove still refuses it.
+        let file = h.join("Downloads/old.dmg");
+        let plan = prepare(
+            &ctx,
+            &[req(file.clone(), Safety::YourCall)],
+            Mode::Quarantine,
+        );
+        assert_eq!(plan.items.len(), 1);
+        ctx.exclusions.add(h.join("Downloads")).unwrap();
+        for dry_run in [true, false] {
+            let report = remove(&ctx, &plan, dry_run).unwrap();
+            assert!(report.done.is_empty());
+            assert_eq!(report.skipped[0].reason, Reason::Excluded);
+        }
+        assert!(skip_logged(&ctx, &file, "refused at the last moment"));
+        assert!(file.exists());
+        // The list survives a relaunch.
+        let reopened = Context::new(h.clone(), ctx.data_dir.clone()).unwrap();
+        assert_eq!(
+            prepare(
+                &reopened,
+                &[req(file.clone(), Safety::YourCall)],
+                Mode::Quarantine
+            )
+            .skipped[0]
+                .reason,
+            Reason::Excluded
+        );
+        // Delegated: emptying the Trash is refused while the Trash is on the list, before any
+        // OS action runs (tests never reach the real one either; see `platform::run_delegated`).
+        fs::create_dir_all(h.join(".Trash")).unwrap();
+        fs::write(h.join(".Trash/kept.txt"), b"kept").unwrap();
+        ctx.exclusions.add(h.join(".Trash")).unwrap();
+        for dry_run in [true, false] {
+            let err = delegate(&ctx, Delegated::EmptyTrash, dry_run).unwrap_err();
+            assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+        }
+        assert!(h.join(".Trash/kept.txt").exists());
+        // Off the list, dry-run reports the size.
+        ctx.exclusions.remove(&h.join(".Trash")).unwrap();
+        assert!(delegate(&ctx, Delegated::EmptyTrash, true).unwrap() > 0);
+        assert_ne!(
+            delegate(&ctx, Delegated::EmptyTrash, false)
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::PermissionDenied,
+            "past the list check, the test build stops before the OS"
+        );
+        crate::platform::remove_test_dir(&base);
+    }
+
+    /// A "your call" file another process has open is skipped, at preview and at the last moment.
+    #[test]
+    fn open_files_are_skipped() {
+        let (base, ctx) = setup("openfile");
+        let file = ctx.home.join("Downloads/old.dmg");
+        let hold = || {
+            std::process::Command::new("/bin/sleep")
+                .arg("30")
+                .stdin(fs::File::open(&file).unwrap())
+                .spawn()
+                .unwrap()
+        };
+        // Open before the preview.
+        let mut child = hold();
+        let plan = prepare(
+            &ctx,
+            &[req(file.clone(), Safety::YourCall)],
+            Mode::Quarantine,
+        );
+        assert_eq!(plan.skipped[0].reason, Reason::InUse);
+        let _ = child.kill();
+        let _ = child.wait();
+        // Closed at preview, opened before the action.
+        let plan = prepare(
+            &ctx,
+            &[req(file.clone(), Safety::YourCall)],
+            Mode::Quarantine,
+        );
+        assert_eq!(plan.items.len(), 1);
+        let mut child = hold();
+        let report = remove(&ctx, &plan, false).unwrap();
+        let _ = child.kill();
+        let _ = child.wait();
+        assert!(report.done.is_empty());
+        assert_eq!(report.skipped[0].reason, Reason::InUse);
+        assert!(file.exists());
+        // Closed again: it goes.
+        let plan = prepare(
+            &ctx,
+            &[req(file.clone(), Safety::YourCall)],
+            Mode::Quarantine,
+        );
+        assert_eq!(remove(&ctx, &plan, false).unwrap().done.len(), 1);
         crate::platform::remove_test_dir(&base);
     }
 

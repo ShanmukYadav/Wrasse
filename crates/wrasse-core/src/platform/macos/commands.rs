@@ -67,3 +67,32 @@ pub fn empty_trash_via_finder() -> io::Result<()> {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Anything off the read-only allowlist is refused before a process starts.
+    #[test]
+    fn programs_off_the_allowlist_are_refused() {
+        for (program, args) in [
+            ("/bin/sh", &["-c", "true"][..]),
+            ("/usr/bin/osascript", &["-e", "return 1"][..]),
+            (
+                "/usr/bin/tmutil",
+                &["addexclusion", "/nonexistent-wrasse"][..],
+            ),
+            ("/usr/bin/tmutil", &[][..]),
+            ("pmset", &["-g", "batt"][..]),
+            ("/usr/bin/../bin/pmset", &["-g", "batt"][..]),
+        ] {
+            let err = run_readonly(program, args).unwrap_err();
+            assert_eq!(
+                err.kind(),
+                io::ErrorKind::PermissionDenied,
+                "{program} {args:?}"
+            );
+        }
+        assert!(run_readonly("/usr/bin/pmset", &["-g", "batt"]).is_ok());
+    }
+}

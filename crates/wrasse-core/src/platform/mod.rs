@@ -466,6 +466,14 @@ pub fn is_excluded_from_backups(dir: &Path) -> bool {
 
 /// Delegated OS actions (PLAN.md §4.1). Only `safety::delegate` calls this.
 pub fn run_delegated(action: crate::safety::Delegated) -> io::Result<()> {
+    // Tests exercise `safety::delegate` with temporary homes; they must never reach the real OS
+    // action (emptying the user's actual Trash).
+    #[cfg(test)]
+    {
+        let _ = action;
+        return Err(io::Error::other("delegated actions don't run in tests"));
+    }
+    #[allow(unreachable_code)]
     match action {
         crate::safety::Delegated::EmptyTrash => {
             #[cfg(target_os = "macos")]

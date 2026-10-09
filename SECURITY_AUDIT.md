@@ -11,9 +11,10 @@ pre-commit hook), so this file can't drift from what Wrasse actually does.
   `safety/`, `quarantine/` and `platform/` can't delete, rename or start programs;
   `scripts/check-forbidden-apis.sh` fails the build otherwise.
 - **Preview, then act.** `safety::prepare` checks every item and reports what would happen, what
-  would be skipped and why, and whether it can be undone. `safety::remove` re-checks each item
-  right before acting: same file (device and file id), not swapped for a link, same owner, and
-  for "your call" items unchanged in size and date. Anything that changed is skipped.
+  would be skipped and why, and whether it can be undone. `safety::remove` re-runs every check
+  right before acting (protected, Never touch list, open, iCloud-only, …) and confirms it's the
+  same file (device and file id), not swapped for a link, same owner, and for "your call" items
+  unchanged in size and date. Anything that changed is skipped and logged.
 - **The tray first.** By default items go to the quarantine tray
   (`~/Library/Application Support/com.shanmukyadav.wrasse/Quarantine`, same disk, so a move is a
   rename). Each move is written to the batch's manifest before it happens and marked done after;
@@ -33,7 +34,8 @@ pre-commit hook), so this file can't drift from what Wrasse actually does.
 - Anything owned by another user, and other users' home folders.
 - Items in iCloud only (dataless): there's nothing to free and removing them would remove them
   from iCloud.
-- Paths on the user's Never touch list.
+- Paths on the user's Never touch list, in both entrypoints: `safety::delegate` refuses to empty
+  the Trash while the Trash is on the list.
 - Wrasse's own data folder (including the tray).
 - App-managed libraries: any path inside a folder ending in
   <!-- AUDIT:library-suffixes -->
@@ -86,7 +88,8 @@ folder /opt
 ## Junk rules
 
 Bundled rules live in `rules/macos/junk.toml`; each has an explanation shown as "Why is this
-safe?" and a test. A rule is rejected if its schema version is unknown, a root is (or is inside,
+safe?" and its own test (what it matches, and that it never matches a protected place). Rules
+never offer an app-managed library, even with `**`. A rule is rejected if its schema version is unknown, a root is (or is inside,
 or contains) a protected location, a root is a link pointing somewhere protected, a root uses `..`
 or isn't absolute, a pattern could reach outside its root, it's marked `keep`, or it names an
 unknown delegate. Custom rules (`<data>/rules/custom/*.toml`) are always "your call" and can't

@@ -1,5 +1,6 @@
 # macOS junk rules (PLAN.md §6.2). Each rule matches the entries directly inside its roots.
-# Every rule has a test in crates/wrasse-core/src/rules (`each_macos_rule_matches_its_fixture`).
+# Every rule has its own test in crates/wrasse-core/src/rules (`rule_<id>`): what it matches, and
+# that it never matches a protected place.
 schema_version = 1
 
 [[rule]]
