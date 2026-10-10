@@ -202,10 +202,19 @@ Follow-up fixes accepted with the checkpoint:
 - Dark mode no longer paints the lens bar, the filter menu, the selection bar, or the detail
   panel white. They use the dark glass, so All, Junk, Apps, AI Models and Dev stay readable.
   Tile shadows drop the white inset at night. The command bar shadow uses the dark pill shadow.
+- Five cold launches of this release build, each sampled once after a 60 s settle with autoscan
+  on. Totals: **117.0, 117.0, 118.0, 116.9, 118.0 MB**. The first is under 140. At each sample
+  the app was 34–35 MB, its WebContent helper 61 MB, its GPU helper 17 MB, and its Networking
+  helper about 5 MB. During that minute the app peaked near 70 MB, WebContent near 390 MB, and
+  the GPU helper near 140 MB, and all three had released before the sample. The official check
+  on the same binary then read **115.0 MB** on all three samples (budget 140). The earlier
+  readings of 150–153 MB, flat across that launch's samples and followed by a launch at 113–120,
+  match the checker counting a WebKit process that appeared during the wait. This Mac already
+  had other WebKit processes, including a 758 MB WebContent, which stay out of the total only
+  when they exist before launch. No idle-memory code change.
 
 **Stop here.** Windows is deferred. Phase 4 is started, and this step is the checkpoint. Don't
-open AI models, diagnostics, or developer junk until the owner says to continue. The five cold
-launches (60 s settle each) for the first-run idle memory are the next measurement in this step.
+open AI models, diagnostics, or developer junk until the owner says to continue.
 
 ### Other open issues
 
