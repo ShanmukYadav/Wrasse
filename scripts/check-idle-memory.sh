@@ -1,64 +1,191 @@
 #!/usr/bin/env bash
-# Fails if Wrasse uses more memory than its budget while idle with the window open
-# (PLAN.md §8: macOS < 140 MB, measured baseline 131 MB).
+# Memory of one Wrasse launch, counted only for Wrasse's own tree.
 #
-#   scripts/check-idle-memory.sh            build the release app, then measure
-#   scripts/check-idle-memory.sh --no-build measure the existing release build
+#   scripts/check-idle-memory.sh                 build the release app, one launch
+#   scripts/check-idle-memory.sh --no-build      measure the existing release build
+#   scripts/check-idle-memory.sh --launches 5    repeat the cold launch this many times
 #
-# What it measures: physical footprint (`footprint`, the number Activity Monitor shows as
-# Memory) of the app plus the WebKit helper processes it started (page, GPU, network), after a
-# scan and 30 s of idle. macOS only; needs a logged-in session because it opens the window.
-# WRASSE_IDLE_LIMIT_MB overrides the budget.
+# The tree is the app pid plus WebKit WebContent, GPU and Networking helpers that
+# belong to it (parent chain, responsible pid, or that app's launchd services).
+# Other apps' WebKit processes are not counted. See scripts/wrasse-tree.py.
+#
+# Two budgets, both phys_footprint (the Memory column in Activity Monitor):
+#   peak  the highest simultaneous total during the first 60 s (default 400 MB)
+#   idle  the worst of three samples taken at 60 s, 70 s and 80 s (default 140 MB)
+# WRASSE_PEAK_LIMIT_MB and WRASSE_IDLE_LIMIT_MB override them.
+# macOS only. Needs a logged-in session because it opens the window.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-LIMIT_MB="${WRASSE_IDLE_LIMIT_MB:-140}"
+IDLE_MB="${WRASSE_IDLE_LIMIT_MB:-140}"
+PEAK_MB="${WRASSE_PEAK_LIMIT_MB:-400}"
 APP="target/release/wrasse-app"
+LAUNCHES=1
+BUILD=1
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --no-build) BUILD=0; shift ;;
+    --launches)
+      [[ $# -ge 2 ]] || { echo "check-idle-memory: --launches needs a number"; exit 2; }
+      LAUNCHES="$2"
+      shift 2
+      ;;
+    *) echo "check-idle-memory: unknown argument $1"; exit 2 ;;
+  esac
+done
+[[ "$LAUNCHES" =~ ^[1-9][0-9]*$ ]] || { echo "check-idle-memory: --launches must be a positive number"; exit 2; }
 
 if [[ "$(uname)" != "Darwin" ]]; then
   echo "check-idle-memory: macOS only for now (Windows budget: measure, then add)."
   exit 0
 fi
 
-if pgrep -f "wrasse-app" >/dev/null; then
+if pgrep -x wrasse-app >/dev/null; then
   echo "Quit Wrasse first: a running copy would take the launch (single instance) and skew the numbers."
   exit 2
 fi
 
-if [[ "${1:-}" != "--no-build" ]]; then
+if [[ "$BUILD" -eq 1 ]]; then
   (cd app && ../dev.sh npm run tauri build -- --no-bundle >/dev/null)
 fi
 [[ -x "$APP" ]] || { echo "No release build at $APP"; exit 2; }
 
-helpers() { pgrep -f "com.apple.WebKit.(WebContent|GPU|Networking)" | sort; }
-before="$(helpers)"
-
-WRASSE_AUTOSCAN=1 "$APP" >/dev/null 2>&1 &
-app_pid=$!
-trap 'kill "$app_pid" 2>/dev/null || true' EXIT
-
-# Let the scan finish and the page settle.
-sleep 40
-mine=$(comm -13 <(echo "$before") <(helpers) | tr '\n' ' ')
-
-footprint_mb() {
-  footprint "$1" 2>/dev/null | awk '/phys_footprint:/ { v = $2; if ($3 == "KB") v /= 1024; if ($3 == "GB") v *= 1024; printf "%.1f", v; exit }'
+# Current footprint and the process's own high-water, in MB.
+footprint_pair() {
+  local out
+  out=$(footprint "$1" 2>/dev/null || true)
+  awk '
+    /phys_footprint_peak:/ { pv = $2; if ($3 == "KB") pv /= 1024; if ($3 == "GB") pv *= 1024; next }
+    /phys_footprint:/ { cv = $2; if ($3 == "KB") cv /= 1024; if ($3 == "GB") cv *= 1024 }
+    END { printf "%.1f %.1f\n", (cv == "" ? 0 : cv), (pv == "" ? 0 : pv) }
+  ' <<<"$out"
 }
 
-worst=0
-for sample in 1 2 3; do
-  total=0
-  for pid in $app_pid $mine; do
-    mb=$(footprint_mb "$pid")
-    total=$(awk -v a="$total" -v b="${mb:-0}" 'BEGIN { printf "%.1f", a + b }')
-  done
-  echo "sample $sample: ${total} MB"
-  worst=$(awk -v a="$worst" -v b="$total" 'BEGIN { print (b > a) ? b : a }')
-  sleep 10
-done
+role_of() {
+  local cmd
+  cmd=$(ps -o command= -p "$1" 2>/dev/null || echo gone)
+  case "$cmd" in
+    *WebContent*) echo web ;;
+    *WebKit.GPU*) echo gpu ;;
+    *WebKit.Networking*) echo net ;;
+    *wrasse-app*) echo app ;;
+    *) echo other ;;
+  esac
+}
 
-if awk -v w="$worst" -v l="$LIMIT_MB" 'BEGIN { exit !(w > l) }'; then
-  echo "Idle memory ${worst} MB is over the ${LIMIT_MB} MB budget."
+# Sets app_mb web_mb gpu_mb net_mb other_mb total_mb, and updates *_peak high-waters.
+measure() {
+  local pid cur peak role pids
+  app_mb=0; web_mb=0; gpu_mb=0; net_mb=0; other_mb=0
+  pids=$(/usr/bin/python3 scripts/wrasse-tree.py "$app_pid")
+  for pid in $pids; do
+    read -r cur peak < <(footprint_pair "$pid") || true
+    [[ -n "${cur:-}" ]] || continue
+    role=$(role_of "$pid")
+    case "$role" in
+      app) app_mb=$cur ;;
+      web) web_mb=$(awk -v a="$web_mb" -v b="$cur" 'BEGIN { printf "%.1f", a + b }') ;;
+      gpu) gpu_mb=$(awk -v a="$gpu_mb" -v b="$cur" 'BEGIN { printf "%.1f", a + b }') ;;
+      net) net_mb=$(awk -v a="$net_mb" -v b="$cur" 'BEGIN { printf "%.1f", a + b }') ;;
+      *) other_mb=$(awk -v a="$other_mb" -v b="$cur" 'BEGIN { printf "%.1f", a + b }') ;;
+    esac
+    case "$role" in
+      app) app_peak=$(awk -v a="$app_peak" -v b="$peak" 'BEGIN { print (b > a) ? b : a }') ;;
+      web) web_peak=$(awk -v a="$web_peak" -v b="$peak" 'BEGIN { print (b > a) ? b : a }') ;;
+      gpu) gpu_peak=$(awk -v a="$gpu_peak" -v b="$peak" 'BEGIN { print (b > a) ? b : a }') ;;
+      net) net_peak=$(awk -v a="$net_peak" -v b="$peak" 'BEGIN { print (b > a) ? b : a }') ;;
+    esac
+  done
+  total_mb=$(awk -v a="$app_mb" -v w="$web_mb" -v g="$gpu_mb" -v n="$net_mb" -v o="$other_mb" \
+    'BEGIN { printf "%.1f", a + w + g + n + o }')
+}
+
+over() { awk -v v="$1" -v l="$2" 'BEGIN { exit !(v > l) }'; }
+
+fail=0
+worst_peak=0
+worst_idle=0
+
+for launch in $(seq 1 "$LAUNCHES"); do
+  echo "=== launch $launch ==="
+  WRASSE_AUTOSCAN=1 "$APP" >/dev/null 2>&1 &
+  app_pid=$!
+  trap 'kill "$app_pid" 2>/dev/null || true' EXIT
+  echo "app pid $app_pid"
+
+  app_peak=0; web_peak=0; gpu_peak=0; net_peak=0
+  launch_peak=0
+  peak_at=0
+  peak_line=""
+  start=$(date +%s)
+  while true; do
+    now=$(date +%s)
+    elapsed=$((now - start))
+    if [[ "$elapsed" -gt 60 ]]; then
+      break
+    fi
+    if ! kill -0 "$app_pid" 2>/dev/null; then
+      echo "app exited before the minute was up"
+      exit 1
+    fi
+    measure
+    if awk -v t="$total_mb" -v p="$launch_peak" 'BEGIN { exit !(t > p) }'; then
+      launch_peak=$total_mb
+      peak_at=$elapsed
+      peak_line="app ${app_mb} web ${web_mb} gpu ${gpu_mb} net ${net_mb} other ${other_mb}"
+    fi
+    if [[ $((elapsed % 5)) -eq 0 ]]; then
+      echo "t=${elapsed}s ${total_mb} MB (app ${app_mb} web ${web_mb} gpu ${gpu_mb} net ${net_mb} other ${other_mb})"
+    fi
+    sleep 1
+  done
+
+  echo "peak launch $launch: ${launch_peak} MB at t=${peak_at}s (${peak_line})"
+  echo "high-water launch $launch: app ${app_peak} web ${web_peak} gpu ${gpu_peak} net ${net_peak}"
+  worst_peak=$(awk -v a="$worst_peak" -v b="$launch_peak" 'BEGIN { print (b > a) ? b : a }')
+
+  idle_worst=0
+  idle_line=""
+  for sample in 1 2 3; do
+    measure
+    echo "idle sample $sample: ${total_mb} MB (app ${app_mb} web ${web_mb} gpu ${gpu_mb} net ${net_mb} other ${other_mb})"
+    idle_line="${idle_line}${total_mb} "
+    if awk -v t="$total_mb" -v p="$idle_worst" 'BEGIN { exit !(t > p) }'; then
+      idle_worst=$total_mb
+    fi
+    if [[ "$sample" -lt 3 ]]; then
+      sleep 10
+    fi
+  done
+  echo "summary launch $launch: peak ${launch_peak} MB, idle ${idle_line}MB"
+  worst_idle=$(awk -v a="$worst_idle" -v b="$idle_worst" 'BEGIN { print (b > a) ? b : a }')
+
+  kill "$app_pid" 2>/dev/null || true
+  wait "$app_pid" 2>/dev/null || true
+  for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+    kill -0 "$app_pid" 2>/dev/null || break
+    sleep 1
+  done
+  if kill -0 "$app_pid" 2>/dev/null; then
+    echo "app did not exit"
+    exit 1
+  fi
+  sleep 2
+done
+trap - EXIT
+
+echo "Worst simultaneous peak ${worst_peak} MB (budget ${PEAK_MB} MB)."
+echo "Worst idle sample ${worst_idle} MB (budget ${IDLE_MB} MB)."
+if over "$worst_peak" "$PEAK_MB"; then
+  echo "Peak memory ${worst_peak} MB is over the ${PEAK_MB} MB first-minute budget."
+  fail=1
+fi
+if over "$worst_idle" "$IDLE_MB"; then
+  echo "Idle memory ${worst_idle} MB is over the ${IDLE_MB} MB budget."
+  fail=1
+fi
+if [[ "$fail" -ne 0 ]]; then
   exit 1
 fi
-echo "Idle memory check passed: ${worst} MB (budget ${LIMIT_MB} MB)."
+echo "Memory check passed: peak ${worst_peak} MB, idle ${worst_idle} MB."

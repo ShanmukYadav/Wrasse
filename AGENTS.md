@@ -41,5 +41,5 @@ scripts/check-windows-compile.sh  # core crates still compile for Windows (only 
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
 ./dev.sh cargo test --workspace
 (cd app && ../dev.sh npm run build)
-scripts/check-idle-memory.sh   # macOS, with Wrasse quit: idle memory under the PLAN.md §8 budget
+scripts/check-idle-memory.sh   # macOS, with Wrasse quit: first-minute peak under 400 MB, idle under 140 MB
 ```

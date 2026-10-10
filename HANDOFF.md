@@ -40,7 +40,8 @@ read the files under "Read first".
   iCloud-only (dataless) files are untouchable.
 - **Dry run:** dev builds start every launch in dry run; while it's off the DEV badge is a red LIVE
   badge. `clean.sh` keeps the tray unless `--all` (asks first).
-- **Idle memory budget:** 140 MB on macOS (`scripts/check-idle-memory.sh`). Don't keep scans in
+- **Idle memory budget:** 140 MB on macOS, and a first-minute peak of 400 MB, both for Wrasse's
+  own tree only (`scripts/check-idle-memory.sh`, `scripts/wrasse-tree.py`). Don't keep scans in
   memory; Tauri commands read the saved scan or tree on demand.
 - Repo-local git identity is the owner's noreply address (already configured). Commit messages
   end with your tool's attribution line if it adds one; no model names in commits.
@@ -56,7 +57,7 @@ scripts/check-windows-compile.sh
 ./dev.sh cargo test --workspace          # 81 tests in wrasse-core, all passing
 ./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
 (cd app && ../dev.sh npm run build)
-scripts/check-idle-memory.sh             # with Wrasse quit
+scripts/check-idle-memory.sh             # with Wrasse quit; peak 400 MB, idle 140 MB
 ```
 
 The hook is enabled with `git config core.hooksPath scripts/hooks` (already set). Clippy isn't in
@@ -202,16 +203,24 @@ Follow-up fixes accepted with the checkpoint:
 - Dark mode no longer paints the lens bar, the filter menu, the selection bar, or the detail
   panel white. They use the dark glass, so All, Junk, Apps, AI Models and Dev stay readable.
   Tile shadows drop the white inset at night. The command bar shadow uses the dark pill shadow.
-- Five cold launches of this release build, each sampled once after a 60 s settle with autoscan
-  on. Totals: **117.0, 117.0, 118.0, 116.9, 118.0 MB**. The first is under 140. At each sample
-  the app was 34–35 MB, its WebContent helper 61 MB, its GPU helper 17 MB, and its Networking
-  helper about 5 MB. During that minute the app peaked near 70 MB, WebContent near 390 MB, and
-  the GPU helper near 140 MB, and all three had released before the sample. The official check
-  on the same binary then read **115.0 MB** on all three samples (budget 140). The earlier
-  readings of 150–153 MB, flat across that launch's samples and followed by a launch at 113–120,
-  match the checker counting a WebKit process that appeared during the wait. This Mac already
-  had other WebKit processes, including a 758 MB WebContent, which stay out of the total only
-  when they exist before launch. No idle-memory code change.
+- The memory checker counts only Wrasse's tree: the app pid, child processes, WebKit helpers
+  whose responsible pid is the app, and WebContent, GPU and Networking services launchd lists
+  for that app (`scripts/wrasse-tree.py`). A WebKit process owned by another app is left out.
+  From a shell, macOS names the shell as the responsible process and launchd as the parent, so
+  the service list is what still ties the helpers to this app.
+- Five cold launches with that checker, autoscan on. Simultaneous peak in the first minute:
+  **493.3, 484.3, 523.3, 471.4, 478.4 MB**, each at 2–3 s. At that moment WebContent was about
+  310–330 MB and the GPU helper about 120–130 MB; the app was 34–70 MB and Networking about 5 MB.
+  Per-process high-water across the minute: app about 70 MB, WebContent about 390 MB, GPU about
+  140 MB, Networking about 5 MB. Those highs are not the same instant. The 400 MB peak budget
+  is not met. Idle at 60/70/80 s: **117.0, 117.0, 153.0, 116.9, 118.0 MB**. The 153 MB launch
+  is the app staying at its 70 MB scan high-water after WebKit had settled to 61 + 17 + 5; the
+  other four released the app back to 34–35 MB. No cut has been made. To get the first minute
+  under 400 MB, the webview's first paint has to allocate less: lazy-render the tiles and drop
+  composited layers (the backdrop blur and the sonar). Deferring the scan avoids stacking the
+  app's 70 MB on that paint, and it is what kept one launch at 153 MB idle, but the paint alone
+  is already about 450 MB, so deferring it does not land under 400. Waiting for approval before
+  changing that.
 
 **Stop here.** Windows is deferred. Phase 4 is started, and this step is the checkpoint. Don't
 open AI models, diagnostics, or developer junk until the owner says to continue.
