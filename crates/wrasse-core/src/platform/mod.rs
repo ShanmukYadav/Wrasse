@@ -599,7 +599,8 @@ pub fn last_used(path: &Path) -> Option<i64> {
     }
 }
 
-/// Politely asks an app to quit (never forces it). Returns once asked; the caller waits.
+/// Politely asks an app to quit (never forces it). Returns once the request is sent, or after
+/// 10 s if it couldn't be sent. The caller waits for the app to exit.
 pub fn quit_app(bundle_id: &str) -> io::Result<()> {
     #[cfg(target_os = "macos")]
     return macos::commands::quit_app(bundle_id);

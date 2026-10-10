@@ -112,19 +112,24 @@ function, with arguments passed as argv (never through a shell):
 
 - `tmutil addexclusion <Wrasse data folder>`: keeps Wrasse's own folder out of Time Machine
   (no admin rights; nothing of the user's is affected).
-- `osascript … tell application id <bundle id> to quit`: asks an app to quit before it's
-  uninstalled, like the Dock's Quit (the app may ask to save documents). Never forced.
+- `NSRunningApplication terminate` for a bundle id: asks an app to quit before it's uninstalled,
+  like the Dock's Quit (the app may ask to save documents). The call returns once the request is
+  sent; if it hasn't returned after 10 seconds, Wrasse reports "couldn't ask it to quit" and
+  leaves the app running. Never `forceTerminate`, and never a signal to the app.
 
 Delegated actions, reachable only through `safety::delegate`, which validates each before it runs
 and logs it (dry run reports them without running):
 
 - `EmptyTrash`: `osascript -e 'tell application "Finder" to empty trash'`. Not undoable. Refused
-  while the Trash is on the Never touch list.
+  while the Trash is on the Never touch list. If Finder hasn't answered after 2 minutes, only
+  that `osascript` is stopped (Finder is not); Wrasse reports that it couldn't ask.
 - `BrewUninstallCask`: `brew uninstall --cask -- <token>` (no `--zap`: the leftovers go to the tray
   instead). `brew` must be `/opt/homebrew/bin/brew` or `/usr/local/bin/brew` and owned by the
   user; the token must be well formed and that cask's metadata must list the app. Not undoable.
 - `FinderMoveToTrash`: Finder moves a root-owned app (App Store, `.pkg`) to the user's Trash and
-  asks for the password itself; Put Back works.
+  asks for the password itself; Put Back works. Same 2-minute bound as emptying the Trash: only
+  `osascript` is stopped, so a stuck Automation prompt can't hang Wrasse, and a password dialog
+  still has time to be answered.
 
 For both app actions the app must be an `.app` directly in (or one folder inside)
 `/Applications` or `~/Applications`, on the startup disk, not protected, not on the Never touch

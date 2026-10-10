@@ -44,14 +44,22 @@ PLIST
     # binary would be killed by code signing). No Dock icon, no window.
     printf '%s\n' '#import <Cocoa/Cocoa.h>' \
       'int main(void) { @autoreleasepool { [NSApplication sharedApplication];' \
-      '[NSApp setActivationPolicy:NSApplicationActivationPolicyProhibited]; [NSApp run]; } return 0; }' |
+      '[NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory]; [NSApp run]; } return 0; }' |
       cc -x objective-c -framework Cocoa -o "$APP/Contents/MacOS/WrasseDummy" -
     head -c 3000000 /dev/urandom > "$APP/Contents/Resources/assets.bin"
     mkdir -p "$LIB/Caches/$ID" "$LIB/Application Support/WrasseDummy" "$LIB/Saved Application State/$ID.savedState" \
       "$LIB/Logs/$ID" "$LIB/HTTPStorages/$ID" "$LIB/WebKit/$ID" "$LIB/Caches/$GONE" "$LIB/Application Support/$GONE"
     head -c 400000 /dev/urandom > "$LIB/Caches/$ID/Cache.db"
     head -c 120000 /dev/urandom > "$LIB/Application Support/WrasseDummy/state.json"
-    head -c 2000 /dev/urandom > "$LIB/Preferences/$ID.plist"
+    # A real plist. Random bytes here are not a preference file: when the dummy actually quits,
+    # cfprefsd throws them away, and the checksum round trip no longer has a file to compare.
+    cat > "$LIB/Preferences/$ID.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>WrasseDummy</key><string>keep</string>
+</dict></plist>
+PLIST
     head -c 8000 /dev/urandom > "$LIB/Saved Application State/$ID.savedState/windows.plist"
     head -c 9000 /dev/urandom > "$LIB/Logs/$ID/today.log"
     head -c 1000 /dev/urandom > "$LIB/HTTPStorages/$ID/httpstorages.sqlite"

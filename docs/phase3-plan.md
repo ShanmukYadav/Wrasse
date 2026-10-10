@@ -1,6 +1,6 @@
 # Phase 3 plan (macOS): Apps, Free Up Space, Large/Old/Duplicate files
 
-Status: **in progress.** Phase 2 (macOS) was approved on 2026-10-09 after the manual tray test
+Status: **checkpoint done, waiting for approval.** Phase 2 (macOS) was approved on 2026-10-09 after the manual tray test
 (~/WrasseTest moved to the tray and restored, all 8 files byte-identical by SHA-256). The user took
 the recommendation for all 11 decisions in §8. Windows stays deferred (PLAN.md status note); everything new in `wrasse-core` stays
 platform-neutral, with macOS specifics in `platform/macos/`.
@@ -63,10 +63,13 @@ Leftover { path, kind, matched_by: BundleId | Name, shared_with: Vec<app id>, ne
 ## 3. Uninstaller
 
 **Quit first.** If the app runs, the sheet shows "Quit <App>" and nothing else can be confirmed.
-Quitting is a polite request (`tell application id "<id>" to quit`, via a named function in
-`platform/macos/commands.rs`), never a force-kill; Wrasse waits up to 10 s and, if the app is still
-open (unsaved work prompt), says so and stops. `safety` re-checks at the last moment that no process
-runs from the bundle, so an app reopened in between is skipped (new `Reason::AppRunning`).
+Quitting is a polite request (`NSRunningApplication terminate` for that bundle id, the same quit
+event as the Dock, via `platform/macos/commands.rs`). It returns once the request is sent. A stuck
+call is given up after 10 s ("couldn't ask it to quit"). Never `forceTerminate`, never a signal.
+Wrasse then waits up to 10 s and, if the app is still open (unsaved work prompt), says so and stops.
+`safety` re-checks at the last moment that no process runs from the bundle, so an app reopened in
+between is skipped (`Reason::AppRunning`). Finder's AppleScripts (empty Trash, Move to Trash) have
+their own 2-minute bound; only the `osascript` process is stopped.
 
 **Three routes, chosen by source and owner:**
 

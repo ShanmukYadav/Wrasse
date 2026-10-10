@@ -52,7 +52,7 @@ scripts/check-security-audit.sh
 scripts/check-windows-compile.sh
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
-./dev.sh cargo test --workspace          # 68 tests in wrasse-core, all passing
+./dev.sh cargo test --workspace          # 72 tests in wrasse-core, all passing
 (cd app && ../dev.sh npm run build)
 scripts/check-idle-memory.sh             # with Wrasse quit
 ```
@@ -81,7 +81,8 @@ the hook, so run it yourself.
 
 - Phase 0 to 2: done and approved. Phase 2 was approved after a manual tray round trip of
   `~/WrasseTest`, where every file matched its SHA-256 (`~/WrasseTest-checksums.txt`).
-- **Phase 3 (macOS): steps 1 to 6 committed; step 7 (checkpoint) in progress.**
+- **Phase 3 (macOS): steps 1 to 7 done. Checkpoint report is below. Not approved yet.**
+  Don't start Phase 4 until the owner says "start". Windows stays deferred.
   - Done: app discovery (sources: folder, Homebrew cask, App Store, system; owner; Spotlight last
     use; leftovers in every Library place; shared and name-only leftovers start unticked; system
     Library items "Needs admin"); uninstaller (routes: tray, `brew uninstall --cask`, Finder Move
@@ -92,40 +93,39 @@ the hook, so run it yourself.
     removed the whole folder (now `aggregate`, blocked); the ranker offered single files deep
     in ~/Library (now each source is taken whole, the Library only through junk rules).
 
-### Phase 3 checkpoint: what's left (step 7)
+### Phase 3 checkpoint (step 7): done, waiting for approval
 
-Real-Mac dummy check, so far, with `scripts/dummy-app.sh` and the CLI (`./target/release/wrasse`):
-- ✓ Discovery finds `~/Applications/WrasseDummy.app` (folder, user-owned, 6 bundle-id
-  leftovers plus 1 name-only), and the orphan `com.wrasse-gone-test.app` (60 days old).
-- ✓ Uninstall moved the bundle and the ticked leftovers to the tray, left the name-only one, and
-  restore was byte-identical (12/12 files).
-- ✓ Uninstall is refused while the dummy runs ("WrasseDummy is open; quit it first").
-- ✗ **Open issue 1:** `wrasse quit` / the Tauri `quit_app` command hung. `osascript … tell
-  application id … to quit` waited with no timeout, probably on a macOS Automation permission
-  prompt or because the dummy uses `NSApplicationActivationPolicyProhibited`. Fix:
-  - give `platform::macos::commands::quit_app` a timeout (spawn, wait about 10 s, then kill
-    `osascript` and report "couldn't ask it to quit");
-  - consider `NSRunningApplication terminate` through FFI instead of AppleScript (no Automation
-    prompt);
-  - rebuild the dummy with `…ActivationPolicyAccessory` and retest.
-  Never force-quit.
+Real-Mac dummy check with `scripts/dummy-app.sh` and `./target/release/wrasse` (2026-10-10):
+- Discovery finds `~/Applications/WrasseDummy.app` (folder, user-owned, 6 bundle-id leftovers
+  plus 1 name-only), and the orphan `com.wrasse-gone-test.app`.
+- Uninstall while it was running was refused ("WrasseDummy is open; quit it first").
+- `wrasse quit` closed it in 0.36 s. Quit is `NSRunningApplication terminate` (the Dock's polite
+  quit). It returns once the request is sent, gives up after 10 s with "couldn't ask it to quit",
+  and never calls `forceTerminate` or signals the app. The dummy is an accessory app
+  (`NSApplicationActivationPolicyAccessory`) so that request can reach it.
+- Dry run reported the tray route and removed nothing. Uninstall moved the bundle and the six
+  ticked leftovers to the tray, left the name-only leftover and the orphan, and restore of those
+  seven entries was byte-identical (12/12 SHA-256).
+- The dummy is installed again, with its leftovers and the orphan, so it can be tried in the app.
+  `scripts/dummy-app.sh remove` deletes only those paths. Ask the owner first.
 
-Then finish:
-1. Rerun the dummy flow: `scripts/dummy-app.sh files | … shasum` → `open` the dummy →
-   uninstall refused → quit works → `wrasse uninstall --dry-run` → `wrasse uninstall` → restore by
-   entry ids (`wrasse tray`) → all checksums OK. The dummy is currently installed with its
-   leftovers, plus the orphan dummy; the owner can try it in the app too.
-2. Homebrew and Finder routes: covered by unit tests only (Homebrew isn't installed on this Mac;
-   a root-owned dummy needs sudo). Say so in the report; don't install Homebrew.
-3. Run all checks, including `scripts/check-idle-memory.sh` (the always-visible tray button and
-   new overlays shouldn't push idle memory over 140 MB; measure it).
-4. Report to the owner: test counts, what was verified on the real Mac, numbers (full scan with
-   app discovery ~2.5 s; duplicate search on this Mac: 221 files, 2.2 GB hashed, 20 groups,
-   0.76 s, 35 MB peak; Free Up Space on real data offers 0.43 GB, 9.57 GB short of 10 GB, since
-   this Mac has little junk), the two bugs fixed, open issues, and that Windows is deferred.
-   Then **stop** and wait for "start" before Phase 4.
-5. Clean up: `scripts/dummy-app.sh remove` deletes only the dummy paths. Ask the owner first if
-   they want to try it in the app.
+Homebrew and Finder routes: unit tests only. Homebrew is not installed; a root-owned dummy needs
+sudo. Neither was installed or run.
+
+Checks on this Mac, all passing: forbidden-API, SECURITY_AUDIT sync, Windows `cargo check` of
+wrasse-core / wrasse-fixtures / wrasse-cli, fmt, clippy `-D warnings`, **72 tests** in wrasse-core
+(was 68), app `npm run build`, idle memory **133.9 MB** (budget 140).
+
+Numbers carried from the earlier real-data runs (not re-measured this step): full scan with app
+discovery ~2.5 s; duplicate search 221 files, 2.2 GB hashed, 20 groups, 0.76 s, 35 MB peak;
+Free Up Space offers 0.43 GB, 9.57 GB short of 10 GB.
+
+Bugs fixed in Phase 3: "Smaller items" could remove its whole folder (now `aggregate`, blocked);
+the ranker offered single files deep in ~/Library (now each source is taken whole); quit and the
+Finder AppleScripts could hang (quit no longer uses `osascript`; emptying the Trash and Finder
+Move to Trash give `osascript` 2 minutes, then only that process is stopped).
+
+**Stop here.** Windows is deferred. Don't start Phase 4 until the owner says "start".
 
 ### Other open issues
 
@@ -135,8 +135,7 @@ Then finish:
   once (iCloud note); there's no full caution sheet there.
 - PLAN.md §6.9 asks for "old" by Spotlight last use; scan dates are labeled "approx" when
   Spotlight has none. Fine as is.
-- The `osascript`-based actions (empty Trash, Finder Move to Trash, quit) have no timeouts;
-  apply the same fix as for quit.
+
 
 ## Phase 4 and later
 
