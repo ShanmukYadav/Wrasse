@@ -125,6 +125,31 @@ button {
 .crumb.is-current {
   color: var(--c-text);
 }
+.crumb-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.crumb-dot {
+  color: var(--c-text-muted);
+  font-size: var(--d1-header-title-size);
+}
+.crumb-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--c-accent) 14%, transparent);
+  color: var(--c-accent);
+  font-size: var(--t-caption);
+  font-weight: var(--w-size);
+  cursor: pointer;
+  white-space: nowrap;
+}
 .back-btn {
   display: grid;
   place-items: center;
@@ -876,11 +901,50 @@ button {
     left: calc((100% - 280px) / 2);
   }
 }
+.lens-cats {
+  position: relative;
+  display: flex;
+  gap: var(--d1-lens-gap);
+  align-items: center;
+}
+.lens-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 8px 4px;
+  background: var(--c-divider);
+}
+.lens-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-text-muted);
+}
+.lens-filter {
+  height: var(--d1-lens-pill-height);
+  padding: 0 14px;
+  border-radius: var(--d1-lens-pill-radius);
+  border: 1px solid var(--c-divider);
+  background: transparent;
+  font-size: var(--d1-lens-font-size);
+  color: var(--c-inactive);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.lens-filter.is-on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+  font-weight: var(--w-size);
+}
 .lens-go {
   margin-left: 4px;
   color: var(--c-accent);
   border-left: 1px solid var(--c-divider);
   border-radius: 0 var(--d1-lens-radius) var(--d1-lens-radius) 0;
+}
+.lens-go.is-disabled {
+  color: var(--c-text-muted);
+  cursor: default;
 }
 .lens-go.is-hot {
   margin-left: 8px;
@@ -890,7 +954,7 @@ button {
   color: var(--c-on-accent);
   font-weight: var(--w-size);
 }
-/* One soft ring when a lens is chosen. Opacity and transform only, and only once. */
+/* One soft ring when a filter turns on. Opacity and transform only, and only once. */
 .lens-glow {
   position: absolute;
   inset: -4px;
@@ -934,10 +998,50 @@ button {
 .lens-indicator {
   position: absolute;
   left: 0;
-  top: var(--d1-lens-pad);
+  top: 0;
   height: var(--d1-lens-pill-height);
   border-radius: var(--d1-lens-pill-radius);
   background: var(--c-navy);
+}
+.scope-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.scope-empty p {
+  margin: 0;
+  font-size: var(--t-label);
+  color: var(--c-text);
+}
+.scope-empty-list {
+  padding: 28px 20px;
+}
+.scope-banner {
+  position: absolute;
+  z-index: 4;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 48px));
+  padding: 14px 18px;
+  border-radius: var(--d1-tile-radius);
+  background: var(--c-glass-strong);
+  border: 1px solid var(--c-glass-border);
+  box-shadow: var(--d1-lens-shadow);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+.scope-empty-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--c-accent);
+  font: inherit;
+  font-size: var(--t-label);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* ---- Buttons --------------------------------------------------------------------------- */

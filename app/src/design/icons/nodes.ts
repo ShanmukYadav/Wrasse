@@ -5,7 +5,7 @@
 import {
   AppWindow, Boxes, Broom, Check, ChevronDown, ChevronLeft, ChevronRight, CircleQuestionMark, Clock, Cloud, Code, Container,
   Disc, ExternalLink, File, FileArchive, FileText, Film, Folder, Hammer, Hourglass, Image, Info, Layers,
-  LayoutGrid, List, ListChecks, Lock, Monitor, MonitorCog, User, Music, Package, Power, Radar, Scale, ScrollText, Search,
+  Funnel, LayoutGrid, List, ListChecks, Lock, Monitor, MonitorCog, User, Music, Package, Power, Radar, Scale, ScrollText, Search,
   Settings, ShieldCheck, Sparkles, Trash, TrendingUp, TriangleAlert, Undo2, X,
 } from "lucide";
 
@@ -90,6 +90,7 @@ export const ICONS = {
   dev: strip(Code),
   largeOld: strip(Hourglass),
   grew: strip(TrendingUp),
+  filter: strip(Funnel),
   free: strip(Sparkles),
   // Controls
   search: strip(Search),

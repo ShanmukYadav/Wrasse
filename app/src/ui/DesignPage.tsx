@@ -2,7 +2,7 @@
 // variants, color tokens, the type scale and sample blocks of each item type in both themes.
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, type CSSProperties } from "react";
-import type { Disk } from "../api/types";
+import { LENS_BIT, type Disk } from "../api/types";
 import { BrandMark } from "../design/brand/BrandMark";
 import { Icon } from "../design/icons/Icon";
 import { ICONS, type IconName } from "../design/icons/nodes";
@@ -305,7 +305,7 @@ function SampleTile({ id, cell, scheme, lens }: { id: number; cell: Cell; scheme
       parentSize={disk.nodes[n.parent]?.size ?? n.size}
       scheme={scheme}
       units={units}
-      lens={lens}
+      scopeBits={lens === "all" ? 0 : LENS_BIT[lens]}
       selected={false}
       deleting={false}
       pulseKey={null}

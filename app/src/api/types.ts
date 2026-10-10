@@ -1,5 +1,5 @@
 // Data types shared by the UI and the api/ layer. Stage B's Tauri commands return the same shapes.
-import type { Category, LensId, Safety } from "../design/tokens";
+import type { Category, CategoryId, LensId, Safety } from "../design/tokens";
 
 export const GB = 1e9;
 
@@ -332,11 +332,11 @@ export function isAncestor(disk: Disk, ancestor: number, id: number): boolean {
   return false;
 }
 
-/** The lens that matches a category, so the lens bar follows the category you open. */
-export function lensForFocus(disk: Disk, focus: number): LensId {
+/** The category that matches the folder you open, so the category bar follows it. Filters stay as they are. */
+export function lensForFocus(disk: Disk, focus: number): CategoryId {
   let n = disk.nodes[focus];
   while (n.parent >= 0 && n.depth > 1) n = disk.nodes[n.parent];
-  const byCategory: Partial<Record<DiskNode["category"], LensId>> = { aiModels: "aiModels", apps: "apps", developer: "dev", junk: "junk" };
+  const byCategory: Partial<Record<DiskNode["category"], CategoryId>> = { aiModels: "aiModels", apps: "apps", developer: "dev", junk: "junk" };
   return (n.depth === 1 && byCategory[n.category]) || "all";
 }
 

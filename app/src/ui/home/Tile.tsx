@@ -4,13 +4,13 @@ import { api, deletable, type Disk, type DiskNode } from "../../api";
 import { useApp } from "../../store/app";
 import { Icon } from "../../design/icons/Icon";
 import { iconFor } from "../../design/icons/semantic";
-import { categories, d1, type LensId, type Scheme } from "../../design/tokens";
+import { categories, d1, type Scheme } from "../../design/tokens";
 import { t } from "../../i18n";
 import { formatBytes, type UnitSystem } from "../../lib/format";
 import { duration, ease, spring } from "../../motion/tokens";
 import type { Cell } from "./gridLayout";
 import { MiddleEllipsis } from "./MiddleEllipsis";
-import { lensMatch } from "./nodes";
+import { matchesScope } from "../scope";
 
 export type TileMetrics = { cellW: number; cellH: number };
 
@@ -22,7 +22,7 @@ type Props = {
   parentSize: number;
   scheme: Scheme;
   units: UnitSystem;
-  lens: LensId;
+  scopeBits: number;
   selected: boolean;
   deleting: boolean;
   pulseKey: number | null;
@@ -34,7 +34,7 @@ type Props = {
 const UNIT: Partial<Record<DiskNode["category"], string>> = { files: "unit.folders", aiModels: "unit.models", apps: "unit.apps" };
 
 // One D1 tile: badge + name + meta, big size, top items as rows, insight chips.
-export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, lens, selected, deleting, pulseKey, reveal, drillable = node.children.length > 0, onOpen }: Props) {
+export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, scopeBits, selected, deleting, pulseKey, reveal, drillable = node.children.length > 0, onOpen }: Props) {
   const c = categories[scheme][node.category];
   const cells = cell.colSpan * cell.rowSpan;
   const size = formatBytes(node.size, units);
@@ -90,7 +90,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
   const selecting = useApp((s) => s.checked.length > 0);
   // Whole home categories (Your Files, Apps, …) and macOS itself have no tick: open them to choose.
   const tickable = deletable(disk, node.id) && widthPx >= 120;
-  const dimmed = !lensMatch(node, lens);
+  const dimmed = scopeBits !== 0 && !matchesScope(disk, node.id, scopeBits);
 
   const style = {
     gridColumn: `${cell.col} / span ${cell.colSpan}`,
@@ -151,7 +151,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
       {large && (
         <span className="tile-rows">
           {rows.map((k) => (
-            <Row key={k.id} node={k} max={maxKid} units={units} dimmed={!dimmed && !lensMatch(k, lens)} />
+            <Row key={k.id} node={k} max={maxKid} units={units} dimmed={!dimmed && scopeBits !== 0 && !matchesScope(disk, k.id, scopeBits)} />
           ))}
           {more && (
             <span className="tile-row">

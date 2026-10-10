@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ancestors } from "../../api";
+import { activeFilters } from "../scope";
 import { Bytes } from "../../components/Bytes";
 import { Icon } from "../../design/icons/Icon";
 import { trafficLights } from "../../design/tokens";
@@ -38,10 +39,12 @@ export function Header() {
 function Location() {
   const disk = useApp((s) => s.disk);
   const focus = useApp((s) => s.focus);
-  const { setFocus, zoomOut } = useApp.getState();
+  const filters = useApp((s) => s.filters);
+  const { setFocus, zoomOut, toggleFilter } = useApp.getState();
   const listOpen = useApp((s) => s.viewMode === "list");
   const atRoot = focus === disk.root && !listOpen;
   const trail = [...ancestors(disk, focus), focus];
+  const on = activeFilters(filters);
   return (
     <nav className="location" aria-label={t("breadcrumb.label")}>
       <AnimatePresence initial={false}>
@@ -77,6 +80,23 @@ function Location() {
           </span>
         );
       })}
+      {on.length > 0 && (
+        <span className="crumb-filters">
+          <span className="crumb-dot" aria-hidden>·</span>
+          {on.map((id) => (
+            <button
+              key={id}
+              type="button"
+              className="crumb-filter focus-ring"
+              aria-label={t("scope.removeFilter", { name: t(`lens.${id}`) })}
+              onClick={() => toggleFilter(id)}
+            >
+              {t(`lens.${id}`)}
+              <Icon name="close" size={16} />
+            </button>
+          ))}
+        </span>
+      )}
     </nav>
   );
 }

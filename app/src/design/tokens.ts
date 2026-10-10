@@ -7,6 +7,11 @@ export type Scheme = "dark" | "light";
 
 export type Category = "files" | "aiModels" | "developer" | "apps" | "system" | "junk" | "other";
 export type LensId = "all" | "junk" | "apps" | "aiModels" | "dev" | "largeOld" | "grew";
+/** One of these is selected. Choosing it opens that part of the disk. */
+export type CategoryId = "all" | "junk" | "apps" | "aiModels" | "dev";
+/** These combine with the category and with each other. Turning one on does not navigate. */
+export type FilterId = "largeOld" | "grew";
+export type DiskFilters = { largeOld: boolean; grew: boolean };
 export type Safety = "safe" | "yourCall" | "keep";
 export type ChipTone = "amber" | "green" | "violet" | "protected";
 

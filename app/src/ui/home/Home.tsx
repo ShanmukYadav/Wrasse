@@ -12,6 +12,8 @@ import { gridLayout, type Cell } from "./gridLayout";
 import { Sonar } from "./Sonar";
 import { Icon } from "../../design/icons/Icon";
 import { isDrillable } from "./nodes";
+import { ScopeEmpty } from "../ScopeEmpty";
+import { filtersOn, scopeBits, visibleRows } from "../scope";
 import { Tile, type TileMetrics } from "./Tile";
 
 const MORE_ID = -2;
@@ -48,6 +50,8 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   const disk = useApp((s) => s.disk);
   useApp((s) => s.diskVersion);
   const lens = useApp((s) => s.lens);
+  const filters = useApp((s) => s.filters);
+  const plan = useApp((s) => s.plan);
   const selected = useApp((s) => s.selected);
   const deleting = useApp((s) => s.deleting);
   const pulse = useApp((s) => s.pulse);
@@ -112,6 +116,10 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
     else select(n.id);
   }
 
+  const bits = scopeBits(lens, filters);
+  const showBanner = !plan && (lens !== "all" || filtersOn(filters)) && visibleRows(disk, focus, lens, filters).length === 0;
+  const banner = showBanner ? <ScopeEmpty banner /> : null;
+
   const tiles = cells.map((cell) => {
     if (cell.id === MORE_ID) {
       return <MoreTile key="more" cell={cell} focus={focusNode} count={rest.length} size={restSize} onOpen={() => setViewMode("list")} />;
@@ -130,7 +138,7 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
         parentSize={parentSize}
         scheme={scheme}
         units={units}
-        lens={lens}
+        scopeBits={bits}
         selected={selected === n.id}
         deleting={deleting.includes(n.id)}
         pulseKey={pulse?.id === n.id ? pulse.key : null}
@@ -150,6 +158,7 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   if (root) {
     return (
       <motion.div className="level" {...fade}>
+        {banner}
         <div ref={gridRef} className="home-grid">
           {tiles}
         </div>
@@ -162,6 +171,7 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   const frameStyle = { "--from": c.from, "--to": c.to, "--tint": c.border, "--glow": c.glow } as CSSProperties;
   return (
     <motion.div className="level" {...fade}>
+      {banner}
       <div className="level-frame" style={frameStyle} />
       <div ref={gridRef} className="home-grid level-grid">
         {tiles}

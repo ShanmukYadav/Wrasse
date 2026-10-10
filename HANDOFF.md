@@ -53,6 +53,7 @@ scripts/check-windows-compile.sh
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
 ./dev.sh cargo test --workspace          # 80 tests in wrasse-core, all passing
+./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
 (cd app && ../dev.sh npm run build)
 scripts/check-idle-memory.sh             # with Wrasse quit
 ```
@@ -155,6 +156,16 @@ Follow-up fixes accepted with the checkpoint:
   Junk and uninstall leftovers. Once something in Large & Old is ticked, the note says how
   many. The tray has no row checkbox; each item has Restore. Keyboard focus outlines the box,
   and Space toggles it.
+- Categories and filters are separate. All, Junk, Apps, AI Models, and Dev are one choice and
+  still open that category. Large & Old and Grew are filters on the folder you're in: each
+  toggles on its own (both can be on), they stay on when you change category, and they show as
+  removable chips in the breadcrumb. Turning a filter on does not navigate. The See button
+  counts the same rows the list shows for that category, those filters, and that folder
+  (`app/src/ui/scope.test.ts`, 25 scopes). An empty scope says "Nothing here" on the button and
+  explains it in the folder, with "Show all of Macintosh HD". The Large & Old overlay still
+  opens from that button when the Large & Old filter is on. Re-checked on this Mac: forbidden-API,
+  SECURITY_AUDIT sync, Windows `cargo check`, fmt, clippy `-D warnings`, 80 wrasse-core tests,
+  the scope test, app `npm run build`, idle memory **120.0 MB** (budget 140).
 
 **Stop here.** Windows is deferred. Don't start Phase 4 until the owner says "start".
 

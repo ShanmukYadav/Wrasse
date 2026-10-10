@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { type DiskNode, type FreeWhy, type PathRemoval, type ScannedFile, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
-import { categories, type LensId, type Scheme } from "../design/tokens";
+import { categories, type CategoryId, type DiskFilters, type FilterId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
 import type { AppInfo } from "../lib/backend";
 import { formatBytes } from "../lib/format";
@@ -71,7 +71,9 @@ type State = {
   disk: Disk;
   diskVersion: number;
   focus: number;
-  lens: LensId;
+  /** The selected category. Large & Old and Grew live in `filters`. */
+  lens: CategoryId;
+  filters: DiskFilters;
   selected: number | null;
   detailOpen: boolean;
   tray: TrayItem[];
@@ -122,7 +124,13 @@ type Actions = {
   setSystemScheme: (s: Scheme) => void;
   setFocus: (id: number) => void;
   zoomOut: () => void;
-  setLens: (lens: LensId) => void;
+  setLens: (lens: CategoryId) => void;
+  /** Turns one filter on or off. Stays on the current folder. */
+  toggleFilter: (id: FilterId) => void;
+  /** Turns one filter on or off without navigating. */
+  setFilter: (id: FilterId, on: boolean) => void;
+  /** Clears filters, returns to the whole disk, and shows the map. */
+  showAll: () => void;
   select: (id: number | null, open?: boolean) => void;
   closeDetail: () => void;
   addToTray: (ids: number[], confirmed?: boolean, handPicked?: boolean) => void;
@@ -418,6 +426,7 @@ export const useApp = create<State & Actions>((set, get) => {
     diskVersion: 0,
     focus: disk.root,
     lens: "all",
+    filters: { largeOld: false, grew: false },
     selected: null,
     detailOpen: false,
     tray: [],
@@ -470,14 +479,25 @@ export const useApp = create<State & Actions>((set, get) => {
     },
 
     setLens: (lens) =>
-      // "All" also takes you back home.
+      // "All" also takes you back home. Filters stay on.
       set((s) => {
-        // "All" goes home; category lenses open their category's top level from anywhere;
-        // Large & Old and Grew stay highlight filters over the current view.
         const target = lens === "all" ? s.disk.root : categoryForLens(s.disk, lens);
         if (target === null) return { lens, plan: null };
         return { lens, plan: null, focus: target, viewMode: "map", selected: null, detailOpen: false, checked: [] };
       }),
+    toggleFilter: (id) => set((s) => ({ filters: { ...s.filters, [id]: !s.filters[id] }, plan: null })),
+    setFilter: (id, on) => set((s) => ({ filters: { ...s.filters, [id]: on }, plan: null })),
+    showAll: () =>
+      set((s) => ({
+        lens: "all",
+        filters: { largeOld: false, grew: false },
+        focus: s.disk.root,
+        viewMode: "map",
+        plan: null,
+        selected: null,
+        detailOpen: false,
+        checked: [],
+      })),
 
     select: (id, open = true) => set({ selected: id, detailOpen: id !== null && open }),
     closeDetail: () => set({ detailOpen: false, selected: null }),

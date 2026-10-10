@@ -6,11 +6,12 @@ import { t } from "../i18n";
 import { formatBytes } from "../lib/format";
 import { useScheme } from "../lib/prefs";
 import { duration, ease } from "../motion/tokens";
-import { lensMatches } from "../api/types";
 import { useApp } from "../store/app";
 import { SafetyLabel } from "./Safety";
 import { Icon } from "../design/icons/Icon";
 import { iconFor, toneFor } from "../design/icons/semantic";
+import { ScopeEmpty } from "./ScopeEmpty";
+import { scopeBits, visibleRows } from "./scope";
 
 type SortKey = "name" | "category" | "size" | "lastOpened" | "safety";
 
@@ -37,6 +38,7 @@ function List() {
   const version = useApp((s) => s.diskVersion);
   const focus = useApp((s) => s.focus);
   const lens = useApp((s) => s.lens);
+  const filters = useApp((s) => s.filters);
   const plan = useApp((s) => s.plan);
   const selected = useApp((s) => s.selected);
   const units = useApp((s) => s.info?.units ?? "decimal");
@@ -45,9 +47,12 @@ function List() {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "size", desc: true });
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const bits = scopeBits(lens, filters);
   const rows = useMemo(() => {
-    // The items of the current folder: the same things its tiles show, including those under "+N more".
-    const ids = disk.nodes[focus].children.filter((id) => disk.nodes[id].size > 0 && disk.nodes[id].kind !== "ghost");
+    // The same rows buttonCount uses, once a category or filter is on. A plan keeps every row.
+    const ids = plan || bits === 0
+      ? disk.nodes[focus].children.filter((id) => disk.nodes[id].size > 0 && disk.nodes[id].kind !== "ghost")
+      : visibleRows(disk, focus, lens, filters);
     const val = (id: number) => {
       const n = disk.nodes[id];
       switch (sort.key) {
@@ -65,7 +70,7 @@ function List() {
       return sort.desc ? -c : c;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [disk, focus, sort, version]);
+  }, [disk, focus, sort, version, plan, bits, lens, filters]);
 
   const planRank = useMemo(() => new Map((plan?.ids ?? []).map((id, i) => [id, i + 1])), [plan]);
   const virtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => scrollRef.current, estimateSize: () => 40, overscan: 12 });
@@ -119,13 +124,17 @@ function List() {
         aria-activedescendant={selected !== null ? `row-${selected}` : undefined}
         onKeyDown={onKeyDown}
       >
+        {!plan && bits !== 0 && rows.length === 0 ? (
+          <ScopeEmpty />
+        ) : (
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
           {virtualizer.getVirtualItems().map((v) => {
             const id = rows[v.index];
             const n = disk.nodes[id];
-            const matches = plan ? planRank.has(id) : lensMatches(n, lens);
+            const matches = plan ? planRank.has(id) : true;
             const f = formatBytes(n.size, units);
-            const dot = plan ? undefined : lens !== "all" && matches ? lensColors[scheme][lens] : undefined;
+            const dotLens = plan ? null : filters.grew ? "grew" : filters.largeOld ? "largeOld" : lens !== "all" ? lens : null;
+            const dot = dotLens ? lensColors[scheme][dotLens] : undefined;
             return (
               <div
                 key={id}
@@ -133,7 +142,7 @@ function List() {
                 role="option"
                 aria-selected={selected === id}
                 className={`list-row ${selected === id ? "is-selected" : ""}`}
-                style={{ transform: `translateY(${v.start}px)`, opacity: plan || lens !== "all" ? (matches ? 1 : 0.25) : 1 }}
+                style={{ transform: `translateY(${v.start}px)`, opacity: plan ? (matches ? 1 : 0.25) : 1 }}
                 onClick={() => select(id, false)}
                 onDoubleClick={() => select(id, true)}
               >
@@ -151,6 +160,7 @@ function List() {
             );
           })}
         </div>
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 // Command bar: parses what the user typed into ranked, runnable suggestions.
 import type { IconName } from "../design/icons/nodes";
 import { iconFor, toneFor } from "../design/icons/semantic";
-import type { LensId, Tone } from "../design/tokens";
+import type { CategoryId, FilterId, Tone } from "../design/tokens";
 import { LENSES } from "../ui/lenses";
 import { t } from "../i18n";
 import { formatBytes } from "../lib/format";
@@ -38,12 +38,15 @@ export function fuzzy(query: string, text: string): number {
   return score - s.length * 0.05;
 }
 
-const LENS_WORDS: [LensId, string[]][] = [
+const CATEGORY_WORDS: [CategoryId, string[]][] = [
   ["all", ["all", "everything", "reset"]],
   ["junk", ["junk", "caches", "cache", "trash", "logs"]],
   ["apps", ["apps", "applications"]],
   ["aiModels", ["models", "ai", "ai models", "llm"]],
   ["dev", ["dev", "developer", "code", "node_modules"]],
+];
+
+const FILTER_WORDS: [FilterId, string[]][] = [
   ["largeOld", ["large", "old", "large & old", "big files"]],
   ["grew", ["grew", "growth", "what grew"]],
 ];
@@ -101,11 +104,15 @@ export function suggest(raw: string): Suggestion[] {
     push({ key: "free30", icon: "free", tone: "accent", label: t("cmd.free", { size: "30 GB" }), hint: t("cmd.freeHint"), run: () => app.planFree(30 * GB) }, text ? fuzzy(lower, "free 30 gb") : 900);
   }
 
-  // Lenses: "show models", "junk", "what grew"
-  const lensQuery = lower.replace(/^(show|lens)\s+/, "");
-  for (const [lens, words] of LENS_WORDS) {
-    const score = text ? Math.max(...words.map((w) => fuzzy(lensQuery, w))) : lens === "junk" ? 800 : lens === "grew" ? 700 : -1;
-    push({ key: `lens-${lens}`, icon: LENSES.find((l) => l.id === lens)!.icon, label: lens === "grew" ? t("cmd.whatGrew") : t("cmd.show", { lens: t(`lens.${lens}`) }), hint: t("cmd.lensHint"), run: () => app.setLens(lens) }, score);
+  // Categories open that part of the disk. Filters narrow the folder you're already in.
+  const lensQuery = lower.replace(/^(show|lens|filter)\s+/, "");
+  for (const [lens, words] of CATEGORY_WORDS) {
+    const score = text ? Math.max(...words.map((w) => fuzzy(lensQuery, w))) : lens === "junk" ? 800 : -1;
+    push({ key: `lens-${lens}`, icon: LENSES.find((l) => l.id === lens)!.icon, label: t("cmd.show", { lens: t(`lens.${lens}`) }), hint: t("cmd.lensHint"), run: () => app.setLens(lens) }, score);
+  }
+  for (const [lens, words] of FILTER_WORDS) {
+    const score = text ? Math.max(...words.map((w) => fuzzy(lensQuery, w))) : lens === "grew" ? 700 : -1;
+    push({ key: `filter-${lens}`, icon: LENSES.find((l) => l.id === lens)!.icon, label: lens === "grew" ? t("cmd.whatGrew") : t("cmd.filter", { name: t(`lens.${lens}`) }), hint: t("cmd.filterHint"), run: () => app.setFilter(lens, true) }, score);
   }
 
   // Scan, views, overlays, tray
