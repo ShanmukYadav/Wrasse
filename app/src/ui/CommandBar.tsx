@@ -214,12 +214,12 @@ function PlanMeter({ plan }: { plan: Plan }) {
           const on = !plan.off.includes(id);
           const viaSheet = !bulk(id);
           return (
-            <li key={id} className={`plan-row ${on && !viaSheet ? "" : "is-off"}`}>
+            <li key={id} className={`plan-row ${on && !viaSheet ? "is-on" : "is-off"}`}>
               {viaSheet ? (
                 <span className="plan-tick is-sheet" aria-hidden />
               ) : (
                 <button type="button" role="checkbox" aria-checked={on} aria-label={t("select.tick", { name: n.name })} className={`plan-tick focus-ring ${on ? "is-on" : ""}`} onClick={() => togglePlanItem(id)}>
-                  {on && <Icon name="check" tone="white" size={16} />}
+                  {on && <Icon name="check" size={16} />}
                 </button>
               )}
               <button type="button" className="plan-item focus-ring" onClick={() => locate(id)}>

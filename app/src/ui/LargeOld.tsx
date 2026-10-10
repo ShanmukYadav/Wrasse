@@ -27,7 +27,7 @@ const KIND_ICON: Record<FileKind, IconName> = {
   document: "document",
   other: "file",
 };
-const SIZE_KEY = "wrasse.largeMin";
+export const LARGE_MIN_KEY = "wrasse.largeMin";
 
 function useFmt() {
   const units = useApp((s) => s.info?.units ?? "decimal");
@@ -60,7 +60,7 @@ function Large() {
   const openFileCaution = useApp((s) => s.openFileCaution);
   const [min, setMin] = useState<number>(() => {
     try {
-      return Number(localStorage.getItem(SIZE_KEY)) || 500e6;
+      return Number(localStorage.getItem(LARGE_MIN_KEY)) || 500e6;
     } catch {
       return 500e6;
     }
@@ -74,7 +74,7 @@ function Large() {
     let live = true;
     setFiles(null);
     try {
-      localStorage.setItem(SIZE_KEY, String(min));
+      localStorage.setItem(LARGE_MIN_KEY, String(min));
     } catch {
       /* per-viewer convenience only */
     }
@@ -152,7 +152,7 @@ function Large() {
             const name = f.path.split("/").pop() ?? f.path;
             return (
               <li key={f.path}>
-                <label className="largeold-row">
+                <label className={`largeold-row ${on ? "is-on" : ""}`}>
                   <input
                     type="checkbox"
                     className="sr-only"
@@ -165,7 +165,7 @@ function Large() {
                     }}
                   />
                   <span className={`sheet-check ${on ? "is-on" : ""}`} aria-hidden>
-                    {on && <Icon name="check" tone="white" size={16} />}
+                    {on && <Icon name="check" size={16} />}
                   </span>
                   <Icon name={KIND_ICON[f.kind]} tone="files" size={16} />
                   <span className="largeold-main">
@@ -203,7 +203,9 @@ function Large() {
         >
           <Icon name="tray" size={16} /> {confirming ? t("largeOld.moveAnyway") : t("largeOld.move", { count: pickedFiles.length, size: fmt(pickedBytes) })}
         </motion.button>
-        <span className={`text-caption ${confirming ? "text-your-call" : "text-muted"}`}>{confirming ? t("largeOld.personalNote") : t("largeOld.note")}</span>
+        <span className={`text-caption ${confirming ? "text-your-call" : "text-muted"}`}>
+          {confirming ? t("largeOld.personalNote") : pickedFiles.length ? t("largeOld.ticked", { count: pickedFiles.length }) : t("largeOld.note")}
+        </span>
       </div>
     </>
   );
@@ -281,7 +283,9 @@ function Dupes() {
                   <li key={c.path}>
                     <label className={`dupe-copy ${kept === c.path ? "is-kept" : kept ? "is-going" : ""}`}>
                       <input type="radio" name={g.hash} className="sr-only" checked={kept === c.path} onChange={() => { setKeep({ ...keep, [g.hash]: c.path }); setConfirm(null); }} />
-                      <span className={`dupe-radio ${kept === c.path ? "is-on" : ""}`} aria-hidden />
+                      <span className={`dupe-radio ${kept === c.path ? "is-on" : ""}`} aria-hidden>
+                        {kept === c.path && <Icon name="check" size={16} />}
+                      </span>
                       <span className="largeold-main">
                         <MiddleEllipsis text={c.path} className="text-caption" />
                         <span className="text-caption text-muted">

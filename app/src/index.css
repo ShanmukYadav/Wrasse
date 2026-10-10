@@ -293,6 +293,13 @@ button {
 .plan-tick.is-on {
   background: var(--c-accent);
   border-color: var(--c-accent);
+  color: var(--c-on-accent);
+}
+.plan-row.is-on .plan-item {
+  background: color-mix(in srgb, var(--c-accent) 14%, var(--d1-row-surface));
+}
+.plan-row.is-on .plan-item:hover {
+  background: color-mix(in srgb, var(--c-accent) 22%, var(--d1-row-surface));
 }
 .plan-item {
   display: flex;
@@ -869,10 +876,44 @@ button {
     left: calc((100% - 280px) / 2);
   }
 }
-.lens-extra {
+.lens-go {
+  margin-left: 4px;
   color: var(--c-accent);
   border-left: 1px solid var(--c-divider);
   border-radius: 0 var(--d1-lens-radius) var(--d1-lens-radius) 0;
+}
+.lens-go.is-hot {
+  margin-left: 8px;
+  border-left: 0;
+  border-radius: var(--d1-lens-pill-radius);
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  font-weight: var(--w-size);
+}
+/* One soft ring when a lens is chosen. Opacity and transform only, and only once. */
+.lens-glow {
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid var(--c-accent);
+  pointer-events: none;
+  animation: lens-glow 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes lens-glow {
+  from {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lens-glow {
+    animation: none;
+    display: none;
+  }
 }
 .lens-pill {
   position: relative;
@@ -1373,6 +1414,11 @@ button {
   display: flex;
   align-items: center;
   gap: 8px;
+  border-radius: var(--d1-row-radius);
+}
+.junk-head.is-on,
+.junk-item.is-on {
+  background: color-mix(in srgb, var(--c-accent) 14%, var(--d1-row-surface));
 }
 .junk-title {
   flex: 1;
@@ -1399,6 +1445,7 @@ button {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 8px;
+  border-radius: var(--d1-row-radius);
 }
 .detail-rule {
   display: flex;
@@ -1914,8 +1961,20 @@ button {
 }
 .sheet-check.is-on,
 .sheet-check.is-locked {
-  background: var(--acc);
-  border-color: var(--acc);
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+}
+.largeold-row:focus-within .sheet-check,
+.sheet-row:focus-within .sheet-check,
+.dupe-copy:focus-within .dupe-radio {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+}
+.largeold-row.is-on,
+.sheet-row.is-on,
+.dupe-copy.is-kept {
+  background: color-mix(in srgb, var(--c-accent) 14%, var(--d1-row-surface));
 }
 .sheet-name {
   flex: 1;
@@ -2041,14 +2100,18 @@ button {
   gap: 8px;
 }
 .dupe-radio {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   border: 1.5px solid var(--c-kbd-border);
+  display: grid;
+  place-items: center;
   flex-shrink: 0;
+  color: var(--c-on-accent);
 }
 .dupe-radio.is-on {
-  border: 5px solid var(--c-accent);
+  background: var(--c-accent);
+  border-color: var(--c-accent);
 }
 .dupe-copy.is-going {
   opacity: 0.75;

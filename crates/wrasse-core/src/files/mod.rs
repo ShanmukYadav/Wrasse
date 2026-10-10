@@ -141,6 +141,21 @@ pub fn files_over(
         .collect()
 }
 
+/// [`kind_of`] for a real path. A name that looks like a model stays [`FileKind::Other`] unless
+/// the file has a model header or a sibling `config.json`.
+pub fn file_kind(path: &Path) -> FileKind {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let kind = kind_of(&name);
+    if kind == FileKind::Model && !crate::scan::weights::is_model_weights(path) {
+        FileKind::Other
+    } else {
+        kind
+    }
+}
+
 /// The biggest files (at most `limit`) of at least `min_bytes` under `within`, with when each was
 /// last used: Spotlight's date (`last_used`, Unix seconds) or, failing that, the newest of last
 /// read and last changed from the scan (`approx`).
@@ -165,12 +180,7 @@ pub fn large_files(
                 .map(|id| tree.node(id));
             let scanned = node.map_or(today, |n| n.last_used_day);
             BigFile {
-                kind: kind_of(
-                    &path
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default(),
-                ),
+                kind: file_kind(&path),
                 last_used_days: spot.unwrap_or_else(|| today.saturating_sub(scanned)),
                 approx: spot.is_none(),
                 mtime: node.map_or(0, |n| n.mtime),
@@ -261,5 +271,28 @@ mod tests {
             "the scan's modification time travels with the file"
         );
         crate::platform::remove_test_dir(&root);
+    }
+
+    #[test]
+    fn zero_bin_is_not_shown_as_a_model() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("wrasse-kind-{nanos}"));
+        fs::create_dir_all(&dir).unwrap();
+        let bin = dir.join("old-big.bin");
+        fs::write(&bin, [0u8; 64]).unwrap();
+        assert_eq!(file_kind(&bin), FileKind::Other);
+        let gguf = dir.join("mistral.gguf");
+        fs::write(&gguf, b"GGUF\x03\x00\x00\x00").unwrap();
+        assert_eq!(file_kind(&gguf), FileKind::Model);
+        let safe = dir.join("adapter.safetensors");
+        let json = br#"{"format":"pt"}"#;
+        let mut bytes = (json.len() as u64).to_le_bytes().to_vec();
+        bytes.extend_from_slice(json);
+        fs::write(&safe, bytes).unwrap();
+        assert_eq!(file_kind(&safe), FileKind::Model);
+        crate::platform::remove_test_dir(&dir);
     }
 }

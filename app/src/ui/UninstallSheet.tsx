@@ -109,9 +109,9 @@ function Sheet({ appId }: { appId: number }) {
 
       <div className="sheet-list">
         {bundle && (
-          <div className="sheet-row">
+          <div className="sheet-row is-on">
             <span className="sheet-check is-locked" aria-hidden>
-              <Icon name="check" tone="white" size={16} />
+              <Icon name="check" size={16} />
             </span>
             <Icon name="app" tone={app.category} size={16} />
             <span className="sheet-name">
@@ -126,7 +126,7 @@ function Sheet({ appId }: { appId: number }) {
           const meta = l.leftoverMeta;
           const hint = meta?.sharedWith.length ? t("uninstall.shared", { names: meta.sharedWith.join(", ") }) : meta?.matchedBy === "name" ? t("uninstall.byName") : null;
           return (
-            <label key={l.id} className="sheet-row">
+            <label key={l.id} className={`sheet-row ${on ? "is-on" : ""}`}>
               <input
                 type="checkbox"
                 className="sr-only"
@@ -139,7 +139,7 @@ function Sheet({ appId }: { appId: number }) {
                 }}
               />
               <span className={`sheet-check ${on ? "is-on" : ""}`} aria-hidden>
-                {on && <Icon name="check" tone="white" size={16} />}
+                {on && <Icon name="check" size={16} />}
               </span>
               <Icon name={iconFor(l)} tone={app.category} size={16} />
               <span className="sheet-name" title={l.path}>

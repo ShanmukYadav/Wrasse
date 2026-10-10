@@ -34,6 +34,8 @@ export const en = {
   "lens.dev": "Dev",
   "lens.largeOld": "Large & Old",
   "lens.grew": "Grew",
+  "lens.seeFiles": "See {count} file · {size} →|See {count} files · {size} →",
+  "lens.seeItems": "See {count} item · {size} →|See {count} items · {size} →",
 
   "cmd.label": "Command",
   "cmd.placeholder": "Try “free 30 GB” or “where is Docker”",
@@ -93,6 +95,7 @@ export const en = {
   "largeOld.approx": "approx",
   "largeOld.move": "Move {count} to the tray · {size}|Move {count} to the tray · {size}",
   "largeOld.note": "Nothing is ticked for you. Files go to the tray, where you can restore them.",
+  "largeOld.ticked": "You ticked {count} · files go to the tray, where you can restore them.",
   "largeOld.moveAnyway": "Move anyway",
   "largeOld.personalNote": "Some of these are in Documents or Desktop. If iCloud syncs those folders, they're removed from your other devices too. They stay restorable from the tray.",
   "fileKind.video": "Videos",

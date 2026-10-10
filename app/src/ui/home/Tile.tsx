@@ -114,7 +114,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
       aria-label={`${node.name}, ${size.value} ${size.unit}`}
       onClick={() => onOpen(node)}
       initial={reveal ? { opacity: 0, scale: 0.94 } : false}
-      animate={deleting ? { opacity: 0, scale: 0.85 } : { opacity: 1, scale: 1 }}
+      animate={deleting ? { opacity: 0, scale: 0.85 } : { opacity: dimmed ? d1.dimmed : 1, scale: 1 }}
       transition={
         deleting
           ? { duration: duration.base, ease: ease.inOut }
@@ -151,7 +151,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, len
       {large && (
         <span className="tile-rows">
           {rows.map((k) => (
-            <Row key={k.id} node={k} max={maxKid} units={units} dimmed={!lensMatch(k, lens)} />
+            <Row key={k.id} node={k} max={maxKid} units={units} dimmed={!dimmed && !lensMatch(k, lens)} />
           ))}
           {more && (
             <span className="tile-row">

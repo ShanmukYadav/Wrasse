@@ -52,7 +52,7 @@ scripts/check-security-audit.sh
 scripts/check-windows-compile.sh
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
-./dev.sh cargo test --workspace          # 74 tests in wrasse-core, all passing
+./dev.sh cargo test --workspace          # 80 tests in wrasse-core, all passing
 (cd app && ../dev.sh npm run build)
 scripts/check-idle-memory.sh             # with Wrasse quit
 ```
@@ -113,8 +113,8 @@ Homebrew and Finder routes: unit tests only. Homebrew is not installed; a root-o
 sudo. Neither was installed or run.
 
 Checks on this Mac, all passing: forbidden-API, SECURITY_AUDIT sync, Windows `cargo check` of
-wrasse-core / wrasse-fixtures / wrasse-cli, fmt, clippy `-D warnings`, **74 tests** in wrasse-core
-(was 72), app `npm run build`, idle memory **118.0 MB** (budget 140).
+wrasse-core / wrasse-fixtures / wrasse-cli, fmt, clippy `-D warnings`, **80 tests** in wrasse-core
+(was 74), app `npm run build`, idle memory **122.0 MB** (budget 140).
 
 Numbers carried from the earlier real-data runs (not re-measured this step): full scan with app
 discovery ~2.5 s; duplicate search 221 files, 2.2 GB hashed, 20 groups, 0.76 s, 35 MB peak;
@@ -142,6 +142,19 @@ Follow-up fixes accepted with the checkpoint:
   needs an administrator password. The same note is in `docs/phase3-plan.md` §9 and PLAN.md Phase 6.
 - `~/WrasseTest/big-file.bin` was restored from the tray (not purged) and is back at that path.
   The tray no longer lists it.
+- With a lens on, the list button is a filled accent button with the live count and size
+  ("See 1 file · 629 MB →"). With All selected it stays "List & duplicates →". Choosing a lens
+  plays that glow once (opacity and transform, about 600 ms); Reduce Motion skips it. Tiles
+  that hold no match for the lens dim.
+- A file is not an AI model from its extension alone. `.gguf` and `.safetensors` still have to
+  carry their header. `.bin` and the other ambiguous extensions need a known header (GGUF,
+  safetensors, PyTorch, ONNX) or a `config.json` in the same folder. A zero-filled `.bin` is
+  not a model, so it no longer wears the chip or adds to the AI Models count.
+- A ticked box shows a check on the accent fill, and the row takes a light accent tint. That
+  is the same control in Large & Old, Duplicates (the copy you keep), Free Up Space, System
+  Junk and uninstall leftovers. Once something in Large & Old is ticked, the note says how
+  many. The tray has no row checkbox; each item has Restore. Keyboard focus outlines the box,
+  and Space toggles it.
 
 **Stop here.** Windows is deferred. Don't start Phase 4 until the owner says "start".
 

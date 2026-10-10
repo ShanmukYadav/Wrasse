@@ -789,9 +789,9 @@ fn is_read_only_library(name: &str) -> bool {
         || name.ends_with(".logicx")
 }
 
-/// Model weights worth listing on their own: common weight formats from 50 MB, and generic
-/// `.bin` files only when they're named like weights or are large.
-fn is_weights_file(name: &str, size: u64) -> bool {
+/// Model weights worth listing on their own. The extension and size only decide whether to look;
+/// [`super::weights::is_model_weights`] has to see a real header or a sibling `config.json`.
+fn is_weights_file(path: &str, name: &str, size: u64) -> bool {
     let n = name.to_ascii_lowercase();
     let weights = [
         ".gguf",
@@ -804,12 +804,15 @@ fn is_weights_file(name: &str, size: u64) -> bool {
         ".tflite",
         ".h5",
     ];
-    if weights.iter().any(|e| n.ends_with(e)) {
-        return size >= 50_000_000;
-    }
-    n.ends_with(".bin")
-        && (size >= MODEL_FILE
-            || ((n.starts_with("pytorch_model") || n.starts_with("model")) && size >= 50_000_000))
+    let sized = if weights.iter().any(|e| n.ends_with(e)) {
+        size >= 50_000_000
+    } else {
+        n.ends_with(".bin")
+            && (size >= MODEL_FILE
+                || ((n.starts_with("pytorch_model") || n.starts_with("model"))
+                    && size >= 50_000_000))
+    };
+    sized && super::weights::is_model_weights(Path::new(path))
 }
 
 /// Groups found models by project: the first folder under home that isn't a generic container
@@ -855,14 +858,6 @@ fn model_group(display: &str, home: &str) -> (String, String) {
         }
     }
     ("Your folders".into(), home.to_string())
-}
-
-fn is_model_file(name: &str) -> bool {
-    let n = name.to_ascii_lowercase();
-    n.ends_with(".gguf")
-        || n.ends_with(".safetensors")
-        || n.ends_with(".bin")
-        || n.ends_with(".mlpackage")
 }
 
 struct App {
@@ -963,7 +958,7 @@ impl Builder<'_> {
             let node = self.tree.node(id);
             let name = self.tree.name(id);
             if node.kind == Kind::File {
-                if is_weights_file(name, node.size) {
+                if is_weights_file(&self.tree.path(id), name, node.size) {
                     hits.push((id, FoundItem::Weights(id)));
                 }
                 continue;
@@ -1365,13 +1360,16 @@ impl Builder<'_> {
     fn emit(&mut self, aid: u32, parent: u32, ctx: Ctx) -> u32 {
         let node = self.tree.node(aid);
         let name = self.tree.name(aid).to_string();
-        let opaque = node.kind == Kind::File
+        let file_kind = node.kind;
+        let file_size = node.size;
+        let opaque = file_kind == Kind::File
             || name.ends_with(".app")
             || is_read_only_library(&name)
             || node.flags & (flag::UNREADABLE | flag::DATALESS | flag::MOUNT) != 0;
-        let kind = if node.kind == Kind::File {
-            if is_model_file(&name)
-                && (node.size >= MODEL_FILE || ctx.category == Category::AiModels)
+        // Extension is not enough: a zero-filled .bin is a file, not a model.
+        let kind = if file_kind == Kind::File {
+            if (file_size >= MODEL_FILE || ctx.category == Category::AiModels)
+                && super::weights::is_model_weights(Path::new(&self.tree.path(aid)))
             {
                 NodeKind::Model
             } else {
@@ -1650,6 +1648,18 @@ mod tests {
         f.write_all(&vec![1u8; bytes]).unwrap();
     }
 
+    /// A real safetensors header, then padding, so the file is both valid and large.
+    fn write_safetensors(path: &Path, bytes: usize) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let header = br#"{"__metadata__":{"format":"pt"}}"#;
+        let mut f = fs::File::create(path).unwrap();
+        f.write_all(&(header.len() as u64).to_le_bytes()).unwrap();
+        f.write_all(header).unwrap();
+        let used = 8 + header.len();
+        assert!(bytes > used);
+        f.write_all(&vec![0u8; bytes - used]).unwrap();
+    }
+
     #[test]
     fn categories_add_up_and_each_byte_is_shown_once() {
         let nanos = std::time::SystemTime::now()
@@ -1783,10 +1793,12 @@ mod tests {
         let snap = proj.join("env/hf_cache/hub/models--mlx-community--Mistral-7B/snapshots/rev");
         fs::create_dir_all(&snap).unwrap();
         std::os::unix::fs::symlink("../../../blobs/w1", snap.join("model.safetensors")).unwrap();
-        write(
+        write_safetensors(
             &proj.join("models/checkpoint-1/adapter_model.safetensors"),
             55_000_000,
         );
+        // Named like a weight file and large, but no header and no config.json: not a model.
+        write(&proj.join("notes/pytorch_model.bin"), 50_000_000);
         write(&proj.join("notes/readme.bin"), 2_000_000);
         write(&root.join("Users/me/Documents/report.pdf"), 30_000_000);
 
@@ -1819,15 +1831,29 @@ mod tests {
                 .unwrap_or_else(|| panic!("no {name}"))
         };
         let ai = n("AI Models");
-        let group = n("vyakta");
+        // Your Files also has a "vyakta" folder now (the zero-filled bin lives there).
+        let group = disk
+            .nodes
+            .iter()
+            .find(|n| n.name == "vyakta" && n.category == Category::AiModels && n.size > 0)
+            .expect("vyakta model group");
         assert_eq!(group.parent, i64::from(ai.id));
         let mistral = n("Mistral-7B");
         assert_eq!(mistral.kind, NodeKind::Model);
         assert!(mistral.size >= 60_000_000);
         let ckpt = n("checkpoint-1 · adapter_model.safetensors");
         assert_eq!(ckpt.kind, NodeKind::Model);
+        // The zero-filled .bin stays a file under Your Files. It is not an AI model.
+        let stray = disk
+            .nodes
+            .iter()
+            .find(|n| n.name.contains("pytorch_model"))
+            .expect("zero-filled bin stays in the tree");
+        assert_ne!(stray.kind, NodeKind::Model);
+        assert_ne!(stray.category, Category::AiModels);
         // Claimed bytes leave Your Files, and nothing is counted twice.
-        assert!(n("Your Files").size < 30_000_000 + 5_000_000);
+        assert!(n("Your Files").size >= 50_000_000 + 30_000_000);
+        assert!(n("Your Files").size < 50_000_000 + 30_000_000 + 15_000_000);
         let cats: u64 = disk.nodes[0]
             .children
             .iter()
@@ -1835,6 +1861,7 @@ mod tests {
             .sum();
         assert_eq!(cats, disk.nodes[0].size);
         assert!(disk.nodes[0].match_bytes.ai_models >= 115_000_000);
+        assert!(disk.nodes[0].match_bytes.ai_models < 200_000_000);
         crate::platform::remove_test_dir(&root);
     }
 }

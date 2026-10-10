@@ -6,6 +6,7 @@ pub mod cache;
 pub mod hf;
 pub mod tree;
 pub mod walk;
+pub mod weights;
 
 pub use tree::{ScanStats, Tree};
 pub use walk::{rescan, scan, Change, PauseReason, Progress, ScanControl, LOW_BATTERY};

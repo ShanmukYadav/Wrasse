@@ -361,9 +361,9 @@ function JunkGroup({ items, off, fmt, onToggle }: { items: JunkMatch[]; off: Set
   const total = items.reduce((s, m) => s + m.bytes, 0);
   return (
     <li className="junk-group">
-      <div className="junk-head">
+      <div className={`junk-head ${allOn ? "is-on" : ""}`}>
         <button type="button" role="checkbox" aria-checked={allOn} aria-label={first.ruleName} className={`plan-tick focus-ring ${allOn ? "is-on" : ""}`} onClick={() => onToggle(items.map((m) => m.path), !allOn)}>
-          {allOn && <Icon name="check" tone="white" size={16} />}
+          {allOn && <Icon name="check" size={16} />}
         </button>
         <button type="button" className="junk-title focus-ring" onClick={() => setOpen(!open)} aria-expanded={open}>
           <span className="text-label text-strong">{first.ruleName}</span>
@@ -381,9 +381,9 @@ function JunkGroup({ items, off, fmt, onToggle }: { items: JunkMatch[]; off: Set
       {open && (
         <ul className="junk-items">
           {items.map((m) => (
-            <li key={m.path} className="junk-item">
+            <li key={m.path} className={`junk-item ${!off.has(m.path) ? "is-on" : ""}`}>
               <button type="button" role="checkbox" aria-checked={!off.has(m.path)} aria-label={m.path} className={`plan-tick focus-ring ${!off.has(m.path) ? "is-on" : ""}`} onClick={() => onToggle([m.path], off.has(m.path))}>
-                {!off.has(m.path) && <Icon name="check" tone="white" size={16} />}
+                {!off.has(m.path) && <Icon name="check" size={16} />}
               </button>
               <MiddleEllipsis text={m.path} className="history-path" />
               <span className="caution-size tabular">{fmt(m.bytes)}</span>

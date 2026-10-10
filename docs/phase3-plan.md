@@ -155,6 +155,8 @@ that changed ("changed since the scan"). Nothing in the list starts ticked, incl
 date says "approx". Documents and Desktop open the full caution sheet (the list, the iCloud
 warning, "I understand") for the whole selection. A selection that is only in iCloud Drive keeps
 the one-line note. Type filters: video, archive, disk image, model, other (by extension and UTI).
+The model type is not the extension alone: `.gguf` and `.safetensors` must carry their header, and
+`.bin` and the other ambiguous extensions need a known header or a `config.json` beside the file.
 
 **Duplicates** use size → partial hash → full hash:
 1. Group files of **10 MB or more** (decision 6) by exact size from the tree.
