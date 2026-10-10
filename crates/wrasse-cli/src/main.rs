@@ -16,6 +16,7 @@
 //!   wrasse uninstall [--dry-run] [--all-leftovers] <app bundle>
 //!                          uninstall like the app does (route by source and owner; leftovers
 //!                          ticked by default, or all with --all-leftovers, go to the tray)
+//!   wrasse quit <app bundle>  ask an app to quit (never forced), wait up to 10 s
 //!   wrasse free <GB>       what Free Up Space would pick on the app's last saved scan. Read-only.
 //!   wrasse apps [--orphans] list installed apps with source, owner, last use and leftovers (JSON);
 //!                          with --orphans, data folders whose app is gone. Read-only.
@@ -122,6 +123,30 @@ fn main() {
                 wrasse_core::apps::uninstall::uninstall(ctx, &app, &leftovers, running, dry_run)
                     .map(|o| serde_json::json!(o))
             });
+        }
+        Some("quit") => {
+            let bundle = PathBuf::from(args.get(1).expect("usage: wrasse quit <app bundle>"));
+            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let app =
+                wrasse_core::platform::app_at(&home, &bundle).expect("that app isn't installed");
+            let running = || {
+                wrasse_core::apps::uninstall::runs_from(
+                    &app.bundle,
+                    &wrasse_core::platform::running_executables(),
+                )
+            };
+            if running() {
+                if let Err(e) =
+                    wrasse_core::platform::quit_app(app.id.as_deref().unwrap_or_default())
+                {
+                    eprintln!("error: {e}");
+                }
+                let started = Instant::now();
+                while running() && started.elapsed().as_secs() < 10 {
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                }
+            }
+            println!("{}", if running() { "still open" } else { "closed" });
         }
         Some("free") => {
             let gb: f64 = args
