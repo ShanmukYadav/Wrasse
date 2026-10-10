@@ -168,6 +168,8 @@ Follow-up fixes accepted with the checkpoint:
   opens from that button when the Large & Old filter is on. Re-checked on this Mac: forbidden-API,
   SECURITY_AUDIT sync, Windows `cargo check`, fmt, clippy `-D warnings`, 80 wrasse-core tests,
   the scope test, app `npm run build`, idle memory **120.0 MB** (budget 140).
+- The lens bar shows one filter button. Large & Old and Grew appear only while that button is
+  open. The button fills while a filter is on, and the breadcrumb chips still remove a filter.
 - "Show all of Macintosh HD" keeps the active filters and only widens to the whole disk (category
   All, disk root, map). Grew stays on, so the map shows where things grew. The scope test covers
   that widen (`app/src/ui/scope.test.ts`, 28 scopes).

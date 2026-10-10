@@ -98,23 +98,7 @@ export function LensBar() {
         })}
       </div>
       <span className="lens-divider" aria-hidden />
-      <div className="lens-filters" role="group" aria-label={t("scope.filters")}>
-        <Icon name="filter" size={16} />
-        {FILTERS.map(({ id }) => {
-          const on = filters[id];
-          return (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={on}
-              className={`lens-filter focus-ring ${on ? "is-on" : ""}`}
-              onClick={() => toggleFilter(id)}
-            >
-              {t(`lens.${id}`)}
-            </button>
-          );
-        })}
-      </div>
+      <FilterMenu on={filtering} toggle={toggleFilter} filters={filters} />
       <button
         type="button"
         className={`lens-pill lens-go focus-ring ${hot ? "is-hot" : ""} ${empty ? "is-disabled" : ""}`}
@@ -123,6 +107,68 @@ export function LensBar() {
       >
         {hot && glowKey > 0 && !reduced && <span key={glowKey} className="lens-glow" aria-hidden />}
         <span className="relative">{label}</span>
+      </button>
+    </div>
+  );
+}
+
+/** Large & Old and Grew stay in this menu until the filter button is opened. */
+function FilterMenu({
+  on,
+  filters,
+  toggle,
+}: {
+  on: boolean;
+  filters: { largeOld: boolean; grew: boolean };
+  toggle: (id: "largeOld" | "grew") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    const onDown = (e: PointerEvent) => {
+      if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onDown, true);
+    };
+  }, [open]);
+
+  return (
+    <div className="lens-filter-wrap" ref={root}>
+      {open && (
+        <div className="lens-filter-pop" role="group" aria-label={t("scope.filters")}>
+          {FILTERS.map(({ id }) => {
+            const pressed = filters[id];
+            return (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={pressed}
+                className={`lens-filter focus-ring ${pressed ? "is-on" : ""}`}
+                onClick={() => toggle(id)}
+              >
+                {t(`lens.${id}`)}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <button
+        type="button"
+        className={`lens-filter-btn focus-ring ${on ? "is-on" : ""} ${open ? "is-open" : ""}`}
+        aria-expanded={open}
+        aria-label={t("scope.filters")}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Icon name="filter" size={16} />
       </button>
     </div>
   );

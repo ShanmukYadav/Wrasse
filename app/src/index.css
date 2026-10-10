@@ -913,11 +913,56 @@ button {
   margin: 8px 4px;
   background: var(--c-divider);
 }
-.lens-filters {
+.lens-filter-wrap {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  color: var(--c-text-muted);
+}
+.lens-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--d1-lens-pill-height);
+  height: var(--d1-lens-pill-height);
+  border-radius: var(--d1-lens-pill-radius);
+  border: 1px solid var(--c-divider);
+  background: transparent;
+  color: var(--c-inactive);
+  cursor: pointer;
+}
+.lens-filter-btn.is-open {
+  color: var(--c-text);
+}
+.lens-filter-btn.is-on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+}
+.lens-filter-pop {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + var(--d1-lens-gap));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--d1-lens-gap);
+  padding: var(--d1-lens-pad);
+  border-radius: var(--d1-lens-radius);
+  background: var(--d1-lens-bg);
+  border: 1px solid var(--c-glass-border);
+  box-shadow: var(--d1-lens-shadow);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  animation: lens-pop-in var(--d-fast) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes lens-pop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lens-filter-pop {
+    animation: none;
+  }
 }
 .lens-filter {
   height: var(--d1-lens-pill-height);
