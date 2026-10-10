@@ -58,6 +58,17 @@ export function themeVars(scheme: Scheme, platform: PlatformKey = "macos"): Reco
   vars["--d1-row-surface"] = scheme === "dark" ? d1.row.bgDark : d1.row.bg;
   vars["--d1-ghost-surface"] = scheme === "dark" ? d1.ghost.bgDark : d1.ghost.bg;
   vars["--d1-ghost-line"] = scheme === "dark" ? d1.ghost.borderDark : d1.ghost.border;
+  // The day lens and detail sheet are white. At night that white bar hides All / Junk / Apps /
+  // AI Models / Dev (inactive text is a light gray) and the detail text is light on white.
+  vars["--d1-lens-bg"] = scheme === "dark" ? d1.lens.bgDark : d1.lens.bg;
+  vars["--d1-lens-shadow"] = shadow[scheme].glass;
+  vars["--d1-detail-bg"] = scheme === "dark" ? d1.detail.bgDark : d1.detail.bg;
+  vars["--d1-command-shadow"] = scheme === "dark" ? shadow.dark.pill : d1.command.shadow;
+  if (scheme === "dark") {
+    const inset = `0 1px 0 ${palette.dark.glassHighlight} inset, ${shadow.dark.glass}`;
+    vars["--d1-tile-shadow"] = inset;
+    vars["--d1-tile-hover-shadow"] = inset;
+  }
   for (const [k, v] of Object.entries(duration)) vars[`--d-${k}`] = `${v}s`;
 
   return vars;

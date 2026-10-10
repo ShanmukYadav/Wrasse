@@ -124,6 +124,9 @@ function FilterMenu({
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const count = (filters.largeOld ? 1 : 0) + (filters.grew ? 1 : 0);
+  // The closed button has to say how many filters are on. Opening the menu drops the label.
+  const collapsedLabel = !open && count > 0 ? t("scope.filterCount", { count }) : null;
 
   useEffect(() => {
     if (!open) return;
@@ -163,12 +166,13 @@ function FilterMenu({
       )}
       <button
         type="button"
-        className={`lens-filter-btn focus-ring ${on ? "is-on" : ""} ${open ? "is-open" : ""}`}
+        className={`lens-filter-btn focus-ring ${on ? "is-on" : ""} ${open ? "is-open" : ""} ${collapsedLabel ? "has-count" : ""}`}
         aria-expanded={open}
-        aria-label={t("scope.filters")}
+        aria-label={collapsedLabel ? undefined : count > 0 ? t("scope.filterCount", { count }) : t("scope.filters")}
         onClick={() => setOpen((v) => !v)}
       >
         <Icon name="filter" size={16} />
+        {collapsedLabel}
       </button>
     </div>
   );

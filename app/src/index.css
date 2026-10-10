@@ -565,6 +565,8 @@ button {
   font-size: var(--d1-tile-meta-size);
   color: var(--c-text-muted);
   white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 .tile-size {
   position: relative;
@@ -928,7 +930,14 @@ button {
   border: 1px solid var(--c-divider);
   background: transparent;
   color: var(--c-inactive);
+  font-size: var(--d1-lens-font-size);
+  font-weight: var(--w-size);
   cursor: pointer;
+}
+.lens-filter-btn.has-count {
+  width: auto;
+  gap: 6px;
+  padding: 0 var(--d1-lens-pill-pad-x);
 }
 .lens-filter-btn.is-open {
   color: var(--c-text);

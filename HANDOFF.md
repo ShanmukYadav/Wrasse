@@ -24,7 +24,8 @@ read the files under "Read first".
 - **Mac only for now.** Windows parity is deferred. The pre-commit hook still runs a Windows
   `cargo check` on wrasse-core, wrasse-fixtures and wrasse-cli (see PLAN.md status note).
 - **Stop and report at each phase checkpoint.** Don't start the next phase until the owner says
-  "start". Phase 3 is accepted. Don't start Phase 4 until the owner says "start".
+  "start". Phase 3 is accepted. The owner started Phase 4: do the notes in this file first, then
+  stop before AI models, diagnostics, and developer junk.
 - **Test only on dummy apps and files you create, never the owner's real apps or data.** Tests run
   in temp folders (guarded by `platform::remove_test_dir`). Tests can never reach a real delegated
   OS action (`#[cfg(test)]` stop in `platform::run_delegated`).
@@ -83,7 +84,9 @@ the hook, so run it yourself.
 - Phase 0 to 2: done and approved. Phase 2 was approved after a manual tray round trip of
   `~/WrasseTest`, where every file matched its SHA-256 (`~/WrasseTest-checksums.txt`).
 - **Phase 3 (macOS): steps 1 to 7 done and accepted, with the follow-up fixes below.**
-  Don't start Phase 4 until the owner says "start". Windows stays deferred.
+  The owner started Phase 4. The first step is the UI fixes and the idle-memory note below.
+  Don't open AI models, diagnostics, or developer junk until that checkpoint is accepted.
+  Windows stays deferred.
   - Done: app discovery (sources: folder, Homebrew cask, App Store, system; owner; Spotlight last
     use; leftovers in every Library place; shared and name-only leftovers start unticked; system
     Library items "Needs admin"); uninstaller (routes: tray, `brew uninstall --cask`, Finder Move
@@ -191,8 +194,18 @@ Follow-up fixes accepted with the checkpoint:
 - Re-checked on this Mac: forbidden-API, SECURITY_AUDIT sync, Windows `cargo check`, fmt,
   clippy `-D warnings`, 81 wrasse-core tests, the scope test (28 scopes), app `npm run build`,
   idle memory **119.0 MB** on all three samples (budget 140).
+- Phase 4, first step. Every top-level block shows its share at the top right, including Junk
+  ("18% · 4 items"). A short block shows the percent beside the size. The name ellipsizes; the
+  percent does not.
+- While a filter is on and the filter menu is closed, the button reads "Filters · 1" or
+  "Filters · 2". Opening the menu hides that label. The breadcrumb chips still remove a filter.
+- Dark mode no longer paints the lens bar, the filter menu, the selection bar, or the detail
+  panel white. They use the dark glass, so All, Junk, Apps, AI Models and Dev stay readable.
+  Tile shadows drop the white inset at night. The command bar shadow uses the dark pill shadow.
 
-**Stop here.** Windows is deferred. Don't start Phase 4 until the owner says "start".
+**Stop here.** Windows is deferred. Phase 4 is started, and this step is the checkpoint. Don't
+open AI models, diagnostics, or developer junk until the owner says to continue. The five cold
+launches (60 s settle each) for the first-run idle memory are the next measurement in this step.
 
 ### Other open issues
 
@@ -204,6 +217,8 @@ Follow-up fixes accepted with the checkpoint:
 
 ## Phase 4 and later
 
-See PLAN.md §11 (Phase 4: AI models, diagnostics, developer junk; Phase 5: polish; Phase 6:
-release). Plan each phase in `docs/phaseN-plan.md` with decisions and recommendations, and wait for
-"start".
+The owner said "start". This checkpoint is the polish notes and the UI fixes above. AI models,
+diagnostics, and developer junk wait for the next "continue". See PLAN.md §11 (Phase 4: AI models,
+diagnostics, developer junk; Phase 5: polish, including the first-run idle memory; Phase 6:
+release). Plan each area in `docs/phaseN-plan.md` with decisions and recommendations, and stop
+before the next area.

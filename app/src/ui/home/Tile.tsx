@@ -47,8 +47,9 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   const showChips = !short && heightPx >= d1.tile.chipsFrom && widthPx >= d1.tile.chipsMinWidth;
   const fittedSizeFont = Math.min(sizeFont, Math.max(d1.tile.sizeS, (heightPx - (showChips ? 112 : 78)) * 0.9));
   const share = Math.round((node.size / Math.max(1, parentSize)) * 100);
-  // Category tiles count in their own unit (folders, models, apps); deeper tiles count items.
-  const unitKey = node.depth === 1 ? UNIT[node.category] : "unit.items";
+  const shareText = share < 1 ? "<1" : share;
+  // Category tiles count in their own unit (folders, models, apps). Junk and the rest count items.
+  const unitKey = (node.depth === 1 ? UNIT[node.category] : undefined) ?? "unit.items";
   // Actionable items first; read-only libraries (Photos, Music) collapse into "+N more".
   const kids = node.children
     .map((k) => disk.nodes[k])
@@ -71,12 +72,11 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   const large = rows.length > 0;
   // Models are counted wherever they sit (a project folder can hold several), apps likewise.
   const count = node.depth === 1 && (node.category === "aiModels" || node.category === "apps") ? countKind(disk, node.id, node.category === "aiModels" ? "model" : "app") : kids.length;
-  const meta = large
-    ? unitKey
-      ? t("home.metaCount", { share: share < 1 ? "<1" : share, count, unit: t(unitKey) })
-      : t("home.metaShare", { share: share < 1 ? "<1" : share })
-    : node.category === "apps" && node.depth === 1
-      ? t("home.apps", { count })
+  // Every top-level block shows its share, including Junk, which often has no rows.
+  const meta = node.depth === 1
+    ? t("home.metaCount", { share: shareText, count, unit: t(unitKey) })
+    : large
+      ? t("home.metaCount", { share: shareText, count, unit: t("unit.items") })
       : node.kind === "app" && node.app && widthPx >= 340
         ? node.app.neverOpened
           ? t("app.neverOpened")
@@ -133,11 +133,14 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
         )}
         <span className="tile-name">{node.name}</span>
         {short ? (
-          <span className="tile-size-inline">
-            {size.value} {size.unit}
-          </span>
+          <>
+            {node.depth === 1 && <span className="tile-meta">{t("home.metaShare", { share: shareText })}</span>}
+            <span className="tile-size-inline">
+              {size.value} {size.unit}
+            </span>
+          </>
         ) : (
-          meta && widthPx >= d1.tile.chipsMinWidth && <span className="tile-meta">{meta}</span>
+          meta && <span className="tile-meta">{meta}</span>
         )}
       </span>
       {!short && (

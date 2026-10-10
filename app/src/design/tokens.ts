@@ -171,14 +171,14 @@ export const d1 = {
     selectionWidth: 2.5,
     shortBelow: 100, // px tile height: below this, one line (name + size)
     chipsFrom: 150, // px tile height needed to show insight chips
-    chipsMinWidth: 150, // px tile width needed for chips, meta and "Open →"
+    chipsMinWidth: 150, // px tile width needed for chips and "Open →"
     inlineSize: 15,
   },
   row: { height: 38, radius: 10, padX: 10, gap: 10, bg: "rgba(255, 255, 255, 0.72)", bgDark: "rgba(255, 255, 255, 0.06)", fontSize: 13, iconSize: 16, barW: 54, barH: 5, barRadius: 3, sizeW: 58, stackGap: 6 },
   chip: { fontSize: 12, padding: "5px 10px", gap: 6 },
   ghost: { radius: 16, border: "1.5px dashed rgba(11, 26, 46, 0.25)", borderDark: "1.5px dashed rgba(255, 255, 255, 0.25)", bg: "rgba(255, 255, 255, 0.4)", bgDark: "rgba(255, 255, 255, 0.04)", padX: 14, titleSize: 13, hintSize: 11, actionSize: 12 },
-  lens: { bottom: 22, gap: 4, pad: 6, radius: 18, bg: "rgba(255, 255, 255, 0.82)", shadow: "0 10px 30px rgba(11, 26, 46, 0.12)", pillHeight: 40, pillPadX: 16, pillRadius: 12, fontSize: 14 },
-  detail: { width: 330, bg: "rgba(255, 255, 255, 0.86)" },
+  lens: { bottom: 22, gap: 4, pad: 6, radius: 18, bg: "rgba(255, 255, 255, 0.82)", bgDark: palette.dark.glass, shadow: "0 10px 30px rgba(11, 26, 46, 0.12)", pillHeight: 40, pillPadX: 16, pillRadius: 12, fontSize: 14 },
+  detail: { width: 330, bg: "rgba(255, 255, 255, 0.86)", bgDark: palette.dark.glassStrong },
   level: { pad: 14 }, // inset of child tiles inside an opened tile
   dimmed: 0.35,
   frameRadius: 14,

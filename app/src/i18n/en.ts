@@ -38,6 +38,7 @@ export const en = {
   "lens.seeItems": "See {count} item · {size} →|See {count} items · {size} →",
   "scope.categories": "Categories",
   "scope.filters": "Filters",
+  "scope.filterCount": "Filters · {count}",
   "scope.nothing": "Nothing here",
   "scope.showAll": "Show all of {name}",
   "scope.removeFilter": "Remove {name} filter",
