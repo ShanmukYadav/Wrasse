@@ -68,6 +68,9 @@ pub struct ItemRequest {
     rule_root: Option<PathBuf>,
     #[serde(default)]
     hand_picked: bool,
+    /// Size and modification time from the scan (Large & Old). Absent for other removals.
+    #[serde(default)]
+    scanned: Option<safety::Scanned>,
 }
 
 impl ItemRequest {
@@ -82,6 +85,7 @@ impl ItemRequest {
             rule_id: self.rule_id,
             root: self.rule_root,
             hand_picked: self.hand_picked,
+            scanned: self.scanned,
         }
     }
 }

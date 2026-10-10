@@ -248,6 +248,7 @@ pub fn remove(
             rule_id: None,
             root: None,
             hand_picked: true,
+            scanned: None,
         })
         .collect();
     let plan = safety::prepare(ctx, &requests, Mode::Quarantine);

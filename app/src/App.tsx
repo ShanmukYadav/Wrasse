@@ -41,7 +41,7 @@ export function App() {
         s.undoLastMove();
         return;
       }
-      if (e.key === "Escape" && !typing && !s.overlay && !s.detailOpen && !s.commandOpen && s.uninstall === null && !s.confirmDelete) {
+      if (e.key === "Escape" && !typing && !s.overlay && !s.detailOpen && !s.commandOpen && s.uninstall === null && !s.confirmDelete && !s.fileCaution) {
         if (s.checked.length) s.clearChecks();
         else s.zoomOut();
       }

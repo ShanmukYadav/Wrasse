@@ -12,6 +12,11 @@ export function unusedFactor(days: number): number {
   return 1;
 }
 
+/** File and model ages here are scan dates ("approx"). Over a year, they start unticked. */
+function approxOld(n: DiskNode): boolean {
+  return n.lastOpenedDays > 365 && (n.kind === "file" || n.kind === "model");
+}
+
 function allowed(disk: Disk, n: DiskNode): boolean {
   return (
     n.size > 0 &&
@@ -42,6 +47,7 @@ export function planFree(disk: Disk, target: number): FreePlan {
     bytes: n.size,
     lastUsedDays: n.lastOpenedDays,
     why,
+    defaultOff: approxOld(n),
     score: n.size * unusedFactor(n.lastOpenedDays) * (n.safety === "safe" ? 1 : 0.7),
   });
   const stack = [disk.root];
@@ -60,11 +66,11 @@ export function planFree(disk: Disk, target: number): FreePlan {
           heldRunning += bytes;
           continue;
         }
-        push({ id: n.id, parts: parts.map((p) => p.id), bytes, lastUsedDays: n.lastOpenedDays, why: n.app.neverOpened ? "neverOpened" : "unusedApp", score: bytes * unusedFactor(n.lastOpenedDays) * 0.7 });
+        push({ id: n.id, parts: parts.map((p) => p.id), bytes, lastUsedDays: n.lastOpenedDays, why: n.app.neverOpened ? "neverOpened" : "unusedApp", defaultOff: false, score: bytes * unusedFactor(n.lastOpenedDays) * 0.7 });
       } else if (n.orphan && n.kind === "dir" && n.depth >= 3) {
         const parts = n.children.map((c) => disk.nodes[c]).filter((c) => allowed(disk, c));
         const bytes = parts.reduce((s, p) => s + p.size, 0);
-        if (parts.length) push({ id: n.id, parts: parts.map((p) => p.id), bytes, lastUsedDays: n.lastOpenedDays, why: "appRemoved", score: bytes * unusedFactor(n.lastOpenedDays) * 0.7 });
+        if (parts.length) push({ id: n.id, parts: parts.map((p) => p.id), bytes, lastUsedDays: n.lastOpenedDays, why: "appRemoved", defaultOff: false, score: bytes * unusedFactor(n.lastOpenedDays) * 0.7 });
       } else descend();
     } else if (n.category === "junk") {
       if (n.ruleId && allowed(disk, n)) push(single(n, n.safety === "safe" ? "rebuilds" : "unused"));

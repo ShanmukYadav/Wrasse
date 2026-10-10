@@ -14,7 +14,9 @@ pre-commit hook), so this file can't drift from what Wrasse actually does.
   would be skipped and why, and whether it can be undone. `safety::remove` re-runs every check
   right before acting (protected, Never touch list, open, iCloud-only, …) and confirms it's the
   same file (device and file id), not swapped for a link, same owner, and for "your call" items
-  unchanged in size and date. Anything that changed is skipped and logged.
+  unchanged in size and date. Large & Old also sends the allocated size and modification time
+  from the scan; a file that no longer matches is skipped and reported as changed since the scan.
+  Anything that changed is skipped and logged.
 - **The tray first.** By default items go to the quarantine tray
   (`~/Library/Application Support/com.shanmukyadav.wrasse/Quarantine`, same disk, so a move is a
   rename). Each move is written to the batch's manifest before it happens and marked done after;
@@ -122,14 +124,17 @@ and logs it (dry run reports them without running):
 
 - `EmptyTrash`: `osascript -e 'tell application "Finder" to empty trash'`. Not undoable. Refused
   while the Trash is on the Never touch list. If Finder hasn't answered after 2 minutes, only
-  that `osascript` is stopped (Finder is not); Wrasse reports that it couldn't ask.
+  that `osascript` is stopped (Finder is not). Wrasse reports "Emptying the Trash stopped after
+  2 minutes and may be partly done." That is a failure, not success: the empty may already have
+  started.
 - `BrewUninstallCask`: `brew uninstall --cask -- <token>` (no `--zap`: the leftovers go to the tray
   instead). `brew` must be `/opt/homebrew/bin/brew` or `/usr/local/bin/brew` and owned by the
   user; the token must be well formed and that cask's metadata must list the app. Not undoable.
 - `FinderMoveToTrash`: Finder moves a root-owned app (App Store, `.pkg`) to the user's Trash and
   asks for the password itself; Put Back works. Same 2-minute bound as emptying the Trash: only
   `osascript` is stopped, so a stuck Automation prompt can't hang Wrasse, and a password dialog
-  still has time to be answered.
+  still has time to be answered. A stop at that limit reports "Moving it to the Trash stopped
+  after 2 minutes and may be partly done." That is a failure, not success.
 
 For both app actions the app must be an `.app` directly in (or one folder inside)
 `/Applications` or `~/Applications`, on the startup disk, not protected, not on the Never touch

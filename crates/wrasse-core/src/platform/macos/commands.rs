@@ -26,6 +26,13 @@ const FINDER_ASK_TIMEOUT: Duration = Duration::from_secs(120);
 
 const COULDNT_ASK_QUIT: &str = "couldn't ask it to quit";
 
+/// Stopping `osascript` does not roll back what Finder already did. These are errors, never a
+/// successful empty or move.
+const TRASH_PARTLY_DONE: &str =
+    "Emptying the Trash stopped after 2 minutes and may be partly done.";
+const FINDER_PARTLY_DONE: &str =
+    "Moving it to the Trash stopped after 2 minutes and may be partly done.";
+
 /// Programs that only read state.
 const READ_ONLY: [&str; 3] = ["/usr/bin/pmset", "/usr/sbin/lsof", "/usr/bin/tmutil"];
 
@@ -74,11 +81,14 @@ pub fn is_excluded_from_backups(dir: &Path) -> bool {
 
 /// Empties the Trash through Finder, so macOS handles items the user's account can't delete
 /// directly. Not undoable. Called only from `safety::delegate`.
+///
+/// If Finder hasn't finished after 2 minutes, this returns an error
+/// ([`TRASH_PARTLY_DONE`]): the empty may already have started, so it is not success.
 pub fn empty_trash_via_finder() -> io::Result<()> {
     let out = run_osascript(
         &["-e", "tell application \"Finder\" to empty trash"],
         FINDER_ASK_TIMEOUT,
-        "couldn't ask Finder to empty the Trash",
+        TRASH_PARTLY_DONE,
     )?;
     if out.status.success() {
         Ok(())
@@ -92,6 +102,9 @@ pub fn empty_trash_via_finder() -> io::Result<()> {
 /// Moves one item to the Trash through Finder, which asks for an administrator password when the
 /// item is root-owned (App Store and package installs). Put Back works. The path goes in as an
 /// argument to the script, so it can't change the script.
+///
+/// If Finder hasn't finished after 2 minutes, this returns an error
+/// ([`FINDER_PARTLY_DONE`]): the move may already have started, so it is not success.
 pub fn finder_move_to_trash(path: &Path) -> io::Result<()> {
     let Some(p) = path.to_str() else {
         return Err(io::Error::from(io::ErrorKind::InvalidInput));
@@ -108,7 +121,7 @@ pub fn finder_move_to_trash(path: &Path) -> io::Result<()> {
             p,
         ],
         FINDER_ASK_TIMEOUT,
-        "couldn't ask Finder to move it to the Trash",
+        FINDER_PARTLY_DONE,
     )?;
     if out.status.success() {
         Ok(())
@@ -360,7 +373,7 @@ mod tests {
         let err = run_osascript(
             &["-e", "delay 30"],
             Duration::from_millis(500),
-            COULDNT_ASK_QUIT,
+            TRASH_PARTLY_DONE,
         )
         .unwrap_err();
         assert!(
@@ -368,7 +381,9 @@ mod tests {
             "osascript was not stopped: {:?}",
             started.elapsed()
         );
-        assert_eq!(err.to_string(), COULDNT_ASK_QUIT);
+        assert_eq!(err.to_string(), TRASH_PARTLY_DONE);
+        assert!(TRASH_PARTLY_DONE.contains("may be partly done"));
+        assert!(FINDER_PARTLY_DONE.contains("may be partly done"));
         let still = Command::new("/bin/ps")
             .args(["-ax", "-o", "command="])
             .output()

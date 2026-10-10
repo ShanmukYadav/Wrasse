@@ -73,6 +73,9 @@ pub struct BigFile {
     pub last_used_days: u32,
     pub approx: bool,
     pub kind: FileKind,
+    /// Modification time from the scan, seconds since the Unix epoch. Sent back with a move so
+    /// a file that changed after the scan is skipped.
+    pub mtime: u64,
 }
 
 /// Folders Large & Old and Duplicates never look into: the Library (apps, caches and Wrasse's own
@@ -157,9 +160,10 @@ pub fn large_files(
         .into_iter()
         .map(|(path, bytes)| {
             let spot = last_used(&path).map(|s| today.saturating_sub((s / 86_400) as u32));
-            let scanned = tree
+            let node = tree
                 .find(&format!("{prefix}{}", path.display()))
-                .map_or(today, |id| tree.node(id).last_used_day);
+                .map(|id| tree.node(id));
+            let scanned = node.map_or(today, |n| n.last_used_day);
             BigFile {
                 kind: kind_of(
                     &path
@@ -169,6 +173,7 @@ pub fn large_files(
                 ),
                 last_used_days: spot.unwrap_or_else(|| today.saturating_sub(scanned)),
                 approx: spot.is_none(),
+                mtime: node.map_or(0, |n| n.mtime),
                 bytes,
                 path,
             }
@@ -250,6 +255,11 @@ mod tests {
             "not inside an app, other users', the Library, hidden folders, model blobs or environments"
         );
         assert_eq!(found[0].last_used_days, 400, "from Spotlight");
+        assert!(found[1].approx, "no Spotlight date: the age is approximate");
+        assert!(
+            found[1].mtime > 0,
+            "the scan's modification time travels with the file"
+        );
         crate::platform::remove_test_dir(&root);
     }
 }

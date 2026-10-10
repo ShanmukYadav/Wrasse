@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type DiskNode, type FreeWhy, type PathRemoval, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { type DiskNode, type FreeWhy, type PathRemoval, type ScannedFile, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type LensId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -111,6 +111,8 @@ type State = {
   checked: number[];
   /** A removal waiting for confirmation (caution, or "Not undoable"). */
   confirmDelete: { ids: number[]; kind: ConfirmKind; handPicked: boolean } | null;
+  /** Large & Old files in Documents or Desktop, waiting on the full caution sheet. */
+  fileCaution: { files: ScannedFile[]; run: () => void } | null;
   /** Dry-run: actions only report what they would do (dev builds start in it every launch). */
   dryRun: boolean;
 };
@@ -133,6 +135,10 @@ type Actions = {
   setDryRun: (on: boolean) => void;
   confirmDeleteRequest: () => void;
   cancelDelete: () => void;
+  /** Opens the full caution sheet for files in Documents or Desktop, then runs `run`. */
+  openFileCaution: (files: ScannedFile[], run: () => void) => void;
+  confirmFileCaution: () => void;
+  cancelFileCaution: () => void;
   deleteNow: (ids: number[]) => void;
   emptyTray: () => void;
   restoreTray: () => void;
@@ -208,16 +214,23 @@ export const useApp = create<State & Actions>((set, get) => {
     return true;
   }
 
+  const PARTLY_DONE = /(?:Emptying the Trash|Moving it to the Trash) stopped after 2 minutes and may be partly done\./;
   const failed = (e: unknown) => {
-    get().notify(e instanceof Error ? e.message : String(e));
+    const raw = e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
+    // A Finder action stopped at the 2-minute limit is an error. Show that sentence on its own,
+    // never a success toast.
+    get().notify(raw.match(PARTLY_DONE)?.[0] ?? raw);
     return null;
   };
   const fmtBytes = (b: number) => {
     const f = formatBytes(b, get().info?.units ?? "decimal");
     return `${f.value} ${f.unit}`;
   };
-  function reportSkipped(count: number) {
-    if (count) get().notify(t("delete.skippedToast", { count }));
+  function reportSkipped(skipped: number | { reason: string }[]) {
+    const count = typeof skipped === "number" ? skipped : skipped.length;
+    if (!count) return;
+    const sinceScan = typeof skipped !== "number" && skipped.every((s) => s.reason === "changedSinceScan");
+    get().notify(t(sinceScan ? "delete.changedSinceScanToast" : "delete.skippedToast", { count }));
   }
 
   /** Delete (to the tray): the core decides; only what it actually moved flies to the tray. */
@@ -269,7 +282,7 @@ export const useApp = create<State & Actions>((set, get) => {
       get().notify(t("tray.movedToast", { count: moved.length, size }), { label: t("tray.undo"), run: () => get().undoLastMove() });
       void syncTray();
     }
-    reportSkipped(result.skipped.length);
+    reportSkipped(result.skipped);
     ascendIfEmpty();
   }
 
@@ -349,7 +362,7 @@ export const useApp = create<State & Actions>((set, get) => {
     } else {
       get().notify(trayItems.length ? t("uninstall.toastFinderData", { name: app.name }) : t("uninstall.toastFinder", { name: app.name }));
     }
-    reportSkipped(r.skipped.length);
+    reportSkipped(r.skipped);
     void syncTray();
     ascendIfEmpty();
   }
@@ -432,6 +445,7 @@ export const useApp = create<State & Actions>((set, get) => {
     quitting: null,
     checked: [],
     confirmDelete: null,
+    fileCaution: null,
     deleted: [],
     dryRun: false,
 
@@ -496,6 +510,13 @@ export const useApp = create<State & Actions>((set, get) => {
       else if (c.kind === "emptyTrash") void emptyTrash(c.ids[0]);
     },
     cancelDelete: () => set({ confirmDelete: null }),
+    openFileCaution: (files, run) => set({ fileCaution: { files, run }, confirmDelete: null }),
+    confirmFileCaution: () => {
+      const run = get().fileCaution?.run;
+      set({ fileCaution: null });
+      run?.();
+    },
+    cancelFileCaution: () => set({ fileCaution: null }),
     setDryRun: (on) => {
       set({ dryRun: on });
       void api.setDryRun(on);
@@ -519,7 +540,7 @@ export const useApp = create<State & Actions>((set, get) => {
         }, 260);
         for (const n of gone) log(t("audit.deleted"), n.path, n.size);
         record(gone, "deleted");
-        reportSkipped(result.skipped.length);
+        reportSkipped(result.skipped);
       })();
     },
 
@@ -583,7 +604,7 @@ export const useApp = create<State & Actions>((set, get) => {
         get().notify(t("tray.movedToast", { count: items.length, size: fmtBytes(r.bytes) }), { label: t("tray.undo"), run: () => get().undoLastMove() });
         void syncTray();
       }
-      reportSkipped(r.skipped.length);
+      reportSkipped(r.skipped);
       return r.done.map((d) => d.path);
     },
     restoreItem: (id) => {
@@ -618,7 +639,7 @@ export const useApp = create<State & Actions>((set, get) => {
             bytes: Object.fromEntries(r.items.map((c) => [c.id, c.bytes])),
             why: Object.fromEntries(r.items.map((c) => [c.id, c.why])),
             total: r.total,
-            off: [],
+            off: r.items.filter((c) => c.defaultOff).map((c) => c.id),
             shortfall: r.shortfall,
             heldRecent: r.heldRecent,
             heldRunning: r.heldRunning,

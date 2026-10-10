@@ -66,6 +66,20 @@ pub struct Request {
     /// The user picked this item themselves (needed for Documents, Desktop and iCloud Drive).
     #[serde(default)]
     pub hand_picked: bool,
+    /// Size and modification time from the scan. When set, a file that no longer matches is
+    /// skipped (Large & Old). Absent for every other removal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scanned: Option<Scanned>,
+}
+
+/// What the scan recorded for a file, so a later move can see that it changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Scanned {
+    /// Allocated bytes (`st_blocks * 512`), the size the scan stored.
+    pub bytes: u64,
+    /// Modification time, seconds since the Unix epoch.
+    pub mtime: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -82,6 +96,8 @@ pub enum Reason {
     NotFound,
     /// It changed between the preview and the action (different file, now a link, or edited).
     Changed,
+    /// Its size or modification time no longer matches the scan that listed it.
+    ChangedSinceScan,
     InUse,
     /// An app that's open (its bundle, while a process runs from it).
     AppRunning,
@@ -288,6 +304,9 @@ pub fn prepare(ctx: &Context, requests: &[Request], mode: Mode) -> Plan {
 
 fn check(ctx: &Context, req: &Request, mode: Mode) -> Result<Planned, Reason> {
     let (identity, warnings) = vet(ctx, req, mode)?;
+    if req.scanned.is_some_and(|s| !matches_scan(&req.path, &s)) {
+        return Err(Reason::ChangedSinceScan);
+    }
     Ok(Planned {
         request: req.clone(),
         identity,
@@ -347,6 +366,23 @@ fn vet(ctx: &Context, req: &Request, mode: Mode) -> Result<(Identity, Vec<Warnin
     Ok((id, warnings))
 }
 
+/// The live file still has the size and modification time the scan recorded.
+fn matches_scan(path: &Path, scanned: &Scanned) -> bool {
+    let Ok(md) = fs::symlink_metadata(path) else {
+        return false;
+    };
+    // A link is a different thing than the file the scan listed.
+    if md.file_type().is_symlink() {
+        return false;
+    }
+    let mtime = md
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_secs());
+    crate::quarantine::size_on_disk(path) == scanned.bytes && mtime == scanned.mtime
+}
+
 /// Same file as planned? Safe cache folders may change size; "your call" items must not change.
 fn still_same(planned: &Planned) -> bool {
     let Ok(md) = fs::symlink_metadata(&planned.request.path) else {
@@ -390,6 +426,9 @@ pub fn remove(ctx: &Context, plan: &Plan, dry_run: bool) -> io::Result<Report> {
         let target = req.path.to_string_lossy();
         let refused = match vet(ctx, req, plan.mode) {
             Err(reason) => Some(reason),
+            Ok(_) if req.scanned.is_some_and(|s| !matches_scan(&req.path, &s)) => {
+                Some(Reason::ChangedSinceScan)
+            }
             Ok(_) if !still_same(item) => Some(Reason::Changed),
             Ok(_) => None,
         };
@@ -407,6 +446,8 @@ pub fn remove(ctx: &Context, plan: &Plan, dry_run: bool) -> io::Result<Report> {
                 dry_run,
                 if reason == Reason::Changed {
                     "changed since preview"
+                } else if reason == Reason::ChangedSinceScan {
+                    "changed since the scan"
                 } else {
                     "refused at the last moment"
                 },
@@ -791,6 +832,7 @@ mod tests {
             rule_id: None,
             root: None,
             hand_picked: false,
+            scanned: None,
         }
     }
 
@@ -896,6 +938,75 @@ mod tests {
         assert!(report.done.is_empty());
         assert_eq!(report.skipped[0].reason, Reason::Changed);
         assert_eq!(fs::read(&file).unwrap(), b"something else");
+        crate::platform::remove_test_dir(&base);
+    }
+
+    /// Large & Old sends the scan's size and mtime. A file that no longer matches is skipped
+    /// and stays where it is; one that still matches is moved.
+    #[test]
+    fn a_file_changed_since_the_scan_is_skipped_and_reported() {
+        let (base, ctx) = setup("since-scan");
+        let shot = |p: &Path| {
+            let md = fs::symlink_metadata(p).unwrap();
+            Scanned {
+                bytes: crate::quarantine::size_on_disk(p),
+                mtime: md
+                    .modified()
+                    .unwrap()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs(),
+            }
+        };
+        let file = ctx.home.join("Downloads/old.dmg");
+        let original = shot(&file);
+        let mut changed = req(file.clone(), Safety::YourCall);
+        changed.hand_picked = true;
+        changed.scanned = Some(original);
+        fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(
+                SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(original.mtime - 86_400),
+            )
+            .unwrap();
+        let plan = prepare(&ctx, &[changed], Mode::Quarantine);
+        assert!(plan.items.is_empty());
+        assert_eq!(plan.skipped[0].reason, Reason::ChangedSinceScan);
+        let report = remove(&ctx, &plan, false).unwrap();
+        assert!(report.done.is_empty());
+        assert_eq!(report.skipped[0].reason, Reason::ChangedSinceScan);
+        assert!(file.exists(), "a changed file stays put");
+
+        let grown = ctx.home.join("Downloads/grown.bin");
+        fs::write(&grown, vec![3u8; 1000]).unwrap();
+        let before = shot(&grown);
+        fs::OpenOptions::new()
+            .append(true)
+            .open(&grown)
+            .unwrap()
+            .write_all(&vec![9u8; 1_000_000])
+            .unwrap();
+        fs::File::options()
+            .write(true)
+            .open(&grown)
+            .unwrap()
+            .set_modified(SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(before.mtime))
+            .unwrap();
+        let mut sized = req(grown.clone(), Safety::YourCall);
+        sized.hand_picked = true;
+        sized.scanned = Some(before);
+        let plan = prepare(&ctx, &[sized.clone()], Mode::Quarantine);
+        assert_eq!(plan.skipped[0].reason, Reason::ChangedSinceScan);
+        assert!(grown.exists());
+
+        sized.scanned = Some(shot(&grown));
+        let plan = prepare(&ctx, &[sized], Mode::Quarantine);
+        assert!(plan.skipped.is_empty(), "{:?}", plan.skipped);
+        let report = remove(&ctx, &plan, false).unwrap();
+        assert_eq!(report.done.len(), 1);
+        assert!(!grown.exists());
         crate::platform::remove_test_dir(&base);
     }
 
@@ -1185,6 +1296,7 @@ mod tests {
                 rule_id: Some(m.rule_id.clone()),
                 root: Some(m.root.clone()),
                 hand_picked: false,
+                scanned: None,
             })
             .collect();
         assert_eq!(requests.len(), 9, "{found:#?}");

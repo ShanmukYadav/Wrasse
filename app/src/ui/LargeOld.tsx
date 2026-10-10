@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
-import { api, handPickPath, type BigFile, type DuplicateGroup, type FileKind } from "../api";
+import { api, docsOrDesktop, handPickPath, type BigFile, type DuplicateGroup, type FileKind, type ScannedFile } from "../api";
 import { Icon } from "../design/icons/Icon";
 import type { IconName } from "../design/icons/nodes";
 import { t } from "../i18n";
@@ -10,8 +10,10 @@ import { useApp } from "../store/app";
 import { MiddleEllipsis } from "./home/MiddleEllipsis";
 
 // Large & Old (docs/phase3-plan.md §5): the biggest files in the home folder with last use, and
-// Duplicates, where the user picks the copy to keep. Nothing is ticked until the user ticks it;
-// copies in Documents, Desktop or iCloud Drive are never suggested.
+// Duplicates, where the user picks the copy to keep. Nothing is ticked until the user ticks it,
+// including rows whose date says "approx". Copies in Documents, Desktop or iCloud Drive are
+// never suggested. Documents and Desktop open the full caution sheet; iCloud Drive keeps the
+// one-line note. Each move sends the size and mtime from the scan so a changed file is skipped.
 
 const SIZES = [100e6, 500e6, 1e9, 5e9];
 const KINDS: FileKind[] = ["video", "archive", "diskImage", "model", "audio", "image", "document", "other"];
@@ -55,6 +57,7 @@ export function LargeOld() {
 function Large() {
   const fmt = useFmt();
   const moveFilesToTray = useApp((s) => s.moveFilesToTray);
+  const openFileCaution = useApp((s) => s.openFileCaution);
   const [min, setMin] = useState<number>(() => {
     try {
       return Number(localStorage.getItem(SIZE_KEY)) || 500e6;
@@ -89,11 +92,13 @@ function Large() {
   );
   const pickedFiles = shown.filter((f) => picked.has(f.path));
   const pickedBytes = pickedFiles.reduce((s, f) => s + f.bytes, 0);
-  // Documents and Desktop may sync through iCloud: say so once before moving them.
-  const personal = pickedFiles.some((f) => handPickPath(f.path));
+  // Documents and Desktop get the full sheet. iCloud Drive alone keeps the one-line note.
+  const inDocsDesktop = pickedFiles.some((f) => docsOrDesktop(f.path));
+  const inCloudOnly = !inDocsDesktop && pickedFiles.some((f) => handPickPath(f.path));
   const [confirming, setConfirming] = useState(false);
+  const scanned: ScannedFile[] = pickedFiles.map((f) => ({ path: f.path, bytes: f.bytes, mtime: f.mtime }));
   const move = () =>
-    void moveFilesToTray(() => api.removePaths(pickedFiles.map((f) => f.path))).then((moved) => {
+    void moveFilesToTray(() => api.removePaths(scanned)).then((moved) => {
       setFiles((fs) => (fs ?? []).filter((f) => !moved.includes(f.path)));
       setPicked(new Set());
       setConfirming(false);
@@ -183,7 +188,17 @@ function Large() {
           type="button"
           className="btn btn-primary focus-ring"
           disabled={!pickedFiles.length}
-          onClick={() => (personal && !confirming ? setConfirming(true) : move())}
+          onClick={() => {
+            if (inDocsDesktop) {
+              openFileCaution(scanned, move);
+              return;
+            }
+            if (inCloudOnly && !confirming) {
+              setConfirming(true);
+              return;
+            }
+            move();
+          }}
           {...pressable}
         >
           <Icon name="tray" size={16} /> {confirming ? t("largeOld.moveAnyway") : t("largeOld.move", { count: pickedFiles.length, size: fmt(pickedBytes) })}

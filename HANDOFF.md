@@ -24,7 +24,7 @@ read the files under "Read first".
 - **Mac only for now.** Windows parity is deferred. The pre-commit hook still runs a Windows
   `cargo check` on wrasse-core, wrasse-fixtures and wrasse-cli (see PLAN.md status note).
 - **Stop and report at each phase checkpoint.** Don't start the next phase until the owner says
-  "start". Phase 3 isn't approved yet.
+  "start". Phase 3 is accepted. Don't start Phase 4 until the owner says "start".
 - **Test only on dummy apps and files you create, never the owner's real apps or data.** Tests run
   in temp folders (guarded by `platform::remove_test_dir`). Tests can never reach a real delegated
   OS action (`#[cfg(test)]` stop in `platform::run_delegated`).
@@ -52,7 +52,7 @@ scripts/check-security-audit.sh
 scripts/check-windows-compile.sh
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
-./dev.sh cargo test --workspace          # 72 tests in wrasse-core, all passing
+./dev.sh cargo test --workspace          # 74 tests in wrasse-core, all passing
 (cd app && ../dev.sh npm run build)
 scripts/check-idle-memory.sh             # with Wrasse quit
 ```
@@ -81,7 +81,7 @@ the hook, so run it yourself.
 
 - Phase 0 to 2: done and approved. Phase 2 was approved after a manual tray round trip of
   `~/WrasseTest`, where every file matched its SHA-256 (`~/WrasseTest-checksums.txt`).
-- **Phase 3 (macOS): steps 1 to 7 done. Checkpoint report is below. Not approved yet.**
+- **Phase 3 (macOS): steps 1 to 7 done and accepted, with the follow-up fixes below.**
   Don't start Phase 4 until the owner says "start". Windows stays deferred.
   - Done: app discovery (sources: folder, Homebrew cask, App Store, system; owner; Spotlight last
     use; leftovers in every Library place; shared and name-only leftovers start unticked; system
@@ -113,8 +113,8 @@ Homebrew and Finder routes: unit tests only. Homebrew is not installed; a root-o
 sudo. Neither was installed or run.
 
 Checks on this Mac, all passing: forbidden-API, SECURITY_AUDIT sync, Windows `cargo check` of
-wrasse-core / wrasse-fixtures / wrasse-cli, fmt, clippy `-D warnings`, **72 tests** in wrasse-core
-(was 68), app `npm run build`, idle memory **133.9 MB** (budget 140).
+wrasse-core / wrasse-fixtures / wrasse-cli, fmt, clippy `-D warnings`, **74 tests** in wrasse-core
+(was 72), app `npm run build`, idle memory **118.0 MB** (budget 140).
 
 Numbers carried from the earlier real-data runs (not re-measured this step): full scan with app
 discovery ~2.5 s; duplicate search 221 files, 2.2 GB hashed, 20 groups, 0.76 s, 35 MB peak;
@@ -125,16 +125,32 @@ the ranker offered single files deep in ~/Library (now each source is taken whol
 Finder AppleScripts could hang (quit no longer uses `osascript`; emptying the Trash and Finder
 Move to Trash give `osascript` 2 minutes, then only that process is stopped).
 
+Follow-up fixes accepted with the checkpoint:
+
+- Large & Old files in Documents or Desktop open the full caution sheet (list, iCloud warning,
+  "I understand"). A selection that is only in iCloud Drive keeps the one-line note. Duplicates
+  keep that note too. Before each move, allocated size and modification time are checked against
+  the scan (`WRSTREE3`); a file that changed is skipped and reported as changed since the scan.
+- A 2-minute stop of emptying the Trash says "Emptying the Trash stopped after 2 minutes and may
+  be partly done." Finder Move to Trash says "Moving it to the Trash stopped after 2 minutes and
+  may be partly done." Both are failures, never success.
+- A file or model in Free Up Space whose scan date is over a year (`last_opened_days` > 365)
+  stays in the plan and starts unticked. Large & Old still starts with nothing ticked, including
+  rows marked "approx". Select all is an explicit tick.
+- Before release, live-test the Homebrew cask uninstall route and the root-owned Finder Move to
+  Trash route. Both are unit-tested only. Homebrew is not installed on this Mac; the Finder route
+  needs an administrator password. The same note is in `docs/phase3-plan.md` §9 and PLAN.md Phase 6.
+- `~/WrasseTest/big-file.bin` was restored from the tray (not purged) and is back at that path.
+  The tray no longer lists it.
+
 **Stop here.** Windows is deferred. Don't start Phase 4 until the owner says "start".
 
 ### Other open issues
 
-- `~/WrasseTest/big-file.bin` is in the owner's tray (the owner moved it after the verify). Don't
-  touch it.
-- The Large & Old list moves files by path through `remove_items`. Documents/Desktop items ask
-  once (iCloud note); there's no full caution sheet there.
-- PLAN.md §6.9 asks for "old" by Spotlight last use; scan dates are labeled "approx" when
-  Spotlight has none. Fine as is.
+- The dummy app stays installed (`~/Applications/WrasseDummy.app`, its leftovers, and the orphan)
+  so the owner can try it in the app. `scripts/dummy-app.sh remove` deletes only those paths. Ask
+  the owner first.
+- Homebrew and the root-owned Finder route still need a live test before release (see above).
 
 
 ## Phase 4 and later

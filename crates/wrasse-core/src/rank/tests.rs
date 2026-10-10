@@ -498,9 +498,11 @@ fn reaches_a_10_gb_target_with_only_what_may_go() {
         p.items.iter().find(|c| c.id == id("chrome")).unwrap().why,
         Why::Rebuilds
     );
-    assert_eq!(
-        p.items.iter().find(|c| c.id == id("iso")).unwrap().why,
-        Why::LargeAndOld
+    let iso = p.items.iter().find(|c| c.id == id("iso")).unwrap();
+    assert_eq!(iso.why, Why::LargeAndOld);
+    assert!(
+        !iso.default_off,
+        "300 days is under a year, so it still starts ticked"
     );
     // Never offered, whatever the target.
     let (all, held_recent, held_running) = candidates(&f.disk, &limits());
@@ -556,4 +558,73 @@ fn shortfall_gone_items_and_never_touch() {
     assert_eq!(chosen, [f.ids["nodeModules"]]);
     assert_eq!(p.total, GB);
     assert_eq!(p.shortfall, 9 * GB);
+}
+
+/// File and model ages on the map come from the scan. Over a year, that approximate age starts
+/// unticked. Apps and younger files stay ticked.
+#[test]
+fn approx_old_files_and_models_start_unticked() {
+    let mut t = T { nodes: Vec::new() };
+    let root = t.add(
+        -1,
+        "Macintosh HD",
+        "/",
+        0,
+        0,
+        "keep",
+        json!({ "kind": "volume" }),
+    );
+    let files = t.add(
+        root as i64,
+        "Your Files",
+        "/Users/me",
+        0,
+        0,
+        "yourCall",
+        json!({ "kind": "dir" }),
+    );
+    let old = t.add(
+        files as i64,
+        "old.iso",
+        "/Users/me/Downloads/old.iso",
+        2 * GB,
+        400,
+        "yourCall",
+        json!({ "kind": "file" }),
+    );
+    let younger = t.add(
+        files as i64,
+        "year.iso",
+        "/Users/me/Downloads/year.iso",
+        2 * GB,
+        200,
+        "yourCall",
+        json!({ "kind": "file" }),
+    );
+    let models = t.add(
+        root as i64,
+        "AI Models",
+        "/Users/me/models",
+        0,
+        0,
+        "yourCall",
+        json!({ "kind": "dir", "category": "aiModels" }),
+    );
+    let model = t.add(
+        models as i64,
+        "old.gguf",
+        "/Users/me/models/old.gguf",
+        2 * GB,
+        500,
+        "yourCall",
+        json!({ "kind": "model", "category": "aiModels" }),
+    );
+    let p = plan(&t.disk(), 100 * GB, &Limits::default());
+    let off = |id: u32| p.items.iter().find(|c| c.id == id).unwrap().default_off;
+    assert!(off(old), "a file older than a year starts unticked");
+    assert!(!off(younger), "under a year still starts ticked");
+    assert!(
+        off(model),
+        "a model with an approximate old date starts unticked"
+    );
 }

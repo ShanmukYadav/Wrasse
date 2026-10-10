@@ -88,6 +88,7 @@ pub fn uninstall(
                 rule_id: None,
                 root: None,
                 hand_picked: true,
+                scanned: None,
             };
             let plan = safety::prepare(ctx, &[req], Mode::Quarantine);
             let report = safety::remove(ctx, &plan, dry_run)?;
@@ -131,6 +132,7 @@ pub fn uninstall(
             rule_id: None,
             root: None,
             hand_picked: true,
+            scanned: None,
         })
         .collect();
     if !requests.is_empty() {

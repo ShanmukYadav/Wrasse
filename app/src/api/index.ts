@@ -4,7 +4,7 @@
 import { inTauri, type AppInfo } from "../lib/backend";
 import { mockApi } from "../mock/api";
 import { tauriApi } from "./tauri";
-import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathRemoval } from "./types";
+import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -63,8 +63,10 @@ export interface WrasseApi {
   cancelDuplicates(): Promise<void>;
   /** Moves the chosen copies to the tray, keeping `keep`, after checking they're still identical. */
   removeDuplicates(keep: string, remove: string[]): Promise<PathRemoval>;
-  /** Moves files picked by hand to the tray (by path). */
-  removePaths(paths: string[]): Promise<PathRemoval>;
+  /** What moving these paths would do (Large & Old's caution sheet). */
+  previewPaths(files: ScannedFile[]): Promise<PathPreview>;
+  /** Moves files picked by hand to the tray (by path), re-checking each against the scan. */
+  removePaths(files: ScannedFile[]): Promise<PathRemoval>;
   /** Uninstalls an app: the bundle goes by its route (tray, Homebrew, Finder Trash), the chosen
    *  leftovers go to the tray. The core looks the app up again and checks it isn't running. */
   uninstall(disk: Disk, appId: number, leftoverIds: number[]): Promise<UninstallOutcome>;

@@ -79,6 +79,11 @@ pub struct Candidate {
     pub safety: Safety,
     pub score: f64,
     pub why: Why,
+    /// Starts unticked. File and model ages on the map are scan dates, which Large & Old labels
+    /// "approx" when Spotlight has no last-used date. An approximate age over a year is not
+    /// ticked until the user ticks it.
+    #[serde(default)]
+    pub default_off: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -94,6 +99,11 @@ pub struct Plan {
     pub held_recent: u64,
     /// Bytes left out because their app is open.
     pub held_running: u64,
+}
+
+/// A file or model older than a year, dated only from the scan (an "approx" age).
+fn approx_old(n: &UiNode) -> bool {
+    n.last_opened_days > 365 && matches!(n.kind, NodeKind::File | NodeKind::Model)
 }
 
 fn under(path: &str, places: &[PathBuf]) -> bool {
@@ -146,6 +156,7 @@ pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) 
         safety: n.safety,
         score: n.size as f64 * unused_factor(n.last_opened_days) * safety_weight(n.safety),
         why,
+        default_off: approx_old(n),
     };
     // Walk the tree; a node taken whole (an app, a rule match, a rebuildable folder, a model, an
     // orphan) is not looked into further.
@@ -195,6 +206,7 @@ pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) 
                     } else {
                         Why::UnusedApp
                     },
+                    default_off: false,
                 });
             }
             // An orphan (one removed app's folders) goes whole.
@@ -217,6 +229,7 @@ pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) 
                     safety: Safety::YourCall,
                     score: bytes as f64 * unused_factor(n.last_opened_days) * 0.7,
                     why: Why::AppRemoved,
+                    default_off: false,
                 });
             }
             Category::Apps => descend(&mut stack),

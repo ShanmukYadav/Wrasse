@@ -137,8 +137,12 @@ export const mockApi: WrasseApi = {
   async removeDuplicates(_keep, remove) {
     return mockRemoval(remove);
   },
-  async removePaths(paths) {
-    return mockRemoval(paths);
+  async previewPaths(files) {
+    const synced = files.filter((f) => /\/(Documents|Desktop|Library\/Mobile Documents|Library\/CloudStorage)\//.test(f.path)).map((f) => f.path);
+    return { bytes: files.reduce((s, f) => s + f.bytes, 0), undoable: true, synced, skipped: [] };
+  },
+  async removePaths(files) {
+    return mockRemoval(files.map((f) => f.path));
   },
   async planFree(disk, target) {
     return planFree(disk, target);

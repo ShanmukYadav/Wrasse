@@ -6,9 +6,9 @@ import type { WrasseApi } from ".";
 import type { AppInfo } from "../lib/backend";
 import { insights } from "./insights";
 import { detach, detachedRoots, reattach } from "./tree";
-import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathRemoval } from "./types";
+import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile } from "./types";
 
-type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean };
+type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean; scanned?: { bytes: number; mtime: number } };
 type CoreReport = { done: { path: string; bytes: number; entry: string | null }[]; skipped: { path: string; reason: SkipReason }[]; bytes: number; dryRun: boolean };
 type CorePreview = { bytes: number; undoable: boolean; synced: string[]; skipped: { path: string; reason: SkipReason }[] };
 type CoreUninstall = {
@@ -35,6 +35,15 @@ function request(n: DiskNode, opts: RemoveOptions): ItemRequest {
 
 function pathRemoval(r: CoreReport): PathRemoval {
   return { done: r.done.map((d) => ({ path: d.path, bytes: d.bytes, entry: d.entry ?? undefined })), skipped: r.skipped, bytes: r.bytes, dryRun: r.dryRun };
+}
+
+function pathPreview(p: CorePreview): PathPreview {
+  return { bytes: p.bytes, undoable: p.undoable, synced: p.synced, skipped: p.skipped };
+}
+
+/** Large & Old: each file carries the size and mtime the scan recorded. */
+function scannedItems(files: ScannedFile[]): ItemRequest[] {
+  return files.map((f) => ({ path: f.path, safety: "yourCall", handPicked: true, scanned: { bytes: f.bytes, mtime: f.mtime } }));
 }
 
 /** Maps the core's per-path results back to node ids. */
@@ -136,9 +145,11 @@ export const tauriApi: WrasseApi = {
   async removeDuplicates(keep, remove) {
     return pathRemoval(await invoke<CoreReport>("remove_duplicates", { keep, remove }));
   },
-  async removePaths(paths) {
-    const items: ItemRequest[] = paths.map((path) => ({ path, safety: "yourCall", handPicked: true }));
-    return pathRemoval(await invoke<CoreReport>("remove_items", { items, deleteNow: false }));
+  async previewPaths(files) {
+    return pathPreview(await invoke<CorePreview>("preview_removal", { items: scannedItems(files), deleteNow: false }));
+  },
+  async removePaths(files) {
+    return pathRemoval(await invoke<CoreReport>("remove_items", { items: scannedItems(files), deleteNow: false }));
   },
   planFree: (disk, target) => invoke<FreePlan>("plan_free", { target, gone: detachedRoots(disk) }),
   async uninstall(disk, appId, leftoverIds): Promise<UninstallOutcome> {

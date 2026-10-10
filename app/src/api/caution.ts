@@ -36,6 +36,12 @@ export function handPickPath(path: string): boolean {
   return HAND_PICK.test(path);
 }
 
+/** A file inside Documents or Desktop (not the folder itself). */
+const DOCS_DESKTOP = /^(~|\/Users\/[^/]+)\/(Documents|Desktop)\//;
+export function docsOrDesktop(path: string): boolean {
+  return DOCS_DESKTOP.test(path);
+}
+
 export function cautionFor(disk: Disk, id: number): Caution {
   const n = disk.nodes[id];
   if (!n || n.parent < 0 || n.kind === "ghost" || n.kind === "volume" || n.category === "system" || n.readOnly) return { kind: "blocked" };

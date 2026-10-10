@@ -283,6 +283,7 @@ fn clean(args: &[String]) {
                 rule_id: None,
                 root: None,
                 hand_picked,
+                scanned: None,
             })
             .collect();
         let plan = safety::prepare(

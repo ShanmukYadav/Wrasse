@@ -63,7 +63,9 @@ pub fn load(dir: &Path) -> Option<(UiDisk, u64)> {
 // since then?" and re-read only those folders.
 
 const TREE_FILE: &str = "scan-tree.bin";
-const TREE_MAGIC: &[u8; 8] = b"WRSTREE2";
+/// `WRSTREE3` adds each file's modification time (seconds). Older caches are ignored until the
+/// next scan, so Large & Old can compare a file to the scan that listed it.
+const TREE_MAGIC: &[u8; 8] = b"WRSTREE3";
 
 pub struct SavedTree {
     pub tree: Tree,
@@ -121,7 +123,7 @@ pub fn save_tree(
         ] {
             put_u32(&mut b, v);
         }
-        for v in [n.size, n.small_size, n.items, n.clone_shared] {
+        for v in [n.size, n.small_size, n.items, n.clone_shared, n.mtime] {
             put_u64(&mut b, v);
         }
         b.push(n.kind as u8);
@@ -188,7 +190,8 @@ pub fn load_tree(dir: &Path) -> Option<SavedTree> {
     for _ in 0..count {
         let (parent, first_child, next_sibling, name, small_count, last_used_day) =
             (r.u32()?, r.u32()?, r.u32()?, r.u32()?, r.u32()?, r.u32()?);
-        let (size, small_size, items, clone_shared) = (r.u64()?, r.u64()?, r.u64()?, r.u64()?);
+        let (size, small_size, items, clone_shared, mtime) =
+            (r.u64()?, r.u64()?, r.u64()?, r.u64()?, r.u64()?);
         let kind = if r.u8()? == Kind::File as u8 {
             Kind::File
         } else {
@@ -205,6 +208,7 @@ pub fn load_tree(dir: &Path) -> Option<SavedTree> {
             small_count,
             items,
             last_used_day,
+            mtime,
             clone_shared,
             kind,
             flags,
@@ -257,6 +261,12 @@ mod tests {
         assert_eq!(back.log_id.as_deref(), Some("uuid"));
         assert_eq!(back.tree.nodes.len(), tree.nodes.len());
         assert_eq!(back.tree.node(0).size, tree.node(0).size);
+        let file = back
+            .tree
+            .find(&format!("{}/data/sub/a.bin", dir.display()))
+            .unwrap();
+        assert_eq!(back.tree.node(file).mtime, tree.node(file).mtime);
+        assert!(tree.node(file).mtime > 0);
         assert_eq!(back.tree.root_path, tree.root_path);
         assert!(back
             .tree

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { api, cautionFor, strongest, type RemovePreview } from "../api";
+import { api, cautionFor, docsOrDesktop, strongest, type PathPreview, type RemovePreview, type ScannedFile } from "../api";
 import { Icon } from "../design/icons/Icon";
 import { iconFor, toneFor } from "../design/icons/semantic";
 import { t } from "../i18n";
@@ -16,7 +16,13 @@ import { useApp, type ConfirmKind } from "../store/app";
 // and warn when iCloud syncs an item to the user's other devices.
 export function CautionSheet() {
   const c = useApp((s) => s.confirmDelete);
-  return <AnimatePresence>{c && <Sheet key={`${c.kind}:${c.ids.join(",")}`} ids={c.ids} kind={c.kind} handPicked={c.handPicked} />}</AnimatePresence>;
+  const files = useApp((s) => s.fileCaution);
+  return (
+    <AnimatePresence>
+      {c && <Sheet key={`${c.kind}:${c.ids.join(",")}`} ids={c.ids} kind={c.kind} handPicked={c.handPicked} />}
+      {files && <FileSheet key={files.files.map((f) => f.path).join("\n")} files={files.files} />}
+    </AnimatePresence>
+  );
 }
 
 function Sheet({ ids, kind, handPicked }: { ids: number[]; kind: ConfirmKind; handPicked: boolean }) {
@@ -148,6 +154,112 @@ function Sheet({ ids, kind, handPicked }: { ids: number[]; kind: ConfirmKind; ha
                 : kind === "emptyTrash"
                   ? t("confirm.emptyTrashButton", { size: fmt(items[0]?.size ?? 0) })
                   : t("confirm.deleteNowButton", { size: fmt(total) })}
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// Large & Old files in Documents or Desktop. Same sheet as an OS folder: the list, the iCloud
+// warning from the preview, "I understand", then the move. Nothing moves before that.
+function FileSheet({ files }: { files: ScannedFile[] }) {
+  const units = useApp((s) => s.info?.units ?? "decimal");
+  const dryRun = useApp((s) => s.dryRun);
+  const { confirmFileCaution, cancelFileCaution } = useApp.getState();
+  const [understood, setUnderstood] = useState(false);
+  const [preview, setPreview] = useState<PathPreview | null>(null);
+  const fmt = (b: number) => {
+    const f = formatBytes(b, units);
+    return `${f.value} ${f.unit}`;
+  };
+  const allPersonal = files.every((f) => docsOrDesktop(f.path));
+  const title = files.length === 1 ? t("caution.titleOne", { name: files[0].path.split("/").pop() ?? files[0].path }) : t("caution.titleMany", { count: files.length });
+  const body = allPersonal ? t("caution.personal") : t("caution.personalSome");
+
+  useEffect(() => {
+    let live = true;
+    void api
+      .previewPaths(files)
+      .then((p) => live && setPreview(p))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [files]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      cancelFileCaution();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [cancelFileCaution]);
+
+  const total = preview?.bytes ?? files.reduce((s, f) => s + f.bytes, 0);
+  const synced = preview?.synced.length ?? 0;
+  const skipped = preview?.skipped ?? [];
+
+  return (
+    <motion.div
+      className="overlay-scrim"
+      onClick={cancelFileCaution}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1, transition: { duration: duration.base, ease: ease.out } }}
+      exit={{ opacity: 0, transition: { duration: duration.base, ease: ease.inOut } }}
+    >
+      <motion.div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={title}
+        className="overlay-panel caution glass-css"
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1, transition: spring.soft }}
+        exit={{ opacity: 0, scale: 0.96, transition: { duration: duration.fast, ease: ease.inOut } }}
+      >
+        <div className="caution-head">
+          <span className="caution-icon">
+            <Icon name="warning" tone="warning" size={24} />
+          </span>
+          <h2 className="text-title">{title}</h2>
+        </div>
+        <p className="text-label">{body}</p>
+        {synced > 0 && (
+          <p className="caution-synced text-label">
+            <Icon name="cloud" tone="warning" size={16} /> {t("confirm.synced", { count: synced })}
+          </p>
+        )}
+        <ul className="caution-list">
+          {files.slice(0, 5).map((f) => (
+            <li key={f.path} className="caution-item">
+              <Icon name="file" tone="neutral" size={16} />
+              <span className="caution-name">{f.path.split("/").pop()}</span>
+              <span className="text-caption text-muted">{f.path}</span>
+              <span className="caution-size tabular">{fmt(f.bytes)}</span>
+            </li>
+          ))}
+          {files.length > 5 && <li className="text-caption text-muted">{t("caution.more", { count: files.length - 5 })}</li>}
+        </ul>
+        {skipped.length > 0 && (
+          <p className="text-caption text-your-call">
+            {t("confirm.skipped", { count: skipped.length })} { [...new Set(skipped.map((s) => t(`skip.${s.reason}`)))].join(" · ") }
+          </p>
+        )}
+        <p className="text-caption text-muted">{t("caution.trayNote")}</p>
+        {dryRun && <p className="text-caption text-muted">{t("confirm.dryRunNote")}</p>}
+        <label className="caution-check">
+          <input type="checkbox" checked={understood} onChange={(e) => setUnderstood(e.target.checked)} />
+          <span className="text-label">{t("caution.understand")}</span>
+        </label>
+        <div className="caution-actions">
+          <button type="button" className="btn focus-ring" onClick={cancelFileCaution} autoFocus>
+            {t("caution.cancel")}
+          </button>
+          <motion.button type="button" className="btn btn-danger focus-ring" disabled={!understood} onClick={confirmFileCaution} {...pressable}>
+            <Icon name="trash" size={16} /> {t("caution.confirm", { size: fmt(total) })}
           </motion.button>
         </div>
       </motion.div>

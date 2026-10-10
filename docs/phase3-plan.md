@@ -69,7 +69,10 @@ call is given up after 10 s ("couldn't ask it to quit"). Never `forceTerminate`,
 Wrasse then waits up to 10 s and, if the app is still open (unsaved work prompt), says so and stops.
 `safety` re-checks at the last moment that no process runs from the bundle, so an app reopened in
 between is skipped (`Reason::AppRunning`). Finder's AppleScripts (empty Trash, Move to Trash) have
-their own 2-minute bound; only the `osascript` process is stopped.
+their own 2-minute bound; only the `osascript` process is stopped. A stop at that limit is a
+failure, never success. Emptying the Trash says "Emptying the Trash stopped after 2 minutes and
+may be partly done." Finder Move to Trash says "Moving it to the Trash stopped after 2 minutes
+and may be partly done."
 
 **Three routes, chosen by source and owner:**
 
@@ -125,6 +128,9 @@ safety_weight: safe 1.0, your call 0.7; keep excluded
   - Documents/Desktop/iCloud Drive items (hand-pick only);
   - Keep items, protected or never-touch paths, and held rules (app open);
   - running apps and anything used in the last 7 days (decision 8).
+- **Not pre-ticked:** a file or model whose age on the map is a scan date older than a year
+  (`last_opened_days` > 365) stays in the plan and starts unticked. Select all still ticks it.
+  Apps, orphans, junk and anything used within the year are unchanged.
 - **Shortfall:** if the target can't be reached without things used this month, the meter says so
   and shows how much is missing instead of offering them.
 - **Two numbers**, as PLAN.md §6.5 asks:
@@ -141,8 +147,14 @@ safety_weight: safe 1.0, your call 0.7; keep excluded
 - **Old:** not opened in over a year, by Spotlight last-used, else the newest of mtime and atime,
   labeled "approx".
 
-The scan tree gains mtime and atime for files of 1 MB or more (smaller files are already folded
-into their folder), a few bytes per entry. Type filters: video, archive, disk image, model, other (by extension and UTI).
+The scan tree stores each file's modification time in seconds (`WRSTREE3`; older tree caches are
+ignored until the next scan). Last-used day stays the newest of mtime and atime. Files of 1 MB or
+more are their own nodes; smaller files stay folded into their folder. Before each move, Wrasse
+compares the live allocated size and modification time with that scan record and skips a file
+that changed ("changed since the scan"). Nothing in the list starts ticked, including a row whose
+date says "approx". Documents and Desktop open the full caution sheet (the list, the iCloud
+warning, "I understand") for the whole selection. A selection that is only in iCloud Drive keeps
+the one-line note. Type filters: video, archive, disk image, model, other (by extension and UTI).
 
 **Duplicates** use size → partial hash → full hash:
 1. Group files of **10 MB or more** (decision 6) by exact size from the tree.
@@ -180,7 +192,9 @@ No new transitions: crossfade only, and removed items fly to the tray as today.
   tray now".
 - **Large & Old lens** (exists, dims tiles): adds a list overlay with the size slider, type chips
   and age, plus a Duplicates section of group cards. The duplicate chip on tiles stays.
-- **Caution sheet:** reused for Delete now and anything hand-pick-only, unchanged.
+- **Caution sheet:** reused for Delete now, OS folders and Keep data. Large & Old files in
+  Documents or Desktop use that same sheet. iCloud Drive files, and duplicate copies, keep the
+  one-line note.
 
 ## 7. Checkpoint tests (dummy apps only, never real apps)
 
@@ -241,3 +255,9 @@ Each has a recommendation; reply with the numbers you want changed, or "start" t
 11. **Homebrew on this Mac:** it isn't installed, so the cask route is checked by tests and dry-run
     only. *Recommended:* don't install Homebrew for this. Alternative: you install it and a dummy
     cask from a local tap for a live check.
+
+## 9. Release checklist
+
+Before release, live-test the Homebrew cask uninstall route and the root-owned Finder Move to
+Trash route. Both are unit-tested only. Homebrew is not installed on this Mac; the Finder route
+needs an administrator password.

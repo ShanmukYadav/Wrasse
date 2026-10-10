@@ -47,6 +47,9 @@ pub struct Node {
     pub items: u64,
     /// Most recent access (or modification) time under this node, in days since the Unix epoch.
     pub last_used_day: u32,
+    /// Modification time of this file, in seconds since the Unix epoch. `0` for a folder: Large
+    /// & Old compares a file's size and this time against the live file before moving it.
+    pub mtime: u64,
     /// Bytes under this node that may be shared with APFS clones.
     pub clone_shared: u64,
     pub kind: Kind,

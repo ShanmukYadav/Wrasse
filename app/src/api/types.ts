@@ -114,6 +114,8 @@ export type FreeCandidate = {
   bytes: number;
   lastUsedDays: number;
   why: FreeWhy;
+  /** Starts unticked: a file or model whose age is only a file date and is over a year ("approx"). */
+  defaultOff: boolean;
 };
 
 /** Free Up Space: the best candidates until the target, and what was held back. */
@@ -139,6 +141,8 @@ export type BigFile = {
   lastUsedDays: number;
   approx: boolean;
   kind: FileKind;
+  /** Modification time from the scan, seconds since the Unix epoch. */
+  mtime: number;
 };
 
 export type DuplicateCopy = {
@@ -151,6 +155,17 @@ export type DuplicateCopy = {
 };
 
 export type DuplicateGroup = { hash: string; bytes: number; copies: DuplicateCopy[]; reclaimable: number };
+
+/** What moving these paths would do, before Large & Old asks. */
+export type PathPreview = {
+  bytes: number;
+  undoable: boolean;
+  synced: string[];
+  skipped: { path: string; reason: SkipReason }[];
+};
+
+/** A file Large & Old is about to move, with the size and mtime from the scan. */
+export type ScannedFile = { path: string; bytes: number; mtime: number };
 
 /** Moving files to the tray by path (Large & Old, Duplicates). */
 export type PathRemoval = {
@@ -187,6 +202,7 @@ export type SkipReason =
   | "outsideRoot"
   | "notFound"
   | "changed"
+  | "changedSinceScan"
   | "inUse"
   | "appRunning"
   | "notSafeForDeleteNow"

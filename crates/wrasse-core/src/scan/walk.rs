@@ -137,6 +137,8 @@ struct FileOut {
     name: Box<str>,
     size: u64,
     last_used_day: u32,
+    /// Modification time, seconds since the Unix epoch.
+    mtime: u64,
     clone_shared: u64,
     flags: u8,
 }
@@ -276,6 +278,7 @@ fn unflatten(tree: &Tree, id: u32) -> DirOut {
                 name: tree.name(c).into(),
                 size: cn.size,
                 last_used_day: cn.last_used_day,
+                mtime: cn.mtime,
                 clone_shared: cn.clone_shared,
                 flags: cn.flags,
             }),
@@ -453,6 +456,7 @@ fn read_level(
                 name,
                 size,
                 last_used_day: used,
+                mtime: mtime_secs(&md),
                 clone_shared,
                 flags,
             });
@@ -529,6 +533,7 @@ fn push_dir(tree: &mut Tree, mut d: DirOut, parent: u32) -> u32 {
         small_count: d.small_count,
         items: d.items,
         last_used_day: d.last_used_day,
+        mtime: 0,
         clone_shared: d.clone_shared,
         kind: Kind::Dir,
         flags: d.flags,
@@ -557,6 +562,7 @@ fn push_dir(tree: &mut Tree, mut d: DirOut, parent: u32) -> u32 {
                     small_count: 0,
                     items: 1,
                     last_used_day: f.last_used_day,
+                    mtime: f.mtime,
                     clone_shared: f.clone_shared,
                     kind: Kind::File,
                     flags: f.flags,
@@ -568,6 +574,13 @@ fn push_dir(tree: &mut Tree, mut d: DirOut, parent: u32) -> u32 {
         tree.nodes[id as usize].first_child = cid;
     }
     id
+}
+
+fn mtime_secs(md: &fs::Metadata) -> u64 {
+    md.modified()
+        .ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_secs())
 }
 
 fn last_used_day(md: &fs::Metadata) -> u32 {

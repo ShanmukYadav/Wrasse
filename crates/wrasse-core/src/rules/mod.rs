@@ -824,6 +824,7 @@ mod tests {
                 rule_id: Some(m.rule_id.clone()),
                 root: Some(m.root.clone()),
                 hand_picked: false,
+                scanned: None,
             })
             .collect();
         for m in mine.iter().filter(|m| m.delegate.is_some()) {

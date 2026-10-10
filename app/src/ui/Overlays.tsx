@@ -18,7 +18,13 @@ export function Overlays() {
   const setOverlay = useApp((s) => s.setOverlay);
   useEffect(() => {
     if (!overlay) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOverlay(null);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const s = useApp.getState();
+      // The caution sheet is on top. Escape closes that first.
+      if (s.confirmDelete || s.fileCaution) return;
+      setOverlay(null);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [overlay, setOverlay]);
@@ -29,7 +35,11 @@ export function Overlays() {
         <motion.div
           key="scrim"
           className="overlay-scrim"
-          onClick={() => setOverlay(null)}
+          onClick={() => {
+            const s = useApp.getState();
+            if (s.confirmDelete || s.fileCaution) return;
+            setOverlay(null);
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1, transition: { duration: duration.base, ease: ease.out } }}
           exit={{ opacity: 0, transition: { duration: duration.base, ease: ease.inOut } }}

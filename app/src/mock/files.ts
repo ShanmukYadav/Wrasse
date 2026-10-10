@@ -3,15 +3,15 @@ import type { BigFile, DuplicateGroup, PathRemoval } from "../api/types";
 
 const GB = 1e9;
 const FILES: BigFile[] = [
-  { path: "~/Movies/Iceland Trip 2023.mov", bytes: 14.2 * GB, lastUsedDays: 610, approx: false, kind: "video" },
-  { path: "~/Downloads/Xcode_16.1.xip", bytes: 11.9 * GB, lastUsedDays: 420, approx: true, kind: "archive" },
-  { path: "~/Movies/Wedding Highlights.mov", bytes: 11.6 * GB, lastUsedDays: 40, approx: false, kind: "video" },
-  { path: "~/Downloads/Windows11_ARM.iso", bytes: 6.5 * GB, lastUsedDays: 390, approx: true, kind: "diskImage" },
-  { path: "~/Documents/Projects/render-final.mov", bytes: 4.1 * GB, lastUsedDays: 700, approx: false, kind: "video" },
-  { path: "~/models/llama-3.1-8b.Q8_0.gguf", bytes: 8.5 * GB, lastUsedDays: 12, approx: false, kind: "model" },
-  { path: "~/Music/Session stems.zip", bytes: 2.2 * GB, lastUsedDays: 900, approx: true, kind: "archive" },
-  { path: "~/Pictures/Exports/panorama.tif", bytes: 0.9 * GB, lastUsedDays: 500, approx: false, kind: "image" },
-  { path: "~/Downloads/ubuntu-24.04.iso", bytes: 0.6 * GB, lastUsedDays: 200, approx: true, kind: "diskImage" },
+  { path: "~/Movies/Iceland Trip 2023.mov", bytes: 14.2 * GB, lastUsedDays: 610, approx: false, kind: "video", mtime: 1 },
+  { path: "~/Downloads/Xcode_16.1.xip", bytes: 11.9 * GB, lastUsedDays: 420, approx: true, kind: "archive", mtime: 2 },
+  { path: "~/Movies/Wedding Highlights.mov", bytes: 11.6 * GB, lastUsedDays: 40, approx: false, kind: "video", mtime: 3 },
+  { path: "~/Downloads/Windows11_ARM.iso", bytes: 6.5 * GB, lastUsedDays: 390, approx: true, kind: "diskImage", mtime: 4 },
+  { path: "~/Documents/Projects/render-final.mov", bytes: 4.1 * GB, lastUsedDays: 700, approx: false, kind: "video", mtime: 5 },
+  { path: "~/models/llama-3.1-8b.Q8_0.gguf", bytes: 8.5 * GB, lastUsedDays: 12, approx: false, kind: "model", mtime: 6 },
+  { path: "~/Music/Session stems.zip", bytes: 2.2 * GB, lastUsedDays: 900, approx: true, kind: "archive", mtime: 7 },
+  { path: "~/Pictures/Exports/panorama.tif", bytes: 0.9 * GB, lastUsedDays: 500, approx: false, kind: "image", mtime: 8 },
+  { path: "~/Downloads/ubuntu-24.04.iso", bytes: 0.6 * GB, lastUsedDays: 200, approx: true, kind: "diskImage", mtime: 9 },
 ];
 
 export function mockLarge(minBytes: number): BigFile[] {
