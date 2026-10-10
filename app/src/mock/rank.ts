@@ -12,9 +12,9 @@ export function unusedFactor(days: number): number {
   return 1;
 }
 
-/** File and model ages here are scan dates ("approx"). Over a year, they start unticked. */
+/** An approximate file or model date over a year starts unticked. A known date stays ticked. */
 function approxOld(n: DiskNode): boolean {
-  return n.lastOpenedDays > 365 && (n.kind === "file" || n.kind === "model");
+  return n.approx === true && n.lastOpenedDays > 365 && (n.kind === "file" || n.kind === "model");
 }
 
 function allowed(disk: Disk, n: DiskNode): boolean {

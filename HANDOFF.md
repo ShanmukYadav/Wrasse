@@ -52,7 +52,7 @@ scripts/check-security-audit.sh
 scripts/check-windows-compile.sh
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
-./dev.sh cargo test --workspace          # 80 tests in wrasse-core, all passing
+./dev.sh cargo test --workspace          # 81 tests in wrasse-core, all passing
 ./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
 (cd app && ../dev.sh npm run build)
 scripts/check-idle-memory.sh             # with Wrasse quit
@@ -135,9 +135,10 @@ Follow-up fixes accepted with the checkpoint:
 - A 2-minute stop of emptying the Trash says "Emptying the Trash stopped after 2 minutes and may
   be partly done." Finder Move to Trash says "Moving it to the Trash stopped after 2 minutes and
   may be partly done." Both are failures, never success.
-- A file or model in Free Up Space whose scan date is over a year (`last_opened_days` > 365)
-  stays in the plan and starts unticked. Large & Old still starts with nothing ticked, including
-  rows marked "approx". Select all is an explicit tick.
+- A file or model in Free Up Space starts unticked only when its date is approximate (`approx`)
+  and over a year (`last_opened_days` > 365). A known last-used date over a year stays ticked.
+  Large & Old still starts with nothing ticked, including rows marked "approx". Select all is
+  an explicit tick.
 - Before release, live-test the Homebrew cask uninstall route and the root-owned Finder Move to
   Trash route. Both are unit-tested only. Homebrew is not installed on this Mac; the Finder route
   needs an administrator password. The same note is in `docs/phase3-plan.md` §9 and PLAN.md Phase 6.
@@ -149,8 +150,9 @@ Follow-up fixes accepted with the checkpoint:
   that hold no match for the lens dim.
 - A file is not an AI model from its extension alone. `.gguf` and `.safetensors` still have to
   carry their header. `.bin` and the other ambiguous extensions need a known header (GGUF,
-  safetensors, PyTorch, ONNX) or a `config.json` in the same folder. A zero-filled `.bin` is
-  not a model, so it no longer wears the chip or adds to the AI Models count.
+  safetensors, PyTorch, ONNX) or a `config.json` in the same folder whose JSON object has
+  `model_type` or `architectures`. A config without those keys, including `{}`, does not count.
+  A zero-filled `.bin` is not a model, so it no longer wears the chip or adds to the AI Models count.
 - A ticked box shows a check on the accent fill, and the row takes a light accent tint. That
   is the same control in Large & Old, Duplicates (the copy you keep), Free Up Space, System
   Junk and uninstall leftovers. Once something in Large & Old is ticked, the note says how
@@ -166,6 +168,27 @@ Follow-up fixes accepted with the checkpoint:
   opens from that button when the Large & Old filter is on. Re-checked on this Mac: forbidden-API,
   SECURITY_AUDIT sync, Windows `cargo check`, fmt, clippy `-D warnings`, 80 wrasse-core tests,
   the scope test, app `npm run build`, idle memory **120.0 MB** (budget 140).
+- "Show all of Macintosh HD" keeps the active filters and only widens to the whole disk (category
+  All, disk root, map). Grew stays on, so the map shows where things grew. The scope test covers
+  that widen (`app/src/ui/scope.test.ts`, 28 scopes).
+- Free Up Space starts a file or model unticked only when `approx` is set and `last_opened_days`
+  is over 365. A known last-used date over a year stays ticked. The walk still marks file and
+  model rows approximate: their age is the newer of access time and modification time, and
+  Spotlight is not queried per file. Apps keep their Spotlight date and stay ticked.
+- A `.bin` (and the other ambiguous extensions) beside `config.json` is a model only when that
+  file is a JSON object with `model_type` or `architectures`. `{}` and a config such as
+  `{"name":"not-a-model"}` do not count. A header still counts on its own. `.gguf` still needs
+  its own header.
+- Live check on `~/WrasseTest/changed-since-scan.bin` (created with `dd` of 500,000,000 bytes,
+  then removed through the tray). The scan recorded 500,002,816 allocated bytes. After appending
+  4,096 bytes the move was skipped as changed since the scan and the file stayed put. A rescan
+  moved it to the tray and purge removed that entry only. Purge reported 516,780,032 bytes.
+  `df -k` on `/System/Volumes/Data` showed Available 373,918,780 blocks before purge and
+  374,423,448 after, a rise of 516,780,032 bytes. The other files in that folder, and
+  `~/Documents/WrasseTest/old-big.bin`, were left in place.
+- Re-checked on this Mac: forbidden-API, SECURITY_AUDIT sync, Windows `cargo check`, fmt,
+  clippy `-D warnings`, 81 wrasse-core tests, the scope test (28 scopes), app `npm run build`,
+  idle memory **119.0 MB** on all three samples (budget 140).
 
 **Stop here.** Windows is deferred. Don't start Phase 4 until the owner says "start".
 

@@ -72,6 +72,8 @@ export function generateDisk(seed = 7): Disk {
       grewBy: 0,
       shade: 0,
       duplicateOf: undefined,
+      // Mock file and model ages are scan dates, the same fallback a real walk uses.
+      approx: kind === "file" || kind === "model" ? true : undefined,
     });
     if (p) p.children.push(id);
     return id;

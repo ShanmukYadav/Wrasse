@@ -142,6 +142,11 @@ pub struct UiNode {
     pub category: Category,
     pub kind: NodeKind,
     pub last_opened_days: u32,
+    /// The age came from file dates (the newer of access and modification), not from a known
+    /// last-used date. Free Up Space starts a file or model unticked only when this is set and
+    /// the age is over a year.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub approx: bool,
     pub safety: Safety,
     pub why: String,
     pub lenses: u32,
@@ -790,7 +795,8 @@ fn is_read_only_library(name: &str) -> bool {
 }
 
 /// Model weights worth listing on their own. The extension and size only decide whether to look;
-/// [`super::weights::is_model_weights`] has to see a real header or a sibling `config.json`.
+/// [`super::weights::is_model_weights`] has to see a real header or a sibling `config.json`
+/// with `model_type` or `architectures`.
 fn is_weights_file(path: &str, name: &str, size: u64) -> bool {
     let n = name.to_ascii_lowercase();
     let weights = [
@@ -1035,6 +1041,7 @@ impl Builder<'_> {
             );
             self.nodes[id as usize].size = bytes;
             self.nodes[id as usize].last_opened_days = last;
+            self.nodes[id as usize].approx = true;
         }
         // Leftover bytes (configs, partial downloads) stay with the cache, as one tile when big
         // enough to matter, otherwise on the cache tile itself.
@@ -1050,6 +1057,7 @@ impl Builder<'_> {
             );
             self.nodes[id as usize].size = left;
             self.nodes[id as usize].last_opened_days = last;
+            self.nodes[id as usize].approx = true;
         } else if left > 0 && self.nodes[node as usize].children.is_empty() {
             self.nodes[node as usize].size = left;
         } else if left > 0 {
@@ -1302,6 +1310,7 @@ impl Builder<'_> {
             category,
             kind,
             last_opened_days: 0,
+            approx: false,
             safety,
             why: why.into(),
             lenses: 0,
@@ -1345,6 +1354,8 @@ impl Builder<'_> {
         let id = self.virtual_node(&name, &path, Some(parent), ctx.category, kind, safety, &why);
         let n = &mut self.nodes[id as usize];
         n.last_opened_days = self.input.today.saturating_sub(node.last_used_day);
+        // The tree date is the file-date fallback. Spotlight last-used is not stored per file.
+        n.approx = matches!(kind, NodeKind::File | NodeKind::Model);
         n.rebuildable = ctx.rebuildable || is_cache_name(&name);
         n.leftover = ctx.leftover;
         n.read_only = is_read_only_library(&name);
@@ -1447,6 +1458,7 @@ impl Builder<'_> {
         let n = &mut self.nodes[id as usize];
         n.size = size;
         n.last_opened_days = self.input.today.saturating_sub(last_day);
+        n.approx = true;
         n.rebuildable = ctx.rebuildable;
         n.aggregate = true;
     }
@@ -1797,8 +1809,9 @@ mod tests {
             &proj.join("models/checkpoint-1/adapter_model.safetensors"),
             55_000_000,
         );
-        // Named like a weight file and large, but no header and no config.json: not a model.
+        // Named like a weight file and large. A config without model keys does not make it one.
         write(&proj.join("notes/pytorch_model.bin"), 50_000_000);
+        fs::write(proj.join("notes/config.json"), br#"{"name":"not-a-model"}"#).unwrap();
         write(&proj.join("notes/readme.bin"), 2_000_000);
         write(&root.join("Users/me/Documents/report.pdf"), 30_000_000);
 
@@ -1840,6 +1853,11 @@ mod tests {
         assert_eq!(group.parent, i64::from(ai.id));
         let mistral = n("Mistral-7B");
         assert_eq!(mistral.kind, NodeKind::Model);
+        assert!(
+            mistral.approx,
+            "a model dated from file dates is approximate"
+        );
+        assert!(!ai.approx, "a category folder is not an approximate date");
         assert!(mistral.size >= 60_000_000);
         let ckpt = n("checkpoint-1 · adapter_model.safetensors");
         assert_eq!(ckpt.kind, NodeKind::Model);
@@ -1851,6 +1869,7 @@ mod tests {
             .expect("zero-filled bin stays in the tree");
         assert_ne!(stray.kind, NodeKind::Model);
         assert_ne!(stray.category, Category::AiModels);
+        assert!(stray.approx, "the file's age still comes from file dates");
         // Claimed bytes leave Your Files, and nothing is counted twice.
         assert!(n("Your Files").size >= 50_000_000 + 30_000_000);
         assert!(n("Your Files").size < 50_000_000 + 30_000_000 + 15_000_000);

@@ -6,6 +6,7 @@ import { t } from "../i18n";
 import type { AppInfo } from "../lib/backend";
 import { formatBytes } from "../lib/format";
 import { mapMotion } from "../motion/tokens";
+import { showAllScope } from "../ui/scope";
 
 export type Overlay = "onboarding" | "junk" | "startup" | "settings" | "audit" | "history" | "design" | "largeOld" | null;
 export type ThemePref = "system" | "dark" | "light";
@@ -129,7 +130,7 @@ type Actions = {
   toggleFilter: (id: FilterId) => void;
   /** Turns one filter on or off without navigating. */
   setFilter: (id: FilterId, on: boolean) => void;
-  /** Clears filters, returns to the whole disk, and shows the map. */
+  /** Widens to the whole disk and shows the map. The active filters stay on. */
   showAll: () => void;
   select: (id: number | null, open?: boolean) => void;
   closeDetail: () => void;
@@ -488,16 +489,20 @@ export const useApp = create<State & Actions>((set, get) => {
     toggleFilter: (id) => set((s) => ({ filters: { ...s.filters, [id]: !s.filters[id] }, plan: null })),
     setFilter: (id, on) => set((s) => ({ filters: { ...s.filters, [id]: on }, plan: null })),
     showAll: () =>
-      set((s) => ({
-        lens: "all",
-        filters: { largeOld: false, grew: false },
-        focus: s.disk.root,
-        viewMode: "map",
-        plan: null,
-        selected: null,
-        detailOpen: false,
-        checked: [],
-      })),
+      set((s) => {
+        // The empty-state link only widens the folder. Grew (and Large & Old) stay on.
+        const next = showAllScope(s.filters);
+        return {
+          lens: next.category,
+          filters: next.filters,
+          focus: s.disk.root,
+          viewMode: "map",
+          plan: null,
+          selected: null,
+          detailOpen: false,
+          checked: [],
+        };
+      }),
 
     select: (id, open = true) => set({ selected: id, detailOpen: id !== null && open }),
     closeDetail: () => set({ detailOpen: false, selected: null }),

@@ -142,7 +142,7 @@ pub fn files_over(
 }
 
 /// [`kind_of`] for a real path. A name that looks like a model stays [`FileKind::Other`] unless
-/// the file has a model header or a sibling `config.json`.
+/// the file has a model header or a sibling `config.json` with `model_type` or `architectures`.
 pub fn file_kind(path: &Path) -> FileKind {
     let name = path
         .file_name()

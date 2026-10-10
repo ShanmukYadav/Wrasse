@@ -560,8 +560,8 @@ fn shortfall_gone_items_and_never_touch() {
     assert_eq!(p.shortfall, 9 * GB);
 }
 
-/// File and model ages on the map come from the scan. Over a year, that approximate age starts
-/// unticked. Apps and younger files stay ticked.
+/// Only an approximate date over a year starts unticked. A known last-used date over a year
+/// stays ticked, and so does a younger file.
 #[test]
 fn approx_old_files_and_models_start_unticked() {
     let mut t = T { nodes: Vec::new() };
@@ -583,6 +583,15 @@ fn approx_old_files_and_models_start_unticked() {
         "yourCall",
         json!({ "kind": "dir" }),
     );
+    let known = t.add(
+        files as i64,
+        "known.iso",
+        "/Users/me/Downloads/known.iso",
+        2 * GB,
+        400,
+        "yourCall",
+        json!({ "kind": "file", "approx": false }),
+    );
     let old = t.add(
         files as i64,
         "old.iso",
@@ -590,7 +599,7 @@ fn approx_old_files_and_models_start_unticked() {
         2 * GB,
         400,
         "yourCall",
-        json!({ "kind": "file" }),
+        json!({ "kind": "file", "approx": true }),
     );
     let younger = t.add(
         files as i64,
@@ -599,7 +608,7 @@ fn approx_old_files_and_models_start_unticked() {
         2 * GB,
         200,
         "yourCall",
-        json!({ "kind": "file" }),
+        json!({ "kind": "file", "approx": true }),
     );
     let models = t.add(
         root as i64,
@@ -610,6 +619,15 @@ fn approx_old_files_and_models_start_unticked() {
         "yourCall",
         json!({ "kind": "dir", "category": "aiModels" }),
     );
+    let known_model = t.add(
+        models as i64,
+        "known.gguf",
+        "/Users/me/models/known.gguf",
+        2 * GB,
+        500,
+        "yourCall",
+        json!({ "kind": "model", "category": "aiModels", "approx": false }),
+    );
     let model = t.add(
         models as i64,
         "old.gguf",
@@ -617,12 +635,20 @@ fn approx_old_files_and_models_start_unticked() {
         2 * GB,
         500,
         "yourCall",
-        json!({ "kind": "model", "category": "aiModels" }),
+        json!({ "kind": "model", "category": "aiModels", "approx": true }),
     );
     let p = plan(&t.disk(), 100 * GB, &Limits::default());
     let off = |id: u32| p.items.iter().find(|c| c.id == id).unwrap().default_off;
-    assert!(off(old), "a file older than a year starts unticked");
+    assert!(
+        !off(known),
+        "a known last-used date over a year stays ticked"
+    );
+    assert!(off(old), "an approximate date over a year starts unticked");
     assert!(!off(younger), "under a year still starts ticked");
+    assert!(
+        !off(known_model),
+        "a model with a known date over a year stays ticked"
+    );
     assert!(
         off(model),
         "a model with an approximate old date starts unticked"

@@ -86,6 +86,11 @@ export function activeFilters(filters: DiskFilters): FilterId[] {
   return on;
 }
 
+/** "Show all of Macintosh HD": category All on the disk root, with the same filters. */
+export function showAllScope(filters: DiskFilters): { category: "all"; filters: DiskFilters } {
+  return { category: "all", filters: { largeOld: filters.largeOld, grew: filters.grew } };
+}
+
 /** The folder name used in the empty sentence. The root uses the volume label passed in. */
 export function scopeWhere(disk: Disk, focus: number, rootLabel: string): string {
   if (focus === disk.root) return rootLabel;

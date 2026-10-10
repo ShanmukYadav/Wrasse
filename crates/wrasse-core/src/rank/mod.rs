@@ -79,9 +79,8 @@ pub struct Candidate {
     pub safety: Safety,
     pub score: f64,
     pub why: Why,
-    /// Starts unticked. File and model ages on the map are scan dates, which Large & Old labels
-    /// "approx" when Spotlight has no last-used date. An approximate age over a year is not
-    /// ticked until the user ticks it.
+    /// Starts unticked. Only a file or model whose date is approximate (`approx`) and over a
+    /// year. A known last-used date stays ticked.
     #[serde(default)]
     pub default_off: bool,
 }
@@ -101,9 +100,9 @@ pub struct Plan {
     pub held_running: u64,
 }
 
-/// A file or model older than a year, dated only from the scan (an "approx" age).
+/// A file or model older than a year whose date is approximate (file dates, not a known last use).
 fn approx_old(n: &UiNode) -> bool {
-    n.last_opened_days > 365 && matches!(n.kind, NodeKind::File | NodeKind::Model)
+    n.approx && n.last_opened_days > 365 && matches!(n.kind, NodeKind::File | NodeKind::Model)
 }
 
 fn under(path: &str, places: &[PathBuf]) -> bool {

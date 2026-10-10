@@ -14,8 +14,8 @@ export function planReason(disk: Disk, n: DiskNode, why?: FreeWhy): string {
   }
   if (n.rebuildable) return t("plan.why.rebuildable");
   if (n.category === "junk") return t("plan.why.junk");
-  // File and model ages on the map are scan dates. Large & Old labels those "approx".
-  if ((n.kind === "file" || n.kind === "model") && n.lastOpenedDays > 365) return t("plan.why.approxOld", { count: n.lastOpenedDays });
+  // Only an approximate file or model date says "approx". A known date over a year is just unused.
+  if ((n.kind === "file" || n.kind === "model") && n.approx && n.lastOpenedDays > 365) return t("plan.why.approxOld", { count: n.lastOpenedDays });
   if (n.lastOpenedDays >= 180) return t("plan.why.unused", { count: n.lastOpenedDays });
   if (n.safety === "safe") return t("plan.why.safe");
   return t("plan.why.large");

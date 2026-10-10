@@ -25,6 +25,8 @@ export type DiskNode = {
   category: Category;
   kind: NodeKind;
   lastOpenedDays: number;
+  /** Age came from file dates, not a known last-used date. Over a year, Free Up Space starts it unticked. */
+  approx?: boolean;
   safety: Safety;
   why: string;
   lenses: number; // bitmask of LENS_BIT
@@ -114,7 +116,7 @@ export type FreeCandidate = {
   bytes: number;
   lastUsedDays: number;
   why: FreeWhy;
-  /** Starts unticked: a file or model whose age is only a file date and is over a year ("approx"). */
+  /** Starts unticked only when the node's `approx` flag is set and the age is over a year. */
   defaultOff: boolean;
 };
 

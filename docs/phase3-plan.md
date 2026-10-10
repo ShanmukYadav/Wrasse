@@ -128,9 +128,11 @@ safety_weight: safe 1.0, your call 0.7; keep excluded
   - Documents/Desktop/iCloud Drive items (hand-pick only);
   - Keep items, protected or never-touch paths, and held rules (app open);
   - running apps and anything used in the last 7 days (decision 8).
-- **Not pre-ticked:** a file or model whose age on the map is a scan date older than a year
-  (`last_opened_days` > 365) stays in the plan and starts unticked. Select all still ticks it.
-  Apps, orphans, junk and anything used within the year are unchanged.
+- **Not pre-ticked:** a file or model starts unticked only when its date is approximate
+  (`approx`, from file dates rather than a known last-used date) and older than a year
+  (`last_opened_days` > 365). It stays in the plan. A known date over a year stays ticked.
+  Select all still ticks an unticked row. Apps, orphans, junk and anything used within the
+  year are unchanged.
 - **Shortfall:** if the target can't be reached without things used this month, the meter says so
   and shows how much is missing instead of offering them.
 - **Two numbers**, as PLAN.md §6.5 asks:
@@ -156,7 +158,7 @@ date says "approx". Documents and Desktop open the full caution sheet (the list,
 warning, "I understand") for the whole selection. A selection that is only in iCloud Drive keeps
 the one-line note. Type filters: video, archive, disk image, model, other (by extension and UTI).
 The model type is not the extension alone: `.gguf` and `.safetensors` must carry their header, and
-`.bin` and the other ambiguous extensions need a known header or a `config.json` beside the file.
+`.bin` and the other ambiguous extensions need a known header or a `config.json` beside the file that contains `model_type` or `architectures`. A config without those keys does not count.
 
 **Duplicates** use size → partial hash → full hash:
 1. Group files of **10 MB or more** (decision 6) by exact size from the tree.

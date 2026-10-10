@@ -2,7 +2,7 @@
 // Run: ./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
 import { LENS_BIT, type Disk, type DiskNode } from "../api/types.ts";
 import type { CategoryId, DiskFilters } from "../design/tokens";
-import { buttonBytes, buttonCount, scopeSummary, visibleRows } from "./scope.ts";
+import { buttonBytes, buttonCount, scopeSummary, showAllScope, visibleRows } from "./scope.ts";
 
 const AI = LENS_BIT.aiModels;
 const GREW = LENS_BIT.grew;
@@ -100,6 +100,23 @@ assert(buttonCount(drilled, 2, "all", grew) === 0, "Quiet + Grew ignores the gre
 assert(buttonCount(drilled, 0, "all", grew) === 1, "the disk root still shows the folder that grew");
 assert(visibleRows(drilled, 1, "all", grew).join() === "3", "the grew folder shows its file");
 
+// "Show all of Macintosh HD" keeps the filters and only widens to the disk root.
+const shown = showAllScope(grew);
+assert(shown.category === "all", "Show all uses category All");
+assert(shown.filters.grew && !shown.filters.largeOld, "Show all keeps Grew and leaves Large & Old off");
+assert(buttonCount(drilled, 2, "all", grew) === 0, "Quiet + Grew is empty before Show all");
+const wideRows = visibleRows(drilled, 0, shown.category, shown.filters);
+assert(wideRows.join() === "1", "Show all from Quiet shows the folder that grew");
+assert(buttonCount(drilled, 0, shown.category, shown.filters) === wideRows.length, "Show all count matches those rows");
+const fromModels = showAllScope(grew);
+assert(buttonCount(bug, 1, "aiModels", fromModels.filters) === 0, "AI Models + Grew stays empty");
+const bugWide = visibleRows(bug, 0, fromModels.category, fromModels.filters);
+assert(bugWide.join() === "2", "Show all from AI Models shows where things grew");
+assert(buttonCount(bug, 0, fromModels.category, fromModels.filters) === bugWide.length, "that widened count matches the rows");
+const bothKept = showAllScope(both);
+assert(bothKept.filters.largeOld && bothKept.filters.grew, "Show all keeps both filters");
+assert(visibleRows(split, 0, bothKept.category, bothKept.filters).join() === "1", "widened AND still needs one leaf with both bits");
+
 // Category and filter together: a grew file outside AI Models does not count.
 const mixed = finish([
   dir(0, "Macintosh HD", -1, 0, [1, 2]),
@@ -131,8 +148,11 @@ const scopes: [Disk, number, CategoryId, DiskFilters][] = [
   [split, 1, "all", largeOld],
   [split, 1, "junk", grew],
   [drilled, 0, "all", grew],
+  [drilled, 0, showAllScope(grew).category, showAllScope(grew).filters],
   [drilled, 1, "all", grew],
   [drilled, 2, "all", grew],
+  [bug, 0, showAllScope(grew).category, showAllScope(grew).filters],
+  [bug, 0, showAllScope(both).category, showAllScope(both).filters],
   [drilled, 2, "apps", both],
   [mixed, 0, "all", grew],
   [mixed, 0, "aiModels", grew],

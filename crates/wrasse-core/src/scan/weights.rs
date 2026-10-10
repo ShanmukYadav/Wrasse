@@ -2,8 +2,9 @@
 //!
 //! `.gguf` and `.safetensors` still have to carry their own header. `.bin` and the other
 //! ambiguous extensions need one of the known headers, or a `config.json` in the same folder
-//! (a Hugging Face snapshot's raw `pytorch_model.bin` is the usual case). Only the first 8 KB
-//! is read.
+//! whose JSON object has `model_type` or `architectures` (a Hugging Face snapshot's raw
+//! `pytorch_model.bin` is the usual case). Only the first 8 KB of the weight file is read.
+//! The config is read only up to 1 MB.
 
 use std::fs::File;
 use std::io::Read;
@@ -12,6 +13,8 @@ use std::path::Path;
 const PREFIX: usize = 8192;
 /// A safetensors header longer than this is not a header.
 const MAX_HEADER: u64 = 100_000_000;
+/// `config.json` bigger than this is not read.
+const CONFIG_CAP: u64 = 1_048_576;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Header {
@@ -46,9 +49,28 @@ fn extension(path: &Path) -> Option<String> {
         .map(|e| e.to_ascii_lowercase())
 }
 
+/// A sibling `config.json` counts only when it is a JSON object with `model_type` or
+/// `architectures`. Any other config, including `{}`, does not make the file a model.
 fn sibling_config(path: &Path) -> bool {
-    path.parent()
-        .is_some_and(|dir| dir.join("config.json").is_file())
+    let Some(dir) = path.parent() else {
+        return false;
+    };
+    let cfg = dir.join("config.json");
+    let Ok(meta) = std::fs::metadata(&cfg) else {
+        return false;
+    };
+    if !meta.is_file() || meta.len() == 0 || meta.len() > CONFIG_CAP {
+        return false;
+    }
+    let Ok(text) = std::fs::read_to_string(&cfg) else {
+        return false;
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return false;
+    };
+    value
+        .as_object()
+        .is_some_and(|o| o.contains_key("model_type") || o.contains_key("architectures"))
 }
 
 fn header(path: &Path) -> Option<Header> {
@@ -150,7 +172,7 @@ mod tests {
         assert!(is_model_weights(&path));
         let fake = dir.join("zeros.gguf");
         write(&fake, &[0u8; 32]);
-        write(&dir.join("config.json"), b"{}");
+        write(&dir.join("config.json"), br#"{"model_type":"llama"}"#);
         assert!(
             !is_model_weights(&fake),
             "a .gguf still needs the GGUF header"
@@ -174,13 +196,38 @@ mod tests {
     }
 
     #[test]
-    fn bin_needs_a_header_or_config_json() {
+    fn bin_needs_a_header_or_a_model_config() {
         let dir = scratch();
         let path = dir.join("pytorch_model.bin");
         write(&path, &[0u8; 32]);
         assert!(!is_model_weights(&path));
         write(&dir.join("config.json"), b"{}");
+        assert!(!is_model_weights(&path), "an empty config is not a model");
+        write(&dir.join("config.json"), br#"{"model_type":"bert"}"#);
         assert!(is_model_weights(&path));
+        write(
+            &dir.join("config.json"),
+            br#"{"architectures":["BertModel"]}"#,
+        );
+        assert!(is_model_weights(&path));
+        crate::platform::remove_test_dir(&dir);
+    }
+
+    #[test]
+    fn a_bin_beside_a_non_model_config_json_is_not_a_model() {
+        let dir = scratch();
+        let path = dir.join("weights.bin");
+        write(&path, &[0u8; 32]);
+        write(&dir.join("config.json"), br#"{"name":"not-a-model"}"#);
+        assert!(
+            !is_model_weights(&path),
+            "a config without model_type or architectures is not a model"
+        );
+        write(&dir.join("config.json"), br#"{"note":"model_type"}"#);
+        assert!(
+            !is_model_weights(&path),
+            "those words in a value do not count"
+        );
         crate::platform::remove_test_dir(&dir);
     }
 
