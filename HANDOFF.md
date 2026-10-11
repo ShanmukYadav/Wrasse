@@ -54,7 +54,7 @@ scripts/check-security-audit.sh
 scripts/check-windows-compile.sh
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
-./dev.sh cargo test --workspace          # 99 tests in wrasse-core, all passing
+./dev.sh cargo test --workspace          # 102 tests in wrasse-core, all passing
 ./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
 (cd app && ../dev.sh npm run build)
 scripts/check-idle-memory.sh             # with Wrasse quit; peak 200 MB, idle 100 MB
@@ -240,9 +240,20 @@ Follow-up fixes accepted with the checkpoint:
   and re-execs once so libmalloc returns the scan's pages. Two cold launches, autoscan on:
   peaks **198.4** and **178.4 MB**, idle **96.0** (96.0, 95.0, 95.0) and **95.0** (95.0, 95.0,
   94.9) MB. Both budgets pass.
+- The flat tiles are back to the D1 paint. A resting tile is a gradient, a corner glow, and a
+  shadow, painted in the window: the glow is a background, and the tile has no transform,
+  filter, opacity, or rounded overflow, so it is not its own layer. The scan ring is the old
+  sweep, two circles growing from 8vmax to 160vmax. They grow by width and the border fades.
+  The scan area clips them. A scale that reaches that diameter is stored at the circle's size
+  (one try peaked at 350 MB). Two cold launches of this build, autoscan on, peaked at
+  **276.4** and **280.3 MB**, both at 2–3 s, and the quiet launch idled at **98.0, 98.0,
+  98.0 MB**. That is over 250 MB, so the peak budget stays **200 MB** and the idle budget
+  stays **100 MB**. On the second launch the sweep came back at 50 s (277 MB) and in the last
+  idle sample (344.9 MB); the five other idle samples stayed at 98.
 
-**Stop here.** Windows is deferred. AI models are at the checkpoint. Don't open diagnostics or
-developer junk until the owner says to continue.
+**Stop here.** Windows is deferred. AI models are at the checkpoint, including project models
+(Your call, never pre-selected), project Hugging Face caches, the iCloud-copy warning, and the
+two-format note. Don't open diagnostics or developer junk until the owner says to continue.
 
 ### Other open issues
 

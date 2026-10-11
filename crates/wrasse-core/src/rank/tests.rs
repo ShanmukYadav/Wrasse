@@ -654,3 +654,81 @@ fn approx_old_files_and_models_start_unticked() {
         "a model with an approximate old date starts unticked"
     );
 }
+
+#[test]
+fn icloud_duplicate_models_are_not_offered() {
+    let mut t = T { nodes: Vec::new() };
+    let root = t.add(-1, "HD", "/", 0, 0, "keep", json!({ "kind": "volume" }));
+    let ai = t.add(
+        root as i64,
+        "AI Models",
+        "/Users/me/.ollama",
+        0,
+        0,
+        "yourCall",
+        json!({ "kind": "dir", "category": "aiModels" }),
+    );
+    let cache_path = "/Users/me/.cache/huggingface/hub/models--a/snapshots/rev/model.safetensors";
+    let cloud_path =
+        "/Users/me/Library/Mobile Documents/com~apple~CloudDocs/Backup/model.safetensors";
+    let cache = t.add(
+        ai as i64,
+        "cache-copy",
+        cache_path,
+        2 * GB,
+        400,
+        "yourCall",
+        json!({
+            "kind": "model",
+            "category": "aiModels",
+            "model": {
+                "tool": "huggingFace",
+                "removal": "huggingFace",
+                "weight": cache_path,
+                "partnerWeight": cloud_path,
+                "dupeLevel": "sampled"
+            }
+        }),
+    );
+    let cloud = t.add(
+        ai as i64,
+        "cloud-copy",
+        cloud_path,
+        2 * GB,
+        400,
+        "yourCall",
+        json!({
+            "kind": "model",
+            "category": "aiModels",
+            "model": {
+                "tool": "huggingFace",
+                "removal": "huggingFace",
+                "weight": cloud_path
+            }
+        }),
+    );
+    let ollama = t.add(
+        ai as i64,
+        "llama",
+        "/Users/me/.ollama/models/manifests/library/llama/latest",
+        3 * GB,
+        200,
+        "yourCall",
+        json!({
+            "kind": "model",
+            "category": "aiModels",
+            "model": { "tool": "ollama", "removal": "ollama" }
+        }),
+    );
+    let (offered, _, _) = candidates(&t.disk(), &limits());
+    let ids: Vec<u32> = offered.iter().map(|c| c.id).collect();
+    assert!(
+        !ids.contains(&cache),
+        "the other copy of an iCloud duplicate stays unselected"
+    );
+    assert!(!ids.contains(&cloud), "the iCloud copy stays unselected");
+    assert!(
+        ids.contains(&ollama),
+        "a model outside that pair is still offered"
+    );
+}

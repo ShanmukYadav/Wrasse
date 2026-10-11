@@ -10,13 +10,16 @@ import { useReducedMotion, useScheme } from "../../lib/prefs";
 import { mapMotion } from "../../motion/tokens";
 
 // The scan: a calm sonar ring sweeping out from the center, the Wrasse mark at its heart and a
-// few bubbles rising, with live progress underneath. Plain CSS animations that repeat while
-// mounted: Home mounts this only while a scan runs, so re-renders, hovers and lens changes never
-// restart it, and it is gone the moment the scan ends. Reduced motion keeps only a fade.
+// few bubbles rising, with live progress underneath. Home mounts this only while a scan runs,
+// so it is gone the moment the scan ends. Reduced motion keeps only a fade.
 export function Sonar() {
   const scheme = useScheme();
   const reduced = useReducedMotion();
-  const vars = { "--sonar-dur": `${mapMotion.sonar}s`, "--bubble-dur": `${mapMotion.bubbleRise}s` } as CSSProperties;
+  const vars = {
+    "--sonar-dur": `${mapMotion.sonar}s`,
+    "--bubble-dur": `${mapMotion.bubbleRise}s`,
+    "--sonar-ink": reef.sonar[scheme],
+  } as CSSProperties;
   // The sweep holds still while the scan waits.
   const paused = useApp((s) => !!s.scanProgress?.paused);
   if (reduced) {
@@ -31,14 +34,15 @@ export function Sonar() {
   }
   return (
     <div className={`sonar ${paused ? "is-paused" : ""}`} style={vars}>
-      {/* One ring, and the sweep never scales it past its layout size. A scale above 1 makes
-          WebKit rasterize the transformed bounds, which is a full-window surface per ring. */}
-      <span className="sonar-ring" style={{ borderColor: reef.sonar[scheme] }} />
+      {/* Two rings, the old 8vmax → 160vmax sweep. Width and border color only. */}
+      {[0, 1].map((i) => (
+        <span key={i} className="sonar-ring" style={{ animationDelay: `${i * 0.35}s` }} />
+      ))}
       <span className="sonar-mark">
         <BrandMark size={56} />
       </span>
       <ScanReadout />
-      {Array.from({ length: Math.min(8, reef.bubbleCount) }, (_, i) => {
+      {Array.from({ length: reef.bubbleCount }, (_, i) => {
         const a = (i * 137.5 * Math.PI) / 180;
         const r = 60 + ((i * 53) % 260);
         return (

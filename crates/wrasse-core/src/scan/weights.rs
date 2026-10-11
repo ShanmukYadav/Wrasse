@@ -24,6 +24,32 @@ enum Header {
     Onnx,
 }
 
+/// `model.safetensors` and `pytorch_model.bin` side by side, with a config that names one model.
+///
+/// The check is the safetensors header, the PyTorch header, and `config.json` keys. Each weight
+/// file contributes at most its first 8 KB. The tensors are not read.
+pub fn same_weights_two_formats(dir: &Path) -> bool {
+    let safe = dir.join("model.safetensors");
+    let bin = dir.join("pytorch_model.bin");
+    if !present(&safe) || !present(&bin) || dataless(&safe) || dataless(&bin) {
+        return false;
+    }
+    header(&safe) == Some(Header::Safetensors)
+        && header(&bin) == Some(Header::Pytorch)
+        && sibling_config(&bin)
+}
+
+fn present(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|md| {
+        let t = md.file_type();
+        t.is_file() || t.is_symlink()
+    })
+}
+
+fn dataless(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|md| crate::platform::is_dataless(&md))
+}
+
 /// True when `path` is a model weight file. No size check: callers keep their own size gate.
 pub fn is_model_weights(path: &Path) -> bool {
     let Some(ext) = extension(path) else {
@@ -227,6 +253,31 @@ mod tests {
         assert!(
             !is_model_weights(&path),
             "those words in a value do not count"
+        );
+        crate::platform::remove_test_dir(&dir);
+    }
+
+    #[test]
+    fn two_formats_need_both_headers_and_a_model_config() {
+        let dir = scratch();
+        let safe = dir.join("model.safetensors");
+        let json = br#"{"format":"pt"}"#;
+        let mut bytes = (json.len() as u64).to_le_bytes().to_vec();
+        bytes.extend_from_slice(json);
+        write(&safe, &bytes);
+        write(&dir.join("pytorch_model.bin"), b"PK\x03\x04data.pkl");
+        assert!(!same_weights_two_formats(&dir), "no model config yet");
+        write(&dir.join("config.json"), b"{}");
+        assert!(
+            !same_weights_two_formats(&dir),
+            "an empty config is not enough"
+        );
+        write(&dir.join("config.json"), br#"{"model_type":"deberta"}"#);
+        assert!(same_weights_two_formats(&dir));
+        write(&dir.join("pytorch_model.bin"), &[0u8; 32]);
+        assert!(
+            !same_weights_two_formats(&dir),
+            "a zero-filled bin is not the pytorch copy"
         );
         crate::platform::remove_test_dir(&dir);
     }

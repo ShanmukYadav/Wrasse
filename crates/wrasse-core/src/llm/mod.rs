@@ -23,6 +23,19 @@ pub const CLONE_NOTE: &str = "clone, no space to gain";
 pub const SAMPLE_NOTE: &str =
     "Same size and edges as another model. A full check runs before removal.";
 
+/// Shown on an iCloud Drive copy that matches another model. Removing it removes it everywhere.
+pub const ICLOUD_DUPE_NOTE: &str =
+    "Removing this iCloud copy also removes it from your other devices.";
+
+/// `model.safetensors` and `pytorch_model.bin` in one folder. Headers only, not a tensor load.
+pub const FORMAT_NOTE: &str = "Same weights in two formats.";
+
+/// True for a path inside iCloud Drive (`~/Library/Mobile Documents`).
+pub fn icloud_synced_path(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    p.contains("/Library/Mobile Documents/") || p.contains("/com~apple~CloudDocs/")
+}
+
 const SAMPLE: u64 = 16 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

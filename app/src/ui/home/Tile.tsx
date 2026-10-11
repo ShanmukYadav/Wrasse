@@ -113,8 +113,8 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
     "--badge-shadow": c.shadow,
   } as CSSProperties;
 
-  // A plain button. A scale or layout transform gives every tile its own backing store,
-  // several MB each, for as long as the window is open.
+  // A plain button. Gradients and shadows paint here. No transform on the tile: that would
+  // give every block its own backing store for as long as the window is open.
   return (
     <button
       type="button"
@@ -124,7 +124,6 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
       aria-label={`${node.name}, ${size.value} ${size.unit}`}
       onClick={() => onOpen(node)}
     >
-      <span className="tile-glow" aria-hidden />
       <span className={`tile-head ${short ? "is-short" : ""}`}>
         {/* Narrow tiles drop the badge so the name stays readable. */}
         {widthPx >= 120 && (
@@ -230,7 +229,7 @@ function MiddleEllipsisInline({ text }: { text: string }) {
 function SizeBar({ fraction }: { fraction: number }) {
   return (
     <span className="size-bar" aria-hidden>
-      <span className="size-bar-fill" style={{ transform: `scaleX(${Math.max(0.02, Math.min(1, fraction))})` }} />
+      <span className="size-bar-fill" style={{ width: `${Math.max(2, Math.min(100, fraction * 100))}%` }} />
     </span>
   );
 }

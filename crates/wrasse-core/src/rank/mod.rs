@@ -105,6 +105,41 @@ fn approx_old(n: &UiNode) -> bool {
     n.approx && n.last_opened_days > 365 && matches!(n.kind, NodeKind::File | NodeKind::Model)
 }
 
+/// Both copies of a duplicate when one of them is in iCloud Drive. Neither is offered.
+fn icloud_duplicate_ids(nodes: &[UiNode]) -> HashSet<u32> {
+    let mut weights = HashSet::new();
+    for n in nodes {
+        let Some(m) = &n.model else { continue };
+        if m.dupe_level.is_none() && n.duplicate_of.is_none() {
+            continue;
+        }
+        let own = m.weight.as_deref().unwrap_or(n.path.as_str());
+        let partner = m.partner_weight.as_deref().unwrap_or("");
+        if crate::llm::icloud_synced_path(own)
+            || crate::llm::icloud_synced_path(&n.path)
+            || crate::llm::icloud_synced_path(partner)
+        {
+            weights.insert(own.to_string());
+            weights.insert(n.path.clone());
+            if !partner.is_empty() {
+                weights.insert(partner.to_string());
+            }
+        }
+    }
+    nodes
+        .iter()
+        .filter(|n| {
+            let own = n
+                .model
+                .as_ref()
+                .and_then(|m| m.weight.as_deref())
+                .unwrap_or(n.path.as_str());
+            weights.contains(own) || weights.contains(&n.path)
+        })
+        .map(|n| n.id)
+        .collect()
+}
+
 fn under(path: &str, places: &[PathBuf]) -> bool {
     let p = Path::new(path);
     places.iter().any(|d| p.starts_with(d))
@@ -137,6 +172,7 @@ pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) 
             && !under(&n.path, &limits.never_touch)
             && attached(n)
     };
+    let icloud_dupes = icloud_duplicate_ids(nodes);
     let mut out = Vec::new();
     let (mut held_recent, mut held_running) = (0u64, 0u64);
     let mut push = |c: Candidate| {
@@ -258,7 +294,11 @@ pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) 
             // AI models, whole.
             Category::AiModels => {
                 // A clone shares its blocks: removing it frees nothing, so it is not offered.
+                // An iCloud duplicate pair stays unticked on both copies.
                 let clone = n.model.as_ref().is_some_and(|m| m.clone_copy);
+                if icloud_dupes.contains(&n.id) {
+                    continue;
+                }
                 if n.kind == NodeKind::Model && allowed(n) && !clone {
                     push(single(
                         n,

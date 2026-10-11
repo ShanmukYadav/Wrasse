@@ -2,7 +2,8 @@
 
 /* "Reef Blocks" (D1). Every value comes from design tokens (src/design/tokens.ts and
    src/motion/tokens.ts), published as CSS variables by src/design/apply.ts.
-   Only transform and opacity animate; blur is limited to glass surfaces. */
+   A resting tile is not a composited layer: no will-change, transform, filter, or opacity.
+   Gradients and shadows paint into the window. Blur stays on the small glass surfaces. */
 
 html,
 body,
@@ -503,24 +504,28 @@ html:not(.is-glass) .glass-css {
   gap: var(--d1-tile-gap);
   padding: var(--d1-tile-padding);
   border-radius: var(--d1-tile-radius);
-  /* A gradient, a shadow, or overflow:clip gives every tile its own backing store and the
-     first paint of those stores crosses the launch budget. The category color still comes
-     from --from. */
-  background: var(--from);
+  /* Painted in place. A transform, a filter, an opacity, or a rounded overflow on this box
+     promotes every tile into its own surface, and the gradient is then stored per tile.
+     The corner glow is the first background, so the border radius clips it. */
+  background-image:
+    radial-gradient(
+      circle calc(var(--d1-tile-glow-size) / 2) at
+        calc(100% - (var(--d1-tile-glow-size) / 2 + var(--d1-tile-glow-offset)))
+        calc(var(--d1-tile-glow-size) / 2 + var(--d1-tile-glow-offset)),
+      var(--glow) 100%,
+      transparent 100%
+    ),
+    linear-gradient(160deg, var(--from) 0%, var(--to) 100%);
   border: 1px solid var(--tint);
-  box-shadow: none;
-  overflow: visible;
+  box-shadow: var(--d1-tile-shadow);
   text-align: left;
   cursor: pointer;
   min-width: 0;
   min-height: 0;
-  transition:
-    translate var(--d-base) cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow var(--d-base) cubic-bezier(0.22, 1, 0.36, 1),
-    opacity var(--d-base) cubic-bezier(0.65, 0, 0.35, 1);
+  transition: box-shadow var(--d-base) cubic-bezier(0.22, 1, 0.36, 1);
 }
 .tile:hover {
-  translate: 0 calc(var(--d1-tile-hover-lift) * 1px);
+  box-shadow: var(--d1-tile-hover-shadow);
 }
 .tile.is-dimmed {
   opacity: var(--d1-dimmed);
@@ -532,17 +537,6 @@ html:not(.is-glass) .glass-css {
 .tile.is-selected {
   outline: var(--d1-tile-selection-width) solid var(--acc);
   outline-offset: -1px;
-}
-.tile-glow {
-  display: none;
-  position: absolute;
-  right: var(--d1-tile-glow-offset);
-  top: var(--d1-tile-glow-offset);
-  width: var(--d1-tile-glow-size);
-  height: var(--d1-tile-glow-size);
-  border-radius: 50%;
-  background: var(--glow);
-  pointer-events: none;
 }
 .tile-head {
   position: relative;
@@ -622,7 +616,6 @@ html:not(.is-glass) .glass-css {
   padding: 0 var(--d1-row-pad-x);
   border-radius: var(--d1-row-radius);
   background: var(--d1-row-surface);
-  transition: opacity var(--d-base) cubic-bezier(0.65, 0, 0.35, 1);
 }
 .tile-row.is-dimmed {
   opacity: var(--d1-dimmed);
@@ -648,7 +641,6 @@ html:not(.is-glass) .glass-css {
   height: 100%;
   width: 100%;
   background: var(--acc);
-  transform-origin: left center;
 }
 .tile-row-size {
   width: var(--d1-row-size-w);
@@ -705,16 +697,12 @@ html:not(.is-glass) .glass-css {
   font-weight: var(--w-size);
   color: var(--acc);
   white-space: nowrap;
-  opacity: 0;
-  translate: -4px 0;
-  transition:
-    opacity var(--d-fast) ease-out,
-    translate var(--d-fast) ease-out;
+  /* visibility, not opacity: an opacity of 0 is still a composited layer on every tile. */
+  visibility: hidden;
 }
 .tile:hover .tile-open,
 .tile:focus-visible .tile-open {
-  opacity: 1;
-  translate: 0 0;
+  visibility: visible;
 }
 .tile-check {
   position: absolute;
@@ -739,8 +727,7 @@ html:not(.is-glass) .glass-css {
   place-items: center;
   background: var(--c-glass-strong);
   border: 1.5px solid var(--tint);
-  opacity: 0;
-  transition: opacity var(--d-fast) cubic-bezier(0.22, 1, 0.36, 1);
+  visibility: hidden;
   cursor: pointer;
   z-index: 2;
 }
@@ -748,16 +735,13 @@ html:not(.is-glass) .glass-css {
 .tile:focus-visible .tile-tick,
 .tile-tick.is-visible,
 .tile-tick.is-on {
-  opacity: 1;
+  visibility: visible;
 }
 /* The tick takes the top-right corner, so the meta line steps aside while it shows. */
-.tile .tile-meta {
-  transition: opacity var(--d-fast) cubic-bezier(0.22, 1, 0.36, 1);
-}
 .tile.has-tick:hover .tile-meta,
 .tile.has-tick:focus-visible .tile-meta,
 .tile.is-ticking .tile-meta {
-  opacity: 0;
+  visibility: hidden;
 }
 .tile-tick.is-on {
   background: var(--acc);
@@ -817,24 +801,20 @@ html:not(.is-glass) .glass-css {
   inset: 0 0 var(--d1-grid-pad-bottom) 0;
   pointer-events: none;
   overflow: hidden;
-  /* Layout size is the largest the ring gets. Scaling past 1 rasterizes the transformed
-     bounds and the launch spike comes back. */
-  --sonar-ring: 480px;
-  animation: sonar-in 0.35s ease both;
 }
+/* The ring grows by width, clipped by .sonar. No transform and no will-change: a scale
+   is stored at the circle's size (a 160vmax ring is about 64 MB). The rings unmount
+   when the scan ends. */
 .sonar-ring {
   position: absolute;
   left: 50%;
   top: 50%;
-  /* Layout size is capped. A 160vmax ring is ~1888px on the default window, and at 2x
-     WebKit tiles that square out to a 4096px backing store (~64 MB) per ring. The sweep
-     scales this smaller square up to the same visual diameter. Transform only, so the
-     backing store stays the layout size. */
-  width: var(--sonar-ring);
-  height: var(--sonar-ring);
-  margin: calc(var(--sonar-ring) / -2) 0 0 calc(var(--sonar-ring) / -2);
+  width: 8vmax;
+  height: 8vmax;
+  margin: -4vmax 0 0 -4vmax;
   border-radius: 50%;
-  border: 1px solid;
+  border: 2px solid transparent;
+  background: none;
   animation: sonar-sweep var(--sonar-dur) cubic-bezier(0.22, 1, 0.36, 1) infinite both;
 }
 .sonar-mark {
@@ -866,9 +846,10 @@ html:not(.is-glass) .glass-css {
 }
 .sonar-readout {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   top: calc(50% + 44px);
-  transform: translateX(-50%);
+  margin-inline: auto;
   width: min(420px, 80%);
   display: flex;
   flex-direction: column;
@@ -890,15 +871,23 @@ html:not(.is-glass) .glass-css {
   font-size: var(--t-caption);
   color: var(--c-text-muted);
 }
-/* They repeat only while a scan runs (the component unmounts when it ends); transform and opacity only. */
-@keyframes sonar-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* 8vmax and 160vmax are the old ring diameters (0.05×160vmax and 1×160vmax).
+   The border fades. The field clips whatever leaves the scan area. */
 @keyframes sonar-sweep {
-  from { transform: scale(0.2); opacity: 0.9; }
-  to { transform: scale(1); opacity: 0; }
+  from {
+    width: 8vmax;
+    height: 8vmax;
+    margin: -4vmax 0 0 -4vmax;
+    border-color: var(--sonar-ink);
+  }
+  to {
+    width: 160vmax;
+    height: 160vmax;
+    margin: -80vmax 0 0 -80vmax;
+    border-color: transparent;
+  }
 }
+/* The mark and the bubbles are the elements that move. They unmount when the scan ends. */
 @keyframes sonar-mark {
   0% { transform: scale(0.9); opacity: 0; }
   20% { transform: scale(1); opacity: 1; }

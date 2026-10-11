@@ -40,7 +40,7 @@ export function Home() {
   const scan = useApp((s) => s.scan);
   const scanKey = useApp((s) => s.scanKey);
   const visible = useApp((s) => s.viewMode === "map");
-  // Sonar mounts after the first paint and fades in, so its rings are not in the opening composite.
+  // Sonar mounts after the first paint, so its rings are not in the opening composite.
   const showSonar = useDelayed(scan === "scanning", 400);
   return (
     <main className={`home ${visible ? "" : "is-hidden"}`} aria-hidden={!visible}>

@@ -371,7 +371,8 @@ pub fn build(input: &Input) -> UiDisk {
         };
         match b.find_hub(id) {
             Some(hub) => {
-                b.emit_hf(&label, id, hub, ai_node);
+                let src_path = b.display(&b.tree.path(id));
+                b.emit_hf(&label, id, hub, ai_node, project_hf_cache(&src_path));
             }
             None if b.emit_ollama(&label, id, ai_node) => {}
             None if b.emit_tool_models(&label, id, ai_node) => {}
@@ -392,6 +393,11 @@ pub fn build(input: &Input) -> UiDisk {
         let group = match groups.iter().find(|(g, _)| *g == f.group) {
             Some(&(_, id)) => id,
             None => {
+                let why = if f.group == "Project models" {
+                    "Models in your projects. Your choice, and never selected for you."
+                } else {
+                    "AI models found in this folder."
+                };
                 let id = b.virtual_node(
                     &f.group,
                     &f.group_path,
@@ -399,7 +405,7 @@ pub fn build(input: &Input) -> UiDisk {
                     Category::AiModels,
                     NodeKind::Dir,
                     Safety::YourCall,
-                    "AI models found in this folder.",
+                    why,
                 );
                 groups.push((f.group.clone(), id));
                 id
@@ -407,7 +413,14 @@ pub fn build(input: &Input) -> UiDisk {
         };
         match f.item {
             FoundItem::Hub(id) => {
-                b.emit_hf("Hugging Face cache", id, id, group);
+                let hub_path = b.display(&b.tree.path(id));
+                let project = f.group == "Project models" || project_hf_cache(&hub_path);
+                let label = if project {
+                    "Hugging Face files"
+                } else {
+                    "Hugging Face cache"
+                };
+                b.emit_hf(label, id, id, group, project);
             }
             FoundItem::Ollama(id) => {
                 if !b.emit_ollama("Ollama models", id, group) {
@@ -777,7 +790,9 @@ fn tool_of(label: &str) -> crate::llm::ModelTool {
     match label {
         "Ollama" | "Ollama models" => crate::llm::ModelTool::Ollama,
         "LM Studio" | "LM Studio (legacy)" => crate::llm::ModelTool::LmStudio,
-        "Hugging Face" | "Hugging Face cache" => crate::llm::ModelTool::HuggingFace,
+        "Hugging Face" | "Hugging Face cache" | "Hugging Face files" => {
+            crate::llm::ModelTool::HuggingFace
+        }
         "Jan" => crate::llm::ModelTool::Jan,
         "GPT4All" => crate::llm::ModelTool::Gpt4all,
         _ => crate::llm::ModelTool::Loose,
@@ -935,8 +950,31 @@ fn is_weights_file(path: &str, name: &str, size: u64) -> bool {
     sized && super::weights::is_model_weights(Path::new(path))
 }
 
-/// Groups found models by project: the first folder under home that isn't a generic container
-/// (Documents, Desktop, …), e.g. `~/Documents/vyakta/env/hf_cache/hub` → "vyakta".
+/// Documents, Desktop, and iCloud Drive. Models here are project files, shown together.
+fn project_place(path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    let parts: Vec<&str> = p.split('/').filter(|s| !s.is_empty()).collect();
+    parts.iter().any(|s| matches!(*s, "Documents" | "Desktop"))
+        || p.contains("/Library/Mobile Documents/")
+        || p.contains("/com~apple~CloudDocs/")
+}
+
+/// A Hugging Face cache that lives in a project (for example `Documents/vyakta/env/hf_cache`),
+/// not the account-wide cache under `~/.cache`. It is project data.
+pub fn project_hf_cache(path: &str) -> bool {
+    if !project_place(path) {
+        return false;
+    }
+    let lower = path.to_ascii_lowercase();
+    lower.contains("/hf_cache/")
+        || lower.ends_with("/hf_cache")
+        || lower.contains("/huggingface/")
+        || lower.ends_with("/huggingface")
+        || lower.contains("/hub/models--")
+}
+
+/// Groups found models. Anything under Documents, Desktop, or iCloud Drive is "Project models".
+/// Other finds use the first folder under home that isn't a generic container.
 /// True when Spotlight's last-used instant is the item's creation instant.
 fn spotlight_matches_birth(path: &Path, secs: i64) -> bool {
     let Ok(md) = std::fs::symlink_metadata(path) else {
@@ -983,6 +1021,17 @@ fn model_group(display: &str, home: &str) -> (String, String) {
         return ("Elsewhere on this Mac".into(), "/".into());
     };
     let parts: Vec<&str> = rel.split('/').filter(|p| !p.is_empty()).collect();
+    if project_place(display) {
+        let mut path = home.to_string();
+        for p in &parts {
+            path.push('/');
+            path.push_str(p);
+            if matches!(*p, "Documents" | "Desktop" | "Mobile Documents") {
+                return ("Project models".into(), path);
+            }
+        }
+        return ("Project models".into(), home.to_string());
+    }
     let mut path = home.to_string();
     for (i, p) in parts.iter().enumerate() {
         path.push('/');
@@ -1129,7 +1178,8 @@ impl Builder<'_> {
     }
 
     /// A Hugging Face cache as one tile per model, sized by the blobs its snapshots link to.
-    fn emit_hf(&mut self, label: &str, src: u32, hub: u32, parent: u32) -> u32 {
+    /// `project` is a cache inside Documents, Desktop, or iCloud: project files, not junk.
+    fn emit_hf(&mut self, label: &str, src: u32, hub: u32, parent: u32, project: bool) -> u32 {
         let size = self.size(src);
         let path = self.display(&self.tree.path(src));
         let last = self
@@ -1164,6 +1214,8 @@ impl Builder<'_> {
             let mp = self.display(&m.dir.to_string_lossy());
             let why = if let Some(other) = &m.shares_with {
                 format!("{name} from Hugging Face. Weights are already counted with {other}.")
+            } else if project {
+                format!("{name} is part of this project. It stays until you choose it.")
             } else {
                 format!("{name} from Hugging Face. Downloads again if a project needs it.")
             };
@@ -1543,9 +1595,81 @@ impl Builder<'_> {
                 self.nodes[id].note = Some(crate::llm::SAMPLE_NOTE.into());
             }
         }
+        self.note_icloud_copies();
         for &i in &idxs {
             if self.nodes[i].model.as_ref().is_some_and(|m| m.clone_copy) {
                 self.nodes[i].note = Some(crate::llm::CLONE_NOTE.into());
+            }
+        }
+        self.note_two_formats();
+    }
+
+    /// An iCloud Drive copy that matches another model. The warning is on the synced copy.
+    fn note_icloud_copies(&mut self) {
+        let mut partners = Vec::new();
+        let mut tagged = Vec::new();
+        for (i, n) in self.nodes.iter().enumerate() {
+            let Some(m) = &n.model else { continue };
+            if m.dupe_level.is_none() && n.duplicate_of.is_none() {
+                continue;
+            }
+            let own = m.weight.clone().unwrap_or_else(|| n.path.clone());
+            let partner = m.partner_weight.clone().unwrap_or_default();
+            let touches = crate::llm::icloud_synced_path(&own)
+                || crate::llm::icloud_synced_path(&n.path)
+                || crate::llm::icloud_synced_path(&partner);
+            if !touches {
+                continue;
+            }
+            if !partner.is_empty() {
+                partners.push(partner);
+            }
+            if crate::llm::icloud_synced_path(&own) || crate::llm::icloud_synced_path(&n.path) {
+                tagged.push(i);
+            }
+        }
+        for (i, n) in self.nodes.iter().enumerate() {
+            let own = n
+                .model
+                .as_ref()
+                .and_then(|m| m.weight.clone())
+                .unwrap_or_else(|| n.path.clone());
+            let synced =
+                crate::llm::icloud_synced_path(&own) || crate::llm::icloud_synced_path(&n.path);
+            if synced && partners.iter().any(|p| p == &own || p == &n.path) {
+                tagged.push(i);
+            }
+        }
+        tagged.sort_unstable();
+        tagged.dedup();
+        for i in tagged {
+            add_note(&mut self.nodes[i], crate::llm::ICLOUD_DUPE_NOTE);
+        }
+    }
+
+    /// The same checkpoint saved as pytorch_model.bin and model.safetensors. Headers only.
+    fn note_two_formats(&mut self) {
+        let mut groups: Vec<(std::path::PathBuf, Vec<usize>)> = Vec::new();
+        for (i, n) in self.nodes.iter().enumerate() {
+            let Some(weight) = n.model.as_ref().and_then(|m| m.weight.clone()) else {
+                continue;
+            };
+            let arena = std::path::PathBuf::from(self.arena_path(&weight));
+            let Some(dir) = arena.parent().map(|p| p.to_path_buf()) else {
+                continue;
+            };
+            if let Some((_, ids)) = groups.iter_mut().find(|(d, _)| d == &dir) {
+                ids.push(i);
+            } else {
+                groups.push((dir, vec![i]));
+            }
+        }
+        for (dir, ids) in groups {
+            if !super::weights::same_weights_two_formats(&dir) {
+                continue;
+            }
+            for i in ids {
+                add_note(&mut self.nodes[i], crate::llm::FORMAT_NOTE);
             }
         }
     }
@@ -1834,13 +1958,18 @@ impl Builder<'_> {
         let name = self.tree.name(aid).to_string();
         let path = self.display(&self.tree.path(aid));
         let node = self.tree.node(aid);
-        let (safety, why) = item_safety(&name, node.flags, ctx);
+        let project_hf = project_hf_cache(&path);
+        let (mut safety, mut why) = item_safety(&name, node.flags, ctx);
+        if project_hf {
+            safety = Safety::YourCall;
+            why = "Project files. Wrasse leaves them until you choose.".into();
+        }
         let id = self.virtual_node(&name, &path, Some(parent), ctx.category, kind, safety, &why);
         let n = &mut self.nodes[id as usize];
         n.last_opened_days = self.input.today.saturating_sub(node.last_used_day);
         // The tree date is the file-date fallback. Spotlight last-used is not stored per file.
         n.approx = matches!(kind, NodeKind::File | NodeKind::Model);
-        n.rebuildable = ctx.rebuildable || is_cache_name(&name);
+        n.rebuildable = !project_hf && (ctx.rebuildable || is_cache_name(&name));
         n.leftover = ctx.leftover;
         n.read_only = is_read_only_library(&name);
         if n.read_only {
@@ -1878,10 +2007,13 @@ impl Builder<'_> {
             self.nodes[id as usize].size = self.size(aid);
             return id;
         }
-        // Children inherit "cache" safety from a cache folder.
+        // Children inherit "cache" safety from a cache folder. A project's own Hugging Face
+        // cache is the project's data, so it does not inherit that.
         let mut child_ctx = ctx;
-        if is_cache_name(&name)
-            || (ctx.category == Category::Junk && matches!(name.as_str(), "Logs" | "Caches"))
+        let display = self.display(&self.tree.path(aid));
+        if !project_hf_cache(&display)
+            && (is_cache_name(&name)
+                || (ctx.category == Category::Junk && matches!(name.as_str(), "Logs" | "Caches")))
         {
             child_ctx.safety = Safety::Safe;
             child_ctx.rebuildable = true;
@@ -2038,6 +2170,20 @@ impl Builder<'_> {
                 .min()
                 .unwrap_or(0);
             self.nodes[id as usize].last_opened_days = recent;
+        }
+    }
+}
+
+fn add_note(n: &mut UiNode, text: &str) {
+    if n.note.as_deref() == Some(crate::llm::CLONE_NOTE) {
+        return;
+    }
+    match &mut n.note {
+        None => n.note = Some(text.to_string()),
+        Some(s) if s.contains(text) => {}
+        Some(s) => {
+            s.push(' ');
+            s.push_str(text);
         }
     }
 }
@@ -2337,11 +2483,27 @@ mod tests {
         let group = disk
             .nodes
             .iter()
-            .find(|n| n.name == "vyakta" && n.category == Category::AiModels && n.size > 0)
-            .expect("vyakta model group");
+            .find(|n| n.name == "Project models" && n.category == Category::AiModels && n.size > 0)
+            .expect("project model group");
         assert_eq!(group.parent, i64::from(ai.id));
+        assert_eq!(group.safety, Safety::YourCall);
         let mistral = n("Mistral-7B");
         assert_eq!(mistral.kind, NodeKind::Model);
+        assert_eq!(mistral.safety, Safety::YourCall);
+        assert!(!mistral.rebuildable);
+        assert!(
+            mistral.why.contains("part of this project"),
+            "a project cache is project data: {}",
+            mistral.why
+        );
+        assert!(!mistral.why.contains("Downloads again"));
+        assert!(disk
+            .nodes
+            .iter()
+            .filter(|n| n.path.contains("hf_cache"))
+            .all(|n| {
+                n.category != Category::Junk && n.safety != Safety::Safe && !n.rebuildable
+            }));
         assert!(
             mistral.approx,
             "a model dated from file dates is approximate"
@@ -2371,6 +2533,122 @@ mod tests {
         assert!(disk.nodes[0].match_bytes.ai_models >= 115_000_000);
         assert!(disk.nodes[0].match_bytes.ai_models < 200_000_000);
         crate::platform::remove_test_dir(&root);
+    }
+
+    #[test]
+    fn project_copies_in_icloud_are_duplicates_and_two_formats_are_labeled() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("wrasse-project-models-{nanos}"));
+        let home = root.join("Users/me");
+        let local = home.join("Documents/vyakta/models/fpc/model.safetensors");
+        let cloud = home.join(
+            "Library/Mobile Documents/com~apple~CloudDocs/Vyakta_Backup/fpc/model.safetensors",
+        );
+        write_safetensors(&local, 50_000_000);
+        write_safetensors(&cloud, 50_000_000);
+        let gector = home.join("Documents/vyakta/models/gector");
+        write_safetensors(&gector.join("model.safetensors"), 50_000_000);
+        write_pytorch(&gector.join("pytorch_model.bin"), 51_000_000);
+        fs::write(gector.join("config.json"), br#"{"model_type":"deberta"}"#).unwrap();
+
+        let tree = scan(&root, &ScanControl::default()).unwrap();
+        let prefix = root.to_string_lossy().into_owned();
+        let scanned = tree.node(0).size;
+        let input = Input {
+            tree: &tree,
+            display_prefix: &prefix,
+            home: Some(PathBuf::from("/Users/me")),
+            volumes: Volumes {
+                capacity: scanned * 4,
+                available: scanned * 2,
+                os_used: 0,
+            },
+            volume_name: "Test HD".into(),
+            previous: None,
+            running: vec![],
+            today: 20_000,
+            env: HashMap::new(),
+            apps: &[],
+            orphans: &[],
+            hf_models: &|_: &Path| Vec::new(),
+        };
+        let disk = build(&input);
+        let models: Vec<&UiNode> = disk
+            .nodes
+            .iter()
+            .filter(|n| n.kind == NodeKind::Model && n.category == Category::AiModels)
+            .collect();
+        assert!(
+            models.len() >= 4,
+            "local, icloud, and both formats: {models:?}"
+        );
+        assert!(models.iter().all(|n| n.safety == Safety::YourCall));
+        let cloud_node = models
+            .iter()
+            .find(|n| n.path.contains("Mobile Documents"))
+            .expect("icloud copy");
+        assert!(
+            cloud_node
+                .note
+                .as_deref()
+                .is_some_and(|s| s.contains(crate::llm::ICLOUD_DUPE_NOTE)),
+            "icloud note: {:?}",
+            cloud_node.note
+        );
+        assert!(
+            cloud_node.model.as_ref().unwrap().dupe_level.is_some()
+                || cloud_node.duplicate_of.is_some()
+        );
+        let local_node = models
+            .iter()
+            .find(|n| n.path.contains("/Documents/") && n.path.ends_with("fpc/model.safetensors"))
+            .expect("local copy");
+        assert!(
+            local_node
+                .note
+                .as_deref()
+                .map(|s| !s.contains("iCloud"))
+                .unwrap_or(true),
+            "the Documents copy is not the synced warning: {:?}",
+            local_node.note
+        );
+        let formats: Vec<&&UiNode> = models
+            .iter()
+            .filter(|n| n.path.contains("/gector/"))
+            .collect();
+        assert_eq!(formats.len(), 2, "{formats:?}");
+        assert!(formats.iter().all(|n| {
+            n.note
+                .as_deref()
+                .is_some_and(|s| s.contains(crate::llm::FORMAT_NOTE))
+                && n.duplicate_of.is_none()
+        }));
+        let limits = crate::rank::Limits {
+            hand_pick_only: vec![
+                PathBuf::from("/Users/me/Documents"),
+                PathBuf::from("/Users/me/Desktop"),
+                PathBuf::from("/Users/me/Library/Mobile Documents"),
+            ],
+            ..Default::default()
+        };
+        let (offered, _, _) = crate::rank::candidates(&disk, &limits);
+        let offered_ids: Vec<u32> = offered.iter().map(|c| c.id).collect();
+        for n in models {
+            assert!(!offered_ids.contains(&n.id), "{} was pre-selected", n.path);
+        }
+        crate::platform::remove_test_dir(&root);
+    }
+
+    fn write_pytorch(path: &Path, bytes: usize) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let magic = b"PK\x03\x04data.pkl";
+        let mut f = fs::File::create(path).unwrap();
+        f.write_all(magic).unwrap();
+        assert!(bytes > magic.len());
+        f.write_all(&vec![0u8; bytes - magic.len()]).unwrap();
     }
 
     fn write_gguf(path: &Path, bytes: usize) {

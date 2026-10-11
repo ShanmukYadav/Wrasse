@@ -188,6 +188,10 @@ fn annotate(disk: &mut UiDisk, matches: &[crate::rules::Match]) {
         let Some(m) = by_path.get(&n.path) else {
             continue;
         };
+        // A Hugging Face cache inside a project is that project's data, not a junk rule.
+        if breakdown::project_hf_cache(&n.path) {
+            continue;
+        }
         n.rule_id = Some(m.rule_id.clone());
         n.rule_root = Some(m.root.to_string_lossy().into_owned());
         n.why = m.explanation.clone();
