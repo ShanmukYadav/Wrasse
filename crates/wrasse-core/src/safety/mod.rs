@@ -103,6 +103,8 @@ pub enum Reason {
     AppRunning,
     /// "Delete now" is only for items labeled Safe.
     NotSafeForDeleteNow,
+    /// A duplicate that has not been confirmed byte for byte.
+    NotConfirmed,
     Failed,
 }
 
@@ -630,6 +632,10 @@ pub enum Delegated {
     /// which asks for the password. Put Back works.
     #[serde(rename_all = "camelCase")]
     FinderMoveToTrash { path: PathBuf },
+    /// `ollama rm`: POST `/api/delete` on 127.0.0.1:11434. Not undoable.
+    OllamaRm { model: String },
+    /// `ollama stop`: POST `/api/generate` with `keep_alive` 0. The model stays on disk.
+    OllamaStop { model: String },
 }
 
 /// Why a delegated action was refused before running.
@@ -759,6 +765,20 @@ pub fn delegate_with(
                 None,
             )
         }),
+        Delegated::OllamaRm { model } => {
+            if !platform::valid_ollama_name(model) {
+                Err(refuse("that isn't a model name"))
+            } else {
+                Ok((format!("ollama rm {model}"), 0, None))
+            }
+        }
+        Delegated::OllamaStop { model } => {
+            if !platform::valid_ollama_name(model) {
+                Err(refuse("that isn't a model name"))
+            } else {
+                Ok((format!("ollama stop {model}"), 0, None))
+            }
+        }
     };
     let (target, bytes, brew) = match checked {
         Ok(c) => c,

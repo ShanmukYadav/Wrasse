@@ -189,6 +189,9 @@ pub struct UiNode {
     /// Cleaned through the OS rather than item by item (the Trash).
     #[serde(skip_serializing_if = "std::ops::Not::not", default)]
     pub delegate: bool,
+    /// Set on a model: which tool, how it's quantized, and how a removal has to work.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<crate::llm::ModelMeta>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -313,7 +316,21 @@ pub fn build(input: &Input) -> UiDisk {
     let home_display = home.clone().unwrap_or_default();
 
     // Claim special folders first, so each byte shows up in exactly one place.
-    let ai = b.claim_all(&ai_sources(&home_display, &input.env));
+    let mut sources = ai_sources(&home_display, &input.env);
+    if let Some(home) = input.home.as_ref() {
+        let arena = PathBuf::from(format!(
+            "{}{}",
+            input.display_prefix.trim_end_matches('/'),
+            home.display()
+        ));
+        if let Some(dir) = crate::llm::lmstudio_download_dir(&arena) {
+            let display = strip_prefix(input.display_prefix, &dir);
+            if !sources.iter().any(|(_, p)| overlaps(p, &display)) {
+                sources.push(("LM Studio".into(), display));
+            }
+        }
+    }
+    let ai = b.claim_all(&sources);
     // Models anywhere else on the Mac (a project's own cache, downloaded weights).
     let found = b.discover_models(&home_display);
     let dev = b.claim_all(&dev_sources(&home_display));
@@ -356,6 +373,8 @@ pub fn build(input: &Input) -> UiDisk {
             Some(hub) => {
                 b.emit_hf(&label, id, hub, ai_node);
             }
+            None if b.emit_ollama(&label, id, ai_node) => {}
+            None if b.emit_tool_models(&label, id, ai_node) => {}
             None => {
                 let n = b.emit(id, ai_node, ctx);
                 b.nodes[n as usize].name = label;
@@ -391,8 +410,10 @@ pub fn build(input: &Input) -> UiDisk {
                 b.emit_hf("Hugging Face cache", id, id, group);
             }
             FoundItem::Ollama(id) => {
-                let n = b.emit(id, group, ai_ctx);
-                b.nodes[n as usize].name = "Ollama models".into();
+                if !b.emit_ollama("Ollama models", id, group) {
+                    let n = b.emit(id, group, ai_ctx);
+                    b.nodes[n as usize].name = "Ollama models".into();
+                }
             }
             FoundItem::Weights(id) => {
                 let n = b.emit(id, group, ai_ctx);
@@ -400,6 +421,7 @@ pub fn build(input: &Input) -> UiDisk {
                 let file = b.tree.name(id).to_string();
                 b.nodes[n as usize].name = format!("{parent} · {file}");
                 b.nodes[n as usize].kind = NodeKind::Model;
+                b.attach_loose(n, id);
             }
         }
     }
@@ -614,6 +636,7 @@ pub fn build(input: &Input) -> UiDisk {
     );
     b.nodes[sd as usize].size = unaccounted;
 
+    b.attach_dupes();
     b.finish(root);
     // Drop empty or near-empty categories so the home map only shows what matters.
     for cat in [files, ai_node, dev_node, apps_node, junk, other] {
@@ -698,16 +721,107 @@ fn ai_sources(home: &str, env: &HashMap<String, String>) -> Vec<(String, String)
             format!("{home}/.cache/lm-studio"),
         ),
         ("Hugging Face".into(), hf),
-        (
-            "Jan".into(),
-            format!("{home}/Library/Application Support/Jan"),
-        ),
+        ("Jan".into(), jan_support(home)),
         ("Jan".into(), format!("{home}/jan")),
-        (
-            "GPT4All".into(),
-            format!("{home}/Library/Application Support/nomic.ai/GPT4All"),
-        ),
+        ("GPT4All".into(), gpt4all_support(home)),
     ]
+}
+
+fn jan_support(home: &str) -> String {
+    if cfg!(windows) {
+        format!("{home}/AppData/Roaming/Jan")
+    } else {
+        format!("{home}/Library/Application Support/Jan")
+    }
+}
+
+fn gpt4all_support(home: &str) -> String {
+    if cfg!(windows) {
+        format!("{home}/AppData/Local/nomic.ai/GPT4All")
+    } else {
+        format!("{home}/Library/Application Support/nomic.ai/GPT4All")
+    }
+}
+
+fn strip_prefix(prefix: &str, path: &Path) -> String {
+    let prefix = prefix.trim_end_matches('/');
+    let shown = |rest: &str| {
+        if rest.is_empty() {
+            "/".to_string()
+        } else if rest.starts_with('/') {
+            rest.to_string()
+        } else {
+            format!("/{rest}")
+        }
+    };
+    let prefix_path = Path::new(prefix);
+    if let (Ok(root), Ok(canon)) = (
+        std::fs::canonicalize(prefix_path),
+        std::fs::canonicalize(path),
+    ) {
+        if let Ok(rest) = canon.strip_prefix(&root) {
+            return shown(&rest.to_string_lossy());
+        }
+    }
+    let text = path.to_string_lossy();
+    text.strip_prefix(prefix)
+        .map(shown)
+        .unwrap_or_else(|| text.into_owned())
+}
+
+fn overlaps(a: &str, b: &str) -> bool {
+    a == b || a.starts_with(&format!("{b}/")) || b.starts_with(&format!("{a}/"))
+}
+
+fn tool_of(label: &str) -> crate::llm::ModelTool {
+    match label {
+        "Ollama" | "Ollama models" => crate::llm::ModelTool::Ollama,
+        "LM Studio" | "LM Studio (legacy)" => crate::llm::ModelTool::LmStudio,
+        "Hugging Face" | "Hugging Face cache" => crate::llm::ModelTool::HuggingFace,
+        "Jan" => crate::llm::ModelTool::Jan,
+        "GPT4All" => crate::llm::ModelTool::Gpt4all,
+        _ => crate::llm::ModelTool::Loose,
+    }
+}
+
+/// A snapshot file to hash when looking for the same weights in another tool.
+fn first_weight(dir: &Path) -> Option<PathBuf> {
+    fn walk(dir: &Path, depth: u32) -> Option<PathBuf> {
+        if depth > 6 {
+            return None;
+        }
+        let entries = std::fs::read_dir(dir).ok()?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Ok(md) = std::fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if crate::platform::is_dataless(&md) {
+                continue;
+            }
+            if md.is_dir() {
+                if let Some(found) = walk(&path, depth + 1) {
+                    return Some(found);
+                }
+            } else if path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| matches!(e, "gguf" | "safetensors" | "bin" | "pt" | "pth"))
+            {
+                return Some(path);
+            }
+        }
+        None
+    }
+    walk(&dir.join("snapshots"), 0).or_else(|| walk(dir, 0))
+}
+
+fn removal_of(tool: crate::llm::ModelTool) -> crate::llm::ModelRemoval {
+    match tool {
+        crate::llm::ModelTool::Ollama => crate::llm::ModelRemoval::Ollama,
+        crate::llm::ModelTool::HuggingFace => crate::llm::ModelRemoval::HuggingFace,
+        _ => crate::llm::ModelRemoval::Quarantine,
+    }
 }
 
 /// Known developer folders: toolchains, package caches, build products, simulators.
@@ -823,6 +937,20 @@ fn is_weights_file(path: &str, name: &str, size: u64) -> bool {
 
 /// Groups found models by project: the first folder under home that isn't a generic container
 /// (Documents, Desktop, …), e.g. `~/Documents/vyakta/env/hf_cache/hub` → "vyakta".
+/// True when Spotlight's last-used instant is the item's creation instant.
+fn spotlight_matches_birth(path: &Path, secs: i64) -> bool {
+    let Ok(md) = std::fs::symlink_metadata(path) else {
+        return false;
+    };
+    let Ok(created) = md.created() else {
+        return false;
+    };
+    let Ok(birth) = created.duration_since(std::time::UNIX_EPOCH) else {
+        return false;
+    };
+    secs.abs_diff(birth.as_secs() as i64) <= 5
+}
+
 fn model_group(display: &str, home: &str) -> (String, String) {
     // Containers, not projects: a model in ~/Library/Mobile Documents/com~apple~CloudDocs/Backup/…
     // groups under "Backup", one in ~/Library/Application Support/SomeApp/… under "SomeApp".
@@ -1018,15 +1146,27 @@ impl Builder<'_> {
             "Models downloaded from Hugging Face.",
         );
         let models = (self.input.hf_models)(Path::new(&self.tree.path(hub)));
-        let mut left = size;
+        let mut accounted = 0u64;
         for m in models {
-            let bytes = m.bytes.min(left);
-            if bytes < MIN_ITEM {
+            let shares = m.bytes == 0 && m.logical_bytes >= MIN_ITEM;
+            let bytes = if shares {
+                m.logical_bytes
+            } else {
+                m.bytes.min(size.saturating_sub(accounted))
+            };
+            if !shares && bytes < MIN_ITEM {
                 continue;
             }
-            left -= bytes;
+            if !shares {
+                accounted += bytes;
+            }
             let name = m.repo.rsplit('/').next().unwrap_or(&m.repo).to_string();
             let mp = self.display(&m.dir.to_string_lossy());
+            let why = if let Some(other) = &m.shares_with {
+                format!("{name} from Hugging Face. Weights are already counted with {other}.")
+            } else {
+                format!("{name} from Hugging Face. Downloads again if a project needs it.")
+            };
             let id = self.virtual_node(
                 &name,
                 &mp,
@@ -1034,18 +1174,299 @@ impl Builder<'_> {
                 Category::AiModels,
                 NodeKind::Model,
                 Safety::YourCall,
-                &format!(
-                    "{} from Hugging Face. Downloads again if a project needs it.",
-                    m.repo
-                ),
+                &why,
             );
+            let weight = first_weight(&m.dir);
+            let quant = crate::llm::quant_of(&m.repo, weight.as_deref())
+                .or_else(|| crate::llm::quant_from_config(&m.dir));
             self.nodes[id as usize].size = bytes;
             self.nodes[id as usize].last_opened_days = last;
             self.nodes[id as usize].approx = true;
+            self.nodes[id as usize].model = Some(crate::llm::ModelMeta {
+                tool: crate::llm::ModelTool::HuggingFace,
+                quantization: quant,
+                removal: crate::llm::ModelRemoval::HuggingFace,
+                ollama_name: None,
+                models_dir: None,
+                weight: weight.as_ref().map(|p| self.display(&p.to_string_lossy())),
+                partner_weight: None,
+                dupe_level: None,
+                content_hash: weight
+                    .as_ref()
+                    .and_then(|p| crate::llm::blob_content_hash(p)),
+                orphan_blob: false,
+                clone_copy: false,
+                shares_weights: shares,
+                shares_with: m.shares_with.clone(),
+            });
+            if let Some(w) = &weight {
+                self.refine_used(id, w);
+                self.mark_clone(id, w);
+            } else {
+                self.refine_used(id, &m.dir);
+            }
         }
-        // Leftover bytes (configs, partial downloads) stay with the cache, as one tile when big
-        // enough to matter, otherwise on the cache tile itself.
-        if left >= MIN_ITEM {
+        self.fold_remainder(node, size, accounted, last);
+        node
+    }
+
+    /// Ollama, one row per manifest plus orphaned blobs. `false` when this folder isn't a store.
+    fn emit_ollama(&mut self, label: &str, src: u32, parent: u32) -> bool {
+        let arena = PathBuf::from(self.tree.path(src));
+        let Some(store) = crate::llm::Store::open(&arena) else {
+            return false;
+        };
+        let size = self.size(src);
+        let path = self.display(&self.tree.path(src));
+        let node = self.virtual_node(
+            label,
+            &path,
+            Some(parent),
+            Category::AiModels,
+            NodeKind::Dir,
+            Safety::YourCall,
+            "Models downloaded with Ollama.",
+        );
+        let mut accounted = 0u64;
+        let dir_display = self.display(&store.dir.to_string_lossy());
+        for m in &store.models {
+            let shares = m.shares_weights && m.logical >= MIN_ITEM;
+            let own = !m.shares_weights && m.exclusive >= MIN_ITEM;
+            if !shares && !own {
+                continue;
+            }
+            let bytes = if shares { m.logical } else { m.exclusive };
+            let weight = m
+                .weight
+                .as_ref()
+                .map(|p| self.display(&p.to_string_lossy()));
+            let manifest = m
+                .manifest
+                .as_ref()
+                .map(|p| self.display(&p.to_string_lossy()));
+            let node_path = manifest
+                .clone()
+                .or(weight.clone())
+                .unwrap_or_else(|| path.clone());
+            let why = if m.orphan {
+                "An Ollama blob no manifest uses.".to_string()
+            } else if let Some(other) = &m.shares_with {
+                format!("Weights are already counted with {other}.")
+            } else {
+                format!("{} in Ollama.", m.name)
+            };
+            let id = self.virtual_node(
+                &m.name,
+                &node_path,
+                Some(node),
+                Category::AiModels,
+                NodeKind::Model,
+                Safety::YourCall,
+                &why,
+            );
+            self.nodes[id as usize].size = bytes;
+            self.nodes[id as usize].last_opened_days = self.input.today.saturating_sub(m.last_day);
+            self.nodes[id as usize].approx = true;
+            self.nodes[id as usize].model = Some(crate::llm::ModelMeta {
+                tool: crate::llm::ModelTool::Ollama,
+                quantization: m.quantization.clone(),
+                removal: if m.orphan {
+                    crate::llm::ModelRemoval::Quarantine
+                } else {
+                    crate::llm::ModelRemoval::Ollama
+                },
+                ollama_name: (!m.orphan).then(|| m.name.clone()),
+                models_dir: Some(dir_display.clone()),
+                weight: weight.clone(),
+                partner_weight: None,
+                dupe_level: None,
+                content_hash: m.content_hash.clone(),
+                orphan_blob: m.orphan,
+                clone_copy: false,
+                shares_weights: shares,
+                shares_with: m.shares_with.clone(),
+            });
+            let stamp = m.weight.clone().or_else(|| m.manifest.clone());
+            if let Some(p) = stamp {
+                self.refine_used(id, &p);
+                self.mark_clone(id, &p);
+            }
+            if !shares {
+                accounted += m.exclusive;
+            }
+        }
+        let last = self.nodes[node as usize].last_opened_days;
+        self.fold_remainder(node, size, accounted, last);
+        true
+    }
+
+    /// Weight files inside a known tool folder (LM Studio, Jan, GPT4All). `false` when there
+    /// are none big enough to list, so the folder is shown as one item instead.
+    fn emit_tool_models(&mut self, label: &str, src: u32, parent: u32) -> bool {
+        let mut files = Vec::new();
+        self.collect_weights(src, &mut files, 0);
+        if files.is_empty() {
+            return false;
+        }
+        let size = self.size(src);
+        let path = self.display(&self.tree.path(src));
+        let node = self.virtual_node(
+            label,
+            &path,
+            Some(parent),
+            Category::AiModels,
+            NodeKind::Dir,
+            Safety::YourCall,
+            "Models kept by this tool.",
+        );
+        let tool = tool_of(label);
+        let removal = removal_of(tool);
+        let mut accounted = 0u64;
+        for aid in files {
+            let bytes = self.size(aid);
+            if bytes < MIN_ITEM {
+                continue;
+            }
+            let parent_name = self.tree.name(self.tree.node(aid).parent);
+            let file = self.tree.name(aid);
+            let title = if parent_name == self.tree.name(src) {
+                file.to_string()
+            } else {
+                format!("{parent_name} · {file}")
+            };
+            let display = self.display(&self.tree.path(aid));
+            let id = self.virtual_node(
+                &title,
+                &display,
+                Some(node),
+                Category::AiModels,
+                NodeKind::Model,
+                Safety::YourCall,
+                &format!("{title} in {label}."),
+            );
+            let arena = PathBuf::from(self.tree.path(aid));
+            let day = self.tree.node(aid).last_used_day;
+            self.nodes[id as usize].size = bytes;
+            self.nodes[id as usize].last_opened_days = self.input.today.saturating_sub(day);
+            self.nodes[id as usize].approx = true;
+            self.nodes[id as usize].model = Some(crate::llm::ModelMeta {
+                tool,
+                quantization: crate::llm::quant_of(&title, Some(&arena)),
+                removal,
+                ollama_name: None,
+                models_dir: None,
+                weight: Some(display),
+                partner_weight: None,
+                dupe_level: None,
+                content_hash: crate::llm::blob_content_hash(&arena),
+                orphan_blob: false,
+                clone_copy: false,
+                shares_weights: false,
+                shares_with: None,
+            });
+            self.refine_used(id, &arena);
+            self.mark_clone(id, &arena);
+            accounted += bytes;
+        }
+        let last = self
+            .input
+            .today
+            .saturating_sub(self.tree.node(src).last_used_day);
+        self.fold_remainder(node, size, accounted, last);
+        true
+    }
+
+    fn collect_weights(&self, id: u32, out: &mut Vec<u32>, depth: u32) {
+        if depth > 8 {
+            return;
+        }
+        for c in self.tree.children(id) {
+            let node = self.tree.node(c);
+            let name = self.tree.name(c);
+            if name.ends_with(".app") {
+                continue;
+            }
+            if node.kind == Kind::File {
+                if node.size >= MIN_ITEM
+                    && super::weights::is_model_weights(Path::new(&self.tree.path(c)))
+                {
+                    out.push(c);
+                }
+            } else {
+                self.collect_weights(c, out, depth + 1);
+            }
+        }
+    }
+
+    fn attach_loose(&mut self, ui: u32, aid: u32) {
+        let arena = PathBuf::from(self.tree.path(aid));
+        let name = self.nodes[ui as usize].name.clone();
+        let display = self.nodes[ui as usize].path.clone();
+        self.nodes[ui as usize].model = Some(crate::llm::ModelMeta {
+            tool: crate::llm::ModelTool::Loose,
+            quantization: crate::llm::quant_of(&name, Some(&arena)),
+            removal: crate::llm::ModelRemoval::Quarantine,
+            ollama_name: None,
+            models_dir: None,
+            weight: Some(display),
+            partner_weight: None,
+            dupe_level: None,
+            content_hash: crate::llm::blob_content_hash(&arena),
+            orphan_blob: false,
+            clone_copy: false,
+            shares_weights: false,
+            shares_with: None,
+        });
+        self.refine_used(ui, &arena);
+        self.mark_clone(ui, &arena);
+    }
+
+    fn refine_used(&mut self, id: u32, arena: &Path) {
+        let Some(secs) = crate::platform::last_used(arena) else {
+            return;
+        };
+        // Spotlight fills kMDItemLastUsedDate with the creation instant on items
+        // that were never opened. That is not a later open, so the file-date age
+        // stays approximate.
+        if secs < 0 || spotlight_matches_birth(arena, secs) {
+            return;
+        }
+        let day = (secs / 86_400) as u32;
+        let n = &mut self.nodes[id as usize];
+        n.last_opened_days = self.input.today.saturating_sub(day);
+        n.approx = false;
+    }
+
+    fn mark_clone(&mut self, id: u32, arena: &Path) {
+        if !crate::llm::is_clone_file(arena) {
+            return;
+        }
+        if let Some(m) = self.nodes[id as usize].model.as_mut() {
+            m.clone_copy = true;
+        }
+        self.nodes[id as usize].note = Some(crate::llm::CLONE_NOTE.into());
+    }
+
+    /// Bytes of the folder that no listed model owns: a tile when they're large, otherwise
+    /// folded onto the largest model so the category total still matches the scan.
+    fn fold_remainder(&mut self, node: u32, folder_size: u64, accounted: u64, last: u32) {
+        let left = folder_size.saturating_sub(accounted);
+        if left == 0 {
+            return;
+        }
+        let path = self.nodes[node as usize].path.clone();
+        let absorb = self.nodes[node as usize]
+            .children
+            .iter()
+            .copied()
+            .filter(|&k| {
+                !self.nodes[k as usize]
+                    .model
+                    .as_ref()
+                    .is_some_and(|m| m.shares_weights)
+            })
+            .max_by_key(|&k| self.nodes[k as usize].size);
+        if left >= MIN_ITEM || absorb.is_none() {
             let id = self.virtual_node(
                 "Other cache files",
                 &path,
@@ -1058,13 +1479,75 @@ impl Builder<'_> {
             self.nodes[id as usize].size = left;
             self.nodes[id as usize].last_opened_days = last;
             self.nodes[id as usize].approx = true;
-        } else if left > 0 && self.nodes[node as usize].children.is_empty() {
-            self.nodes[node as usize].size = left;
-        } else if left > 0 {
-            let biggest = self.nodes[node as usize].children[0];
+        } else if let Some(biggest) = absorb {
             self.nodes[biggest as usize].size += left;
         }
-        node
+    }
+
+    /// Size, then a sample of the first and last 16 MB. Dataless files are not opened.
+    fn attach_dupes(&mut self) {
+        let mut idxs = Vec::new();
+        let mut cands = Vec::new();
+        for (i, n) in self.nodes.iter().enumerate() {
+            let Some(weight) = n.model.as_ref().and_then(|m| m.weight.clone()) else {
+                continue;
+            };
+            let arena = self.arena_path(&weight);
+            let path = PathBuf::from(&arena);
+            let Ok(md) = std::fs::symlink_metadata(&path) else {
+                continue;
+            };
+            let dataless = crate::platform::is_dataless(&md);
+            let len = if dataless {
+                0
+            } else if md.file_type().is_symlink() {
+                std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0)
+            } else {
+                md.len()
+            };
+            let hash = n.model.as_ref().and_then(|m| m.content_hash.clone());
+            cands.push(crate::llm::DupeCand {
+                path,
+                len,
+                content_hash: hash,
+                dataless,
+            });
+            idxs.push(i);
+        }
+        for (k, cand) in cands.iter().enumerate() {
+            if !cand.dataless {
+                self.mark_clone(idxs[k] as u32, &cand.path);
+            }
+        }
+        // Two seconds of edge reads. Longer than that, the copies stay unlabeled and the
+        // scan ends; removing one still requires a full hash.
+        let pairs = crate::llm::pair_duplicates_until(
+            &cands,
+            Some(std::time::Instant::now() + std::time::Duration::from_secs(2)),
+        );
+        for (k, pair) in pairs.into_iter().enumerate() {
+            let Some(pair) = pair else { continue };
+            let display = self.display(&pair.partner.to_string_lossy());
+            let id = idxs[k];
+            if let Some(m) = self.nodes[id].model.as_mut() {
+                m.partner_weight = Some(display.clone());
+                m.dupe_level = Some(pair.level);
+            }
+            if pair.level == crate::llm::DupeLevel::Full {
+                if let Some(pid) = self.nodes.iter().position(|n| {
+                    n.model.as_ref().and_then(|m| m.weight.as_deref()) == Some(display.as_str())
+                }) {
+                    self.nodes[id].duplicate_of = Some(pid as u32);
+                }
+            } else if self.nodes[id].note.is_none() {
+                self.nodes[id].note = Some(crate::llm::SAMPLE_NOTE.into());
+            }
+        }
+        for &i in &idxs {
+            if self.nodes[i].model.as_ref().is_some_and(|m| m.clone_copy) {
+                self.nodes[i].note = Some(crate::llm::CLONE_NOTE.into());
+            }
+        }
     }
 
     fn claim_all(&mut self, sources: &[(String, String)]) -> Vec<(String, u32)> {
@@ -1332,6 +1815,7 @@ impl Builder<'_> {
             rule_id: None,
             rule_root: None,
             delegate: false,
+            model: None,
         });
         if let Some(p) = parent {
             self.nodes[p as usize].children.push(id);
@@ -1485,8 +1969,13 @@ impl Builder<'_> {
         let mut deep = 0;
         for &k in &kids {
             let c = &self.nodes[k as usize];
-            size += c.size;
-            mb.add(&c.match_bytes);
+            // A model whose weights are already counted on another row stays visible, but its
+            // bytes are not added again.
+            let shared = c.model.as_ref().is_some_and(|m| m.shares_weights);
+            if !shared {
+                size += c.size;
+                mb.add(&c.match_bytes);
+            }
             deep |= c.deep;
         }
         let previous = self
@@ -1881,6 +2370,150 @@ mod tests {
         assert_eq!(cats, disk.nodes[0].size);
         assert!(disk.nodes[0].match_bytes.ai_models >= 115_000_000);
         assert!(disk.nodes[0].match_bytes.ai_models < 200_000_000);
+        crate::platform::remove_test_dir(&root);
+    }
+
+    fn write_gguf(path: &Path, bytes: usize) {
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut f = fs::File::create(path).unwrap();
+        f.write_all(b"GGUF").unwrap();
+        f.write_all(&vec![0u8; bytes - 4]).unwrap();
+    }
+
+    #[test]
+    fn each_tool_lists_its_models_and_shared_weights_count_once() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("wrasse-tools-{nanos}"));
+        let home = root.join("Users/me");
+        let models = home.join(".ollama/models");
+        let shared = "a".repeat(64);
+        let own = "b".repeat(64);
+        write(&models.join(format!("blobs/sha256-{shared}")), 10_000_000);
+        write(&models.join(format!("blobs/sha256-{own}")), 10_000_000);
+        write(&models.join("blobs/sha256-orphan"), 10_000_000);
+        let big = format!(
+            r#"{{"layers":[{{"mediaType":"application/vnd.ollama.image.model","digest":"sha256:{shared}","size":1}},{{"mediaType":"application/vnd.ollama.image.model","digest":"sha256:{own}","size":2}}]}}"#
+        );
+        let tiny = format!(
+            r#"{{"layers":[{{"mediaType":"application/vnd.ollama.image.model","digest":"sha256:{shared}","size":1}}]}}"#
+        );
+        let manifest = models.join("manifests/registry.ollama.ai/library/llama-Q4_K_M/latest");
+        fs::create_dir_all(manifest.parent().unwrap()).unwrap();
+        fs::write(&manifest, big).unwrap();
+        let other = models.join("manifests/registry.ollama.ai/library/tiny/latest");
+        fs::create_dir_all(other.parent().unwrap()).unwrap();
+        fs::write(&other, tiny).unwrap();
+        write_gguf(
+            &home.join("Library/Application Support/Jan/models/coder-Q5_K_M.gguf"),
+            10_000_000,
+        );
+        write_gguf(
+            &home.join("Library/Application Support/nomic.ai/GPT4All/gpt-Q8_0.gguf"),
+            10_000_000,
+        );
+        let lms = home.join("Models");
+        write_gguf(&lms.join("publisher/story-Q4_K_M.gguf"), 10_000_000);
+        let settings = home.join("Library/Application Support/LM Studio/settings.json");
+        fs::create_dir_all(settings.parent().unwrap()).unwrap();
+        fs::write(
+            &settings,
+            format!(r#"{{"downloadsFolder":"{}"}}"#, lms.display()),
+        )
+        .unwrap();
+        let hub = home.join(".cache/huggingface/hub");
+        write(&hub.join("blobs/w"), 10_000_000);
+        let repo = hub.join("models--org--plain");
+        fs::create_dir_all(repo.join("snapshots/rev")).unwrap();
+        std::os::unix::fs::symlink(
+            "../../../blobs/w",
+            repo.join("snapshots/rev/model.safetensors"),
+        )
+        .unwrap();
+        fs::write(
+            repo.join("snapshots/rev/config.json"),
+            r#"{"quantization_config":{"bits":4,"quant_method":"bitsandbytes"}}"#,
+        )
+        .unwrap();
+
+        let tree = scan(&root, &ScanControl::default()).unwrap();
+        let prefix = root.to_string_lossy().into_owned();
+        let scanned = tree.node(0).size;
+        let input = Input {
+            tree: &tree,
+            display_prefix: &prefix,
+            home: Some(PathBuf::from("/Users/me")),
+            volumes: Volumes {
+                capacity: scanned * 4,
+                available: scanned,
+                os_used: 0,
+            },
+            volume_name: "Test HD".into(),
+            previous: None,
+            running: vec![],
+            today: 20_000,
+            env: HashMap::new(),
+            apps: &[],
+            orphans: &[],
+            hf_models: &crate::scan::hf::hf_models,
+        };
+        let disk = build(&input);
+        let find = |name: &str| {
+            disk.nodes
+                .iter()
+                .find(|n| n.name == name)
+                .unwrap_or_else(|| panic!("no {name}"))
+        };
+        let llama = find("llama-Q4_K_M:latest");
+        assert_eq!(llama.kind, NodeKind::Model);
+        assert_eq!(
+            llama.model.as_ref().unwrap().quantization.as_deref(),
+            Some("Q4_K_M")
+        );
+        assert!(llama.size >= 20_000_000);
+        assert!(!llama.model.as_ref().unwrap().shares_weights);
+        let tiny = find("tiny:latest");
+        assert!(tiny.model.as_ref().unwrap().shares_weights);
+        assert_eq!(
+            tiny.model.as_ref().unwrap().shares_with.as_deref(),
+            Some("llama-Q4_K_M:latest")
+        );
+        let orphan = disk
+            .nodes
+            .iter()
+            .find(|n| n.model.as_ref().is_some_and(|m| m.orphan_blob))
+            .unwrap();
+        assert!(orphan.size >= 10_000_000);
+        let jan = find("models · coder-Q5_K_M.gguf");
+        assert_eq!(jan.model.as_ref().unwrap().tool, crate::llm::ModelTool::Jan);
+        assert_eq!(
+            jan.model.as_ref().unwrap().quantization.as_deref(),
+            Some("Q5_K_M")
+        );
+        let gpt = find("gpt-Q8_0.gguf");
+        assert_eq!(
+            gpt.model.as_ref().unwrap().tool,
+            crate::llm::ModelTool::Gpt4all
+        );
+        let story = find("publisher · story-Q4_K_M.gguf");
+        assert_eq!(
+            story.model.as_ref().unwrap().tool,
+            crate::llm::ModelTool::LmStudio
+        );
+        let hf = find("plain");
+        assert_eq!(
+            hf.model.as_ref().unwrap().quantization.as_deref(),
+            Some("4-bit")
+        );
+        assert_eq!(
+            hf.model.as_ref().unwrap().tool,
+            crate::llm::ModelTool::HuggingFace
+        );
+        let ai = find("AI Models").size;
+        assert!(ai >= 70_000_000, "{ai}");
+        assert!(ai < 85_000_000, "shared blob counted once: {ai}");
         crate::platform::remove_test_dir(&root);
     }
 }

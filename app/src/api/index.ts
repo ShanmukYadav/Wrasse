@@ -4,7 +4,7 @@
 import { inTauri, type AppInfo } from "../lib/backend";
 import { mockApi } from "../mock/api";
 import { tauriApi } from "./tauri";
-import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile } from "./types";
+import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -70,6 +70,10 @@ export interface WrasseApi {
   /** Uninstalls an app: the bundle goes by its route (tray, Homebrew, Finder Trash), the chosen
    *  leftovers go to the tray. The core looks the app up again and checks it isn't running. */
   uninstall(disk: Disk, appId: number, leftoverIds: number[]): Promise<UninstallOutcome>;
+  /** Models Ollama reports as loaded, plus LM Studio's process memory. Read-only. */
+  loadedModels(): Promise<LoadedModel[]>;
+  /** Asks Ollama to unload a model. Does not delete it. */
+  unloadModel(name: string): Promise<{ dryRun: boolean }>;
 }
 
 /** Dev toggle: in the app, `wrasse.mock = "1"` in localStorage switches to mock data for UI work. */

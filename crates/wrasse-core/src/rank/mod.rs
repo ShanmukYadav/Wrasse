@@ -257,7 +257,9 @@ pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) 
             }
             // AI models, whole.
             Category::AiModels => {
-                if n.kind == NodeKind::Model && allowed(n) {
+                // A clone shares its blocks: removing it frees nothing, so it is not offered.
+                let clone = n.model.as_ref().is_some_and(|m| m.clone_copy);
+                if n.kind == NodeKind::Model && allowed(n) && !clone {
                     push(single(
                         n,
                         if n.size >= 1_000_000_000 && n.last_opened_days >= 180 {

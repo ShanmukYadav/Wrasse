@@ -6,7 +6,7 @@ import type { WrasseApi } from ".";
 import type { AppInfo } from "../lib/backend";
 import { insights } from "./insights";
 import { detach, detachedRoots, reattach } from "./tree";
-import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile } from "./types";
+import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, ModelMeta } from "./types";
 
 type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean; scanned?: { bytes: number; mtime: number } };
 type CoreReport = { done: { path: string; bytes: number; entry: string | null }[]; skipped: { path: string; reason: SkipReason }[]; bytes: number; dryRun: boolean };
@@ -21,6 +21,25 @@ type CoreUninstall = {
   dryRun: boolean;
 };
 type CoreTrayEntry = { id: string; batch: string; name: string; path: string; bytes: number; at: number; ruleId: string | null };
+
+/** A model removal. Paths are the ones the scan showed, so the report maps back to the node. */
+function modelJob(n: DiskNode, opts: RemoveOptions) {
+  const m: ModelMeta = n.model!;
+  return {
+    path: n.path,
+    tool: m.tool,
+    removal: m.removal,
+    ...(m.ollamaName ? { ollamaName: m.ollamaName } : {}),
+    ...(m.modelsDir ? { modelsDir: m.modelsDir } : {}),
+    ...(m.weight ? { weight: m.weight } : {}),
+    ...(m.partnerWeight ? { partnerWeight: m.partnerWeight } : {}),
+    ...(m.dupeLevel ? { dupeLevel: m.dupeLevel } : {}),
+    bytes: n.size,
+    safety: n.safety === "safe" ? "safe" : "yourCall",
+    handPicked: opts.handPicked,
+    ...(m.cloneCopy ? { cloneCopy: true } : {}),
+  };
+}
 
 function request(n: DiskNode, opts: RemoveOptions): ItemRequest {
   return {
@@ -77,12 +96,40 @@ export const tauriApi: WrasseApi = {
 
   async preview(disk, ids, opts) {
     const idOf = byPath(disk, ids);
-    const p = await invoke<CorePreview>("preview_removal", { items: ids.map((id) => request(disk.nodes[id], opts)), deleteNow: !!opts.deleteNow });
-    return { bytes: p.bytes, undoable: p.undoable, synced: p.synced.map(idOf), skipped: p.skipped.map((s) => ({ id: idOf(s.path), reason: s.reason })) };
+    const modelIds = ids.filter((id) => disk.nodes[id].model);
+    const pathIds = ids.filter((id) => !disk.nodes[id].model);
+    let bytes = 0;
+    let undoable = true;
+    const synced: number[] = [];
+    const skipped: { id: number; reason: SkipReason }[] = [];
+    if (pathIds.length) {
+      const p = await invoke<CorePreview>("preview_removal", { items: pathIds.map((id) => request(disk.nodes[id], opts)), deleteNow: !!opts.deleteNow });
+      bytes += p.bytes;
+      undoable = undoable && p.undoable;
+      synced.push(...p.synced.map(idOf));
+      skipped.push(...p.skipped.map((s) => ({ id: idOf(s.path), reason: s.reason })));
+    }
+    if (modelIds.length) {
+      const p = await invoke<CorePreview>("preview_models", { jobs: modelIds.map((id) => modelJob(disk.nodes[id], opts)) });
+      bytes += p.bytes;
+      undoable = undoable && p.undoable;
+      skipped.push(...p.skipped.map((s) => ({ id: idOf(s.path), reason: s.reason })));
+    }
+    return { bytes, undoable, synced, skipped };
   },
   async remove(disk, ids, opts) {
     const idOf = byPath(disk, ids);
-    const r = await invoke<CoreReport>("remove_items", { items: ids.map((id) => request(disk.nodes[id], opts)), deleteNow: !!opts.deleteNow });
+    const modelIds = ids.filter((id) => disk.nodes[id].model);
+    const pathIds = ids.filter((id) => !disk.nodes[id].model);
+    const reports: CoreReport[] = [];
+    if (pathIds.length) reports.push(await invoke<CoreReport>("remove_items", { items: pathIds.map((id) => request(disk.nodes[id], opts)), deleteNow: !!opts.deleteNow }));
+    if (modelIds.length) reports.push(await invoke<CoreReport>("remove_models", { jobs: modelIds.map((id) => modelJob(disk.nodes[id], opts)) }));
+    const r: CoreReport = {
+      done: reports.flatMap((x) => x.done),
+      skipped: reports.flatMap((x) => x.skipped),
+      bytes: reports.reduce((s, x) => s + x.bytes, 0),
+      dryRun: reports.some((x) => x.dryRun),
+    };
     const done = r.done.map((d) => ({ id: idOf(d.path), entry: d.entry ?? undefined })).filter((d) => d.id >= 0);
     if (!r.dryRun) detach(disk, done.map((d) => d.id));
     return { disk, done, skipped: r.skipped.map((s) => ({ id: idOf(s.path), reason: s.reason })), dryRun: r.dryRun, bytes: r.bytes };
@@ -174,5 +221,9 @@ export const tauriApi: WrasseApi = {
       skipped: r.leftovers.skipped.map((s) => ({ id: idOf(s.path), reason: s.reason })),
       dryRun: r.dryRun,
     };
+  },
+  loadedModels: () => invoke<LoadedModel[]>("loaded_models"),
+  async unloadModel(name) {
+    return { dryRun: await invoke<boolean>("unload_model", { name }) };
   },
 };

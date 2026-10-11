@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager, State};
 use wrasse_core::apps::uninstall;
+use wrasse_core::llm::{self, ModelJob, ModelRemoval, Probe};
 use wrasse_core::platform;
 use wrasse_core::quarantine;
 use wrasse_core::rank;
@@ -216,6 +217,76 @@ pub fn preview_removal(
                 .collect(),
             skipped: plan.skipped,
         })
+    })
+}
+
+/// What removing these models would do. Always dry: a full duplicate check may read the weights,
+/// and nothing is moved. An Ollama removal is not undoable when the local server answers.
+#[tauri::command]
+pub fn preview_models(
+    state: State<'_, CleanupState>,
+    jobs: Vec<ModelJob>,
+) -> Result<Preview, String> {
+    with_ctx(&state, |ctx| {
+        let probe = llm::Live;
+        let reachable = probe.reachable();
+        let mut bytes = 0u64;
+        let mut undoable = true;
+        let mut skipped = Vec::new();
+        for job in &jobs {
+            let one = llm::remove_model_with(ctx, job, true, &probe).map_err(|e| e.to_string())?;
+            bytes += one.bytes;
+            skipped.extend(one.skipped);
+            if job.removal == ModelRemoval::Ollama && reachable && !one.done.is_empty() {
+                undoable = false;
+            }
+        }
+        Ok(Preview {
+            bytes,
+            undoable,
+            synced: Vec::new(),
+            skipped,
+        })
+    })
+}
+
+/// Removes models. Ollama goes through its server when it answers; everything else is quarantined.
+#[tauri::command]
+pub fn remove_models(
+    state: State<'_, CleanupState>,
+    jobs: Vec<ModelJob>,
+) -> Result<safety::Report, String> {
+    let dry_run = state.dry_run.load(Ordering::Relaxed);
+    with_ctx(&state, |ctx| {
+        let probe = llm::Live;
+        let mut report = safety::Report {
+            dry_run,
+            ..Default::default()
+        };
+        for job in &jobs {
+            let one =
+                llm::remove_model_with(ctx, job, dry_run, &probe).map_err(|e| e.to_string())?;
+            report.bytes += one.bytes;
+            report.done.extend(one.done);
+            report.skipped.extend(one.skipped);
+        }
+        Ok(report)
+    })
+}
+
+/// Models Ollama says are loaded, plus LM Studio's process memory. Read-only.
+#[tauri::command]
+pub fn loaded_models() -> Vec<llm::LoadedModel> {
+    llm::loaded_models()
+}
+
+/// Asks Ollama to unload a model. Returns whether this was a dry run.
+#[tauri::command]
+pub fn unload_model(state: State<'_, CleanupState>, name: String) -> Result<bool, String> {
+    let dry_run = state.dry_run.load(Ordering::Relaxed);
+    with_ctx(&state, |ctx| {
+        llm::unload_model(ctx, &name, dry_run).map_err(|e| e.to_string())?;
+        Ok(dry_run)
     })
 }
 

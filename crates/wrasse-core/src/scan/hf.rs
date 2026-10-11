@@ -2,7 +2,7 @@
 //! `snapshots/` into shared blob storage, so a model's real size is the size of the files its
 //! snapshot links point to. Read-only: links are read and followed, nothing is opened for writing.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -14,6 +14,10 @@ pub struct HfModel {
     pub dir: PathBuf,
     /// Bytes on disk of the files its snapshots point to (shared blobs counted once, first model wins).
     pub bytes: u64,
+    /// The same blobs counted for this model even when another model already owns them.
+    pub logical_bytes: u64,
+    /// Short repo name of the model that already owns a shared blob.
+    pub shares_with: Option<String>,
 }
 
 /// The models in a hub folder, largest first.
@@ -21,7 +25,7 @@ pub fn hf_models(hub: &Path) -> Vec<HfModel> {
     let Ok(entries) = fs::read_dir(hub) else {
         return Vec::new();
     };
-    let mut seen = HashSet::new();
+    let mut owner: HashMap<PathBuf, String> = HashMap::new();
     let mut out = Vec::new();
     let mut dirs: Vec<PathBuf> = entries
         .flatten()
@@ -36,15 +40,44 @@ pub fn hf_models(hub: &Path) -> Vec<HfModel> {
     for dir in dirs {
         let name = dir.file_name().and_then(|n| n.to_str()).unwrap_or_default();
         let repo = name.trim_start_matches("models--").replacen("--", "/", 1);
+        let short = repo.rsplit('/').next().unwrap_or(&repo).to_string();
+        let mut local = HashSet::new();
         let mut bytes = 0;
-        sum_snapshot(&dir.join("snapshots"), &mut seen, &mut bytes, 0);
-        out.push(HfModel { repo, dir, bytes });
+        let mut logical = 0;
+        let mut shares_with = None;
+        sum_snapshot(
+            &dir.join("snapshots"),
+            &mut owner,
+            &short,
+            &mut local,
+            &mut bytes,
+            &mut logical,
+            &mut shares_with,
+            0,
+        );
+        out.push(HfModel {
+            repo,
+            dir,
+            bytes,
+            logical_bytes: logical,
+            shares_with,
+        });
     }
     out.sort_by_key(|m| std::cmp::Reverse(m.bytes));
     out
 }
 
-fn sum_snapshot(dir: &Path, seen: &mut HashSet<PathBuf>, bytes: &mut u64, depth: u32) {
+#[allow(clippy::too_many_arguments)]
+fn sum_snapshot(
+    dir: &Path,
+    owner: &mut HashMap<PathBuf, String>,
+    short: &str,
+    local: &mut HashSet<PathBuf>,
+    bytes: &mut u64,
+    logical: &mut u64,
+    shares_with: &mut Option<String>,
+    depth: u32,
+) {
     if depth > 8 {
         return;
     }
@@ -54,18 +87,37 @@ fn sum_snapshot(dir: &Path, seen: &mut HashSet<PathBuf>, bytes: &mut u64, depth:
     for e in entries.flatten() {
         let Ok(md) = e.metadata() else { continue }; // lstat
         if md.is_dir() {
-            sum_snapshot(&e.path(), seen, bytes, depth + 1);
+            sum_snapshot(
+                &e.path(),
+                owner,
+                short,
+                local,
+                bytes,
+                logical,
+                shares_with,
+                depth + 1,
+            );
             continue;
         }
         // Follow the link (possibly a chain) to the real blob.
         let Ok(target) = fs::canonicalize(e.path()) else {
             continue;
         };
-        if !seen.insert(target.clone()) {
+        if !local.insert(target.clone()) {
             continue;
         }
-        if let Ok(t) = fs::metadata(&target) {
-            *bytes += allocated(&t);
+        let Ok(t) = fs::metadata(&target) else {
+            continue;
+        };
+        let size = allocated(&t);
+        *logical += size;
+        if let Some(prev) = owner.get(&target) {
+            if shares_with.is_none() {
+                *shares_with = Some(prev.clone());
+            }
+        } else {
+            owner.insert(target, short.to_string());
+            *bytes += size;
         }
     }
 }
@@ -105,6 +157,8 @@ mod tests {
         assert_eq!(models.len(), 2);
         assert!(models[0].bytes >= 2_000_000);
         assert_eq!(models[1].bytes, 0, "a shared blob counts once");
+        assert!(models[1].logical_bytes >= 2_000_000);
+        assert_eq!(models[1].shares_with.as_deref(), Some("a"));
         assert_eq!(models[0].repo, "org/a");
         crate::platform::remove_test_dir(hub.parent().unwrap());
     }

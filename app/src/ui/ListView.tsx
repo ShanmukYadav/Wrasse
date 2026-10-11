@@ -10,6 +10,7 @@ import { useApp } from "../store/app";
 import { SafetyLabel } from "./Safety";
 import { Icon } from "../design/icons/Icon";
 import { iconFor, toneFor } from "../design/icons/semantic";
+import { usedLabel } from "./modelLine";
 import { ScopeEmpty } from "./ScopeEmpty";
 import { scopeBits, visibleRows } from "./scope";
 
@@ -154,7 +155,7 @@ function List() {
                 </span>
                 <span className="list-col list-col-category text-muted">{t(`category.${n.category}`)}</span>
                 <span className="list-col list-col-size tabular">{f.value} {f.unit}</span>
-                <span className="list-col list-col-lastOpened text-muted tabular">{n.kind === "ghost" ? "—" : n.lastOpenedDays === 0 ? t("detail.today") : t("detail.daysAgo", { count: n.lastOpenedDays })}</span>
+                <span className="list-col list-col-lastOpened text-muted tabular">{n.kind === "ghost" ? "—" : usedLabel(n)}</span>
                 <span className="list-col list-col-safety"><SafetyLabel safety={n.safety} /></span>
               </div>
             );

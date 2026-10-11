@@ -4,8 +4,8 @@ import type { DiskNode } from "../../api";
 import { categories, d1 } from "../../design/tokens";
 import { t } from "../../i18n";
 import { formatBytes } from "../../lib/format";
-import { useReducedMotion, useScheme } from "../../lib/prefs";
-import { duration, ease, mapMotion } from "../../motion/tokens";
+import { useScheme } from "../../lib/prefs";
+import { duration, ease } from "../../motion/tokens";
 import { useApp } from "../../store/app";
 import { GhostTile } from "./GhostTile";
 import { gridLayout, type Cell } from "./gridLayout";
@@ -43,20 +43,14 @@ export function Home() {
   // Sonar mounts after the first paint and fades in, so its rings are not in the opening composite.
   const showSonar = useDelayed(scan === "scanning", 400);
   return (
-    <motion.main
-      className="home"
-      aria-hidden={!visible}
-      animate={{ opacity: visible ? 1 : 0 }}
-      transition={{ duration: duration.base, ease: ease.inOut }}
-      style={{ pointerEvents: visible ? "auto" : "none" }}
-    >
+    <main className={`home ${visible ? "" : "is-hidden"}`} aria-hidden={!visible}>
       <LayoutGroup>
         <AnimatePresence initial={false}>
           <Level key={focus} focus={focus} root={focus === disk.root} />
         </AnimatePresence>
       </LayoutGroup>
       {showSonar && <Sonar key={scanKey} />}
-    </motion.main>
+    </main>
   );
 }
 
@@ -66,16 +60,16 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   const disk = useApp((s) => s.disk);
   useApp((s) => s.diskVersion);
   const lens = useApp((s) => s.lens);
+  useEffect(() => {
+    if (lens === "aiModels") void useApp.getState().refreshLoaded();
+  }, [lens]);
   const filters = useApp((s) => s.filters);
   const plan = useApp((s) => s.plan);
   const selected = useApp((s) => s.selected);
   const deleting = useApp((s) => s.deleting);
   const pulse = useApp((s) => s.pulse);
-  const scan = useApp((s) => s.scan);
-  const scanKey = useApp((s) => s.scanKey);
   const units = useApp((s) => s.info?.units ?? "decimal");
   const scheme = useScheme();
-  const reduced = useReducedMotion();
   const { setFocus, select, freeGhost, setViewMode } = useApp.getState();
 
   // Cell size, so tiles can decide how many rows they fit.
@@ -88,7 +82,11 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
       const cellW = (w - (d1.grid.cols - 1) * d1.grid.gap) / d1.grid.cols;
       const cellH = (h - (d1.grid.rows - 1) * d1.grid.gap) / d1.grid.rows;
       // A level that is fading out may already be detached: keep its last good size.
-      if (Number.isFinite(cellW) && Number.isFinite(cellH) && cellW > 0 && cellH > 0) setMetrics({ cellW, cellH });
+      if (Number.isFinite(cellW) && Number.isFinite(cellH) && cellW > 0 && cellH > 0) {
+        // Same size must not store a new object: that re-render was allocating a fresh set of
+        // tile layers on every resize observation, and the web view's memory climbed for minutes.
+        setMetrics((m) => (Math.abs(m.cellW - cellW) < 0.5 && Math.abs(m.cellH - cellH) < 0.5 ? m : { cellW, cellH }));
+      }
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -119,14 +117,6 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   );
   const parentSize = focusNode.size - (disk.nodes[disk.ghostId]?.parent === focus ? disk.nodes[disk.ghostId].size : 0);
 
-  // Sonar reveal (home only): each tile appears as the sweep passes its center.
-  const revealDelay = (c: Cell) => {
-    const cx = c.col - 1 + c.colSpan / 2 - d1.grid.cols / 2;
-    const cy = (c.row - 1 + c.rowSpan / 2 - d1.grid.rows / 2) * (metrics.cellH / Math.max(1, metrics.cellW));
-    const max = Math.hypot(d1.grid.cols / 2, d1.grid.rows / 2);
-    return reduced ? 0 : (Math.hypot(cx, cy) / max) * mapMotion.sonar * 0.6;
-  };
-
   function open(n: DiskNode) {
     if (isDrillable(n)) setFocus(n.id);
     else select(n.id);
@@ -146,7 +136,7 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
     }
     return (
       <Tile
-        key={`${n.id}-${root ? scanKey : 0}`}
+        key={n.id}
         disk={disk}
         node={n}
         cell={cell}
@@ -158,7 +148,6 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
         selected={selected === n.id}
         deleting={deleting.includes(n.id)}
         pulseKey={pulse?.id === n.id ? pulse.key : null}
-        reveal={root && scan === "scanning" ? { key: scanKey, delay: revealDelay(cell) } : null}
         drillable={isDrillable(n)}
         onOpen={open}
       />
@@ -171,14 +160,16 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
     animate: { opacity: 1, transition: { duration: duration.fast, ease: ease.out } },
     exit: { opacity: 0, transition: { duration: duration.fast, ease: ease.inOut } },
   };
+  // The home level is a plain div. Fading it (or each tile) promotes a backing store the
+  // size of the grid, and the launch stays under the memory budget only without that store.
   if (root) {
     return (
-      <motion.div className="level" {...fade}>
+      <div className="level">
         {banner}
         <div ref={gridRef} className="home-grid">
           {tiles}
         </div>
-      </motion.div>
+      </div>
     );
   }
 
@@ -212,7 +203,7 @@ function MoreTile({ cell, focus, count, size, onOpen }: { cell: Cell; focus: Dis
     "--glow": c.glow,
   } as CSSProperties;
   return (
-    <motion.button
+    <button
       type="button"
       className="tile tile-more focus-ring"
       style={style}
@@ -229,7 +220,7 @@ function MoreTile({ cell, focus, count, size, onOpen }: { cell: Cell; focus: Dis
       </span>
       <span className="tile-spacer" />
       <span className="tile-open">{t("home.showAll")}</span>
-    </motion.button>
+    </button>
   );
 }
 

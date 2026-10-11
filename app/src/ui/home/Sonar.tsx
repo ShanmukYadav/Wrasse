@@ -31,14 +31,14 @@ export function Sonar() {
   }
   return (
     <div className={`sonar ${paused ? "is-paused" : ""}`} style={vars}>
-      {[0, 1].map((i) => (
-        <span key={i} className="sonar-ring" style={{ borderColor: reef.sonar[scheme], animationDelay: `${i * 0.35}s` }} />
-      ))}
+      {/* One ring, and the sweep never scales it past its layout size. A scale above 1 makes
+          WebKit rasterize the transformed bounds, which is a full-window surface per ring. */}
+      <span className="sonar-ring" style={{ borderColor: reef.sonar[scheme] }} />
       <span className="sonar-mark">
         <BrandMark size={56} />
       </span>
       <ScanReadout />
-      {Array.from({ length: reef.bubbleCount }, (_, i) => {
+      {Array.from({ length: Math.min(8, reef.bubbleCount) }, (_, i) => {
         const a = (i * 137.5 * Math.PI) / 180;
         const r = 60 + ((i * 53) % 260);
         return (

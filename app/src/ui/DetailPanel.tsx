@@ -11,6 +11,7 @@ import { duration, ease, spring } from "../motion/tokens";
 import { pressable } from "../motion/variants";
 import { useApp } from "../store/app";
 import { isDrillable } from "./home/nodes";
+import { loadedFor, toolName, usedLabel } from "./modelLine";
 
 // Detail panel (D1): white glass, 330px, slides in from the right.
 export function DetailPanel() {
@@ -59,8 +60,9 @@ function Detail({ id }: { id: number }) {
   const disk = useApp((s) => s.disk);
   const units = useApp((s) => s.info?.units ?? "decimal");
   const fileManager = useApp((s) => s.info?.fileManager ?? "Finder");
+  const loaded = useApp((s) => s.loadedModels);
   const scheme = useScheme();
-  const { closeDetail, requestDeleteNow, freeGhost, notify, setFocus, requestDelete } = useApp.getState();
+  const { closeDetail, requestDeleteNow, freeGhost, notify, setFocus, requestDelete, refreshLoaded, unloadModel } = useApp.getState();
   const blocked = !deletable(disk, id);
   const n = disk.nodes[id];
   const ghost = n.kind === "ghost";
@@ -69,8 +71,14 @@ function Detail({ id }: { id: number }) {
   const c = categories[scheme][n.category];
   const original = n.duplicateOf !== undefined ? disk.nodes[n.duplicateOf] : null;
   const label = labelFor(n);
-  const lastUsed = ghost ? "—" : n.lastOpenedDays === 0 ? t("detail.today") : t("detail.daysAgo", { count: n.lastOpenedDays });
+  const lastUsed = ghost ? "—" : usedLabel(n);
   const explanation = original ? t("detail.duplicateWhy", { name: original.name, path: original.path }) : n.why;
+  const running = n.model ? loadedFor(n, loaded) : undefined;
+  const runningSize = running ? formatBytes(running.bytes, units) : null;
+  const runningText = runningSize ? `${runningSize.value} ${runningSize.unit}` : "";
+  useEffect(() => {
+    if (n.model) void refreshLoaded();
+  }, [id, n.model, refreshLoaded]);
 
   return (
     <div className="detail" style={{ "--acc": c.accent, "--ink": c.ink } as CSSProperties}>
@@ -91,6 +99,11 @@ function Detail({ id }: { id: number }) {
       <div className="flex flex-wrap gap-2">
         <span className={`chip chip-${label.tone}`}>{label.text}</span>
         {n.note && <span className="chip chip-protected">{n.note}</span>}
+        {running && (
+          <span className="chip chip-amber">
+            {running.approx ? t("model.loadedApprox", { size: runningText }) : t("model.loaded", { size: runningText })}
+          </span>
+        )}
       </div>
 
       <dl className="detail-grid">
@@ -98,6 +111,18 @@ function Detail({ id }: { id: number }) {
         <dd className="break-all">{n.path}</dd>
         <dt>{t("detail.lastUsed")}</dt>
         <dd>{lastUsed}</dd>
+        {n.model && (
+          <>
+            <dt>{t("model.toolLabel")}</dt>
+            <dd>{toolName(n.model.tool)}</dd>
+            {n.model.quantization && (
+              <>
+                <dt>{t("model.quant")}</dt>
+                <dd>{n.model.quantization}</dd>
+              </>
+            )}
+          </>
+        )}
         <dt>{t("detail.category")}</dt>
         <dd>{t(`category.${n.category}`)}</dd>
       </dl>
@@ -111,6 +136,8 @@ function Detail({ id }: { id: number }) {
       ) : (
         <p className="detail-why">{explanation}</p>
       )}
+      {n.model?.sharesWith && <p className="text-caption text-muted">{t("model.shares", { name: n.model.sharesWith })}</p>}
+      {n.model?.dupeLevel === "sampled" && !n.note && <p className="text-caption text-muted">{t("model.sampled")}</p>}
 
       <div className="detail-actions">
         {ghost ? (
@@ -119,6 +146,11 @@ function Detail({ id }: { id: number }) {
           </motion.button>
         ) : (
           <>
+            {running && n.model?.removal === "ollama" && n.model.ollamaName && (
+              <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => unloadModel(n.model!.ollamaName!)} {...pressable}>
+                {t("model.unload")}
+              </motion.button>
+            )}
             {n.kind === "app" || n.appBundle ? (
               <AppActions appId={n.kind === "app" ? n.id : n.parent} />
             ) : n.leftover ? (
@@ -126,7 +158,7 @@ function Detail({ id }: { id: number }) {
                 <Icon name="tray" size={16} /> {t("detail.remove", { size: sizeText })}
               </motion.button>
             ) : (
-              !blocked && (
+              !blocked && !running && (
                 <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => requestDelete([n.id])} {...pressable}>
                   <Icon name="trash" size={16} /> {t("delete.button", { size: sizeText })}
                 </motion.button>

@@ -54,7 +54,7 @@ scripts/check-security-audit.sh
 scripts/check-windows-compile.sh
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
-./dev.sh cargo test --workspace          # 81 tests in wrasse-core, all passing
+./dev.sh cargo test --workspace          # 99 tests in wrasse-core, all passing
 ./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
 (cd app && ../dev.sh npm run build)
 scripts/check-idle-memory.sh             # with Wrasse quit; peak 200 MB, idle 100 MB
@@ -232,9 +232,17 @@ Follow-up fixes accepted with the checkpoint:
   budgets to a first-minute peak of 200 MB and idle of 100 MB. One cold launch against those
   limits peaked at **116.1 MB** and idled at **75.5, 75.5, 75.5 MB**. The check passed. A later
   launch over either limit fails it.
+- AI models are in. A scan edge-checks same-size copies for about two seconds; removal still
+  full-checks before anything is quarantined. A later launch of the 116.1 MB commit measured
+  about 291 MB on this Mac: a ring scaled past 1 is rasterized at the transformed size, and a
+  gradient or a shadow gives every tile its own backing store. The checkpoint build keeps one
+  480px ring that stays at or below its layout size, paints each tile as a flat category color,
+  and re-execs once so libmalloc returns the scan's pages. Two cold launches, autoscan on:
+  peaks **198.4** and **178.4 MB**, idle **96.0** (96.0, 95.0, 95.0) and **95.0** (95.0, 95.0,
+  94.9) MB. Both budgets pass.
 
-**Stop here.** Windows is deferred. Phase 4 is started, and this step is the checkpoint. Don't
-open AI models, diagnostics, or developer junk until the owner says to continue.
+**Stop here.** Windows is deferred. AI models are at the checkpoint. Don't open diagnostics or
+developer junk until the owner says to continue.
 
 ### Other open issues
 

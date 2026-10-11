@@ -135,6 +135,13 @@ and logs it (dry run reports them without running):
   `osascript` is stopped, so a stuck Automation prompt can't hang Wrasse, and a password dialog
   still has time to be answered. A stop at that limit reports "Moving it to the Trash stopped
   after 2 minutes and may be partly done." That is a failure, not success.
+- `OllamaRm`: POST `{"name":"..."}` to `http://127.0.0.1:11434/api/delete`, the same request
+  `ollama rm` sends. No shell and no `ollama` binary. The name is 1–256 characters of letters,
+  digits, and `: / . _ - @`, with no `..`. Not undoable. A loaded model is refused by the model
+  remover before this runs. If the server is not reachable, the remover quarantines the manifest
+  and blobs no other manifest uses instead, and does not call this action.
+- `OllamaStop`: POST `{"model":"...","keep_alive":0}` to `http://127.0.0.1:11434/api/generate`,
+  the same request `ollama stop` sends. Same name check. The weights stay on disk.
 
 For both app actions the app must be an `.app` directly in (or one folder inside)
 `/Applications` or `~/Applications`, on the startup disk, not protected, not on the Never touch
@@ -145,6 +152,8 @@ list, not part of macOS (`com.apple.*` without an App Store receipt), and not ru
 EmptyTrash
 BrewUninstallCask
 FinderMoveToTrash
+OllamaRm
+OllamaStop
 ```
 <!-- /AUDIT -->
 

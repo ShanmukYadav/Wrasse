@@ -2,7 +2,7 @@
 // the six Reef Blocks categories plus a snapshot ghost. Deterministic. Nothing here touches the
 // real file system; Stage B replaces it with the Rust scanner behind the same api/ interface.
 import type { Category } from "../design/tokens";
-import { GB, LENS_BIT, LENS_IDS, type AppSource, type Disk, type DiskNode, type NodeKind } from "../api/types";
+import { GB, LENS_BIT, LENS_IDS, type AppSource, type Disk, type DiskNode, type ModelMeta, type NodeKind } from "../api/types";
 
 const CAPACITY = 1000 * GB;
 
@@ -141,9 +141,17 @@ export function generateDisk(seed = 7): Disk {
   const llamaLms = model("Llama 3.1 70B · LM Studio", 39, "~/.lmstudio/models/Meta-Llama-3.1-70B-Q4_K_M.gguf", 140);
   nodes[llamaLms].duplicateOf = llamaOllama;
   nodes[llamaLms].why = WHY.duplicateModel;
-  model("Qwen2.5 Coder 32B", 19.8, "~/.ollama/models/qwen2.5-coder-32b", 2);
-  model("Mistral 7B · Ollama", 8.1, "~/.ollama/models/mistral-7b", 75);
-  model("Gemma 2 9B · Hugging Face", 8.1, "~/.cache/huggingface/hub/models--google--gemma-2-9b", 230);
+  const qwen = model("Qwen2.5 Coder 32B", 19.8, "~/.ollama/models/qwen2.5-coder-32b", 2);
+  const mistral = model("Mistral 7B · Ollama", 8.1, "~/.ollama/models/mistral-7b", 75);
+  const gemma = model("Gemma 2 9B · Hugging Face", 8.1, "~/.cache/huggingface/hub/models--google--gemma-2-9b", 230);
+  const meta = (tool: ModelMeta["tool"], removal: ModelMeta["removal"], quant: string, extra: Partial<ModelMeta> = {}): ModelMeta => ({
+    tool, removal, quantization: quant, ...extra,
+  });
+  nodes[llamaOllama].model = meta("ollama", "ollama", "Q4_K_M", { ollamaName: "llama3.1:70b", weight: nodes[llamaOllama].path });
+  nodes[llamaLms].model = meta("lmStudio", "quarantine", "Q4_K_M", { dupeLevel: "full", weight: nodes[llamaLms].path, partnerWeight: nodes[llamaOllama].path });
+  nodes[qwen].model = meta("ollama", "ollama", "Q4_K_M", { ollamaName: "qwen2.5-coder:32b", weight: nodes[qwen].path });
+  nodes[mistral].model = meta("ollama", "ollama", "Q4_0", { ollamaName: "mistral:7b", weight: nodes[mistral].path });
+  nodes[gemma].model = meta("huggingFace", "huggingFace", "4-bit", { weight: nodes[gemma].path });
 
   // ---- Developer: 83 GB -------------------------------------------------------------------
   const devTop = top("Developer", "developer", { path: "~/Developer", lenses: LENS_BIT.dev, safety: "yourCall", why: WHY.generic });

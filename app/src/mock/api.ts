@@ -65,13 +65,20 @@ export const mockApi: WrasseApi = {
   // the same rules the UI shows (blocked items, Delete now only for Safe).
   async preview(disk, ids, opts) {
     const { ok, skipped } = mockCheck(disk, ids, opts);
-    return { bytes: ok.reduce((s, id) => s + disk.nodes[id].size, 0), undoable: !opts.deleteNow, synced: [], skipped };
+    const ollama = ok.some((id) => disk.nodes[id].model?.removal === "ollama");
+    return { bytes: ok.reduce((s, id) => s + disk.nodes[id].size, 0), undoable: !opts.deleteNow && !ollama, synced: [], skipped };
   },
   async remove(disk, ids, opts) {
     const { ok, skipped } = mockCheck(disk, ids, opts);
     detach(disk, ok);
     const bytes = ok.reduce((s, id) => s + disk.nodes[id].size, 0);
-    return { disk, done: ok.map((id) => ({ id, entry: `mock/${id}` })), skipped, dryRun: false, bytes };
+    return {
+      disk,
+      done: ok.map((id) => ({ id, entry: disk.nodes[id].model?.removal === "ollama" ? undefined : `mock/${id}` })),
+      skipped,
+      dryRun: false,
+      bytes,
+    };
   },
   async removeJunk(items) {
     return { done: items.length, bytes: items.reduce((s, i) => s + i.bytes, 0), skipped: 0, dryRun: false };
@@ -146,6 +153,12 @@ export const mockApi: WrasseApi = {
   },
   async planFree(disk, target) {
     return planFree(disk, target);
+  },
+  async loadedModels() {
+    return [];
+  },
+  async unloadModel() {
+    return { dryRun: true };
   },
   async uninstall(disk, appId, leftoverIds) {
     const app = disk.nodes[appId];

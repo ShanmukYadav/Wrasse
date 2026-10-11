@@ -455,6 +455,11 @@ html:not(.is-glass) .glass-css {
   position: relative;
   display: flex;
 }
+/* Hidden while the list is open. No resting opacity, so the home screen is not its own layer. */
+.home.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
 .level {
   position: absolute;
   inset: 0;
@@ -498,10 +503,13 @@ html:not(.is-glass) .glass-css {
   gap: var(--d1-tile-gap);
   padding: var(--d1-tile-padding);
   border-radius: var(--d1-tile-radius);
-  background: linear-gradient(160deg, var(--from) 0%, var(--to) 100%);
+  /* A gradient, a shadow, or overflow:clip gives every tile its own backing store and the
+     first paint of those stores crosses the launch budget. The category color still comes
+     from --from. */
+  background: var(--from);
   border: 1px solid var(--tint);
-  box-shadow: var(--d1-tile-shadow);
-  overflow: clip; /* clip, not hidden: a hidden box can be scrolled by focus/clicks inside it */
+  box-shadow: none;
+  overflow: visible;
   text-align: left;
   cursor: pointer;
   min-width: 0;
@@ -513,16 +521,20 @@ html:not(.is-glass) .glass-css {
 }
 .tile:hover {
   translate: 0 calc(var(--d1-tile-hover-lift) * 1px);
-  box-shadow: var(--d1-tile-hover-shadow);
 }
 .tile.is-dimmed {
   opacity: var(--d1-dimmed);
+}
+.tile.is-deleting {
+  opacity: 0;
+  pointer-events: none;
 }
 .tile.is-selected {
   outline: var(--d1-tile-selection-width) solid var(--acc);
   outline-offset: -1px;
 }
 .tile-glow {
+  display: none;
   position: absolute;
   right: var(--d1-tile-glow-offset);
   top: var(--d1-tile-glow-offset);
@@ -805,7 +817,9 @@ html:not(.is-glass) .glass-css {
   inset: 0 0 var(--d1-grid-pad-bottom) 0;
   pointer-events: none;
   overflow: hidden;
-  --sonar-ring: 720px;
+  /* Layout size is the largest the ring gets. Scaling past 1 rasterizes the transformed
+     bounds and the launch spike comes back. */
+  --sonar-ring: 480px;
   animation: sonar-in 0.35s ease both;
 }
 .sonar-ring {
@@ -882,9 +896,8 @@ html:not(.is-glass) .glass-css {
   to { opacity: 1; }
 }
 @keyframes sonar-sweep {
-  /* 0.131×720px and 2.622×720px are the old 0.05×160vmax and 1×160vmax diameters. */
-  from { transform: scale(0.131); opacity: 0.9; }
-  to { transform: scale(2.622); opacity: 0; }
+  from { transform: scale(0.2); opacity: 0.9; }
+  to { transform: scale(1); opacity: 0; }
 }
 @keyframes sonar-mark {
   0% { transform: scale(0.9); opacity: 0; }

@@ -58,7 +58,9 @@ function Sheet({ ids, kind, handPicked }: { ids: number[]; kind: ConfirmKind; ha
     return () => window.removeEventListener("keydown", onKey);
   }, [cancelDelete]);
 
-  const permanent = kind !== "caution";
+  const ollama = items.some((n) => n.model?.removal === "ollama");
+  const serverRm = ollama && preview?.undoable === false;
+  const permanent = kind !== "caution" || serverRm;
   const total = kind === "emptyTray" ? tray.reduce((s, i) => s + i.size, 0) : (preview?.bytes ?? items.reduce((s, n) => s + n.size, 0));
   const title =
     kind === "emptyTray"
@@ -75,12 +77,16 @@ function Sheet({ ids, kind, handPicked }: { ids: number[]; kind: ConfirmKind; ha
         ? t("confirm.emptyTrashBody")
         : kind === "deleteNow"
           ? t("confirm.deleteNowBody")
+          : serverRm
+            ? t("model.ollamaRemove")
+            : ollama && strongest(disk, ids) === "none"
+              ? t("model.ollamaTray")
           : strongest(disk, ids) === "osFolder"
             ? t("caution.osFolder", { names: items.filter((n) => cautionFor(disk, n.id).kind === "osFolder").map((n) => n.name).join(", "), platform })
             : t("caution.protected");
   const synced = preview?.synced.length ?? 0;
   const skipped = preview?.skipped ?? [];
-  const needsTick = kind === "caution";
+  const needsTick = kind === "caution" && !serverRm && strongest(disk, ids) !== "none";
   const listed = kind === "emptyTray" ? tray.map((i) => ({ key: i.entry ?? String(i.id), name: i.name, path: i.path ?? "", size: i.size, node: disk.nodes[i.id] })) : items.map((n) => ({ key: String(n.id), name: n.name, path: n.path, size: n.size, node: n }));
 
   return (

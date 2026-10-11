@@ -63,6 +63,41 @@ export type DiskNode = {
   ruleRoot?: string;
   /** Cleaned through the OS (the Trash) rather than item by item. */
   delegate?: boolean;
+  /** Set on a model: which tool owns it, and how a removal is checked. */
+  model?: ModelMeta;
+};
+
+export type ModelTool = "ollama" | "lmStudio" | "huggingFace" | "jan" | "gpt4all" | "loose";
+
+export type ModelRemoval = "ollama" | "huggingFace" | "quarantine";
+
+/** How far a cross-tool duplicate has been checked. "sampled" is not enough to remove. */
+export type DupeLevel = "sampled" | "full";
+
+export type ModelMeta = {
+  tool: ModelTool;
+  quantization?: string;
+  removal: ModelRemoval;
+  ollamaName?: string;
+  modelsDir?: string;
+  weight?: string;
+  partnerWeight?: string;
+  dupeLevel?: DupeLevel;
+  contentHash?: string;
+  orphanBlob?: boolean;
+  cloneCopy?: boolean;
+  /** Bytes are already counted on another model. */
+  sharesWeights?: boolean;
+  sharesWith?: string;
+};
+
+/** A model the Ollama server says is loaded, or LM Studio's process memory. */
+export type LoadedModel = {
+  name: string;
+  tool: ModelTool;
+  bytes: number;
+  /** Process memory, not one model's allocation. */
+  approx?: boolean;
 };
 
 export type LeftoverKind =
@@ -208,6 +243,7 @@ export type SkipReason =
   | "inUse"
   | "appRunning"
   | "notSafeForDeleteNow"
+  | "notConfirmed"
   | "failed";
 
 export type RemoveOptions = {

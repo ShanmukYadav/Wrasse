@@ -309,7 +309,6 @@ function SampleTile({ id, cell, scheme, lens }: { id: number; cell: Cell; scheme
       selected={false}
       deleting={false}
       pulseKey={null}
-      reveal={null}
       onOpen={() => {}}
     />
   );

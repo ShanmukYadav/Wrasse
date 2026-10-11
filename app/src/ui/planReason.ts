@@ -3,6 +3,13 @@ import { t } from "../i18n";
 
 /** Why the planner picked an item, in one short line. */
 export function planReason(disk: Disk, n: DiskNode, why?: FreeWhy): string {
+  const reason = planBody(disk, n, why);
+  if (!n.model) return reason;
+  const head = [t(`model.tool.${n.model.tool}`), n.model.quantization].filter(Boolean).join(" · ");
+  return head ? `${head} · ${reason}` : reason;
+}
+
+function planBody(disk: Disk, n: DiskNode, why?: FreeWhy): string {
   if (why === "neverOpened") return t("plan.why.neverOpened");
   if (why === "unusedApp") return t("plan.why.unusedApp", { count: n.lastOpenedDays });
   if (why === "appRemoved") return t("plan.why.appRemoved");

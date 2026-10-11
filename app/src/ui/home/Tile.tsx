@@ -1,4 +1,3 @@
-import { motion } from "motion/react";
 import { useEffect, useState, type CSSProperties } from "react";
 import { api, deletable, type Disk, type DiskNode } from "../../api";
 import { useApp } from "../../store/app";
@@ -7,9 +6,9 @@ import { iconFor } from "../../design/icons/semantic";
 import { categories, d1, type Scheme } from "../../design/tokens";
 import { t } from "../../i18n";
 import { formatBytes, type UnitSystem } from "../../lib/format";
-import { duration, ease, spring } from "../../motion/tokens";
 import type { Cell } from "./gridLayout";
 import { MiddleEllipsis } from "./MiddleEllipsis";
+import { modelCaption } from "../modelLine";
 import { matchesScope } from "../scope";
 
 export type TileMetrics = { cellW: number; cellH: number };
@@ -26,7 +25,6 @@ type Props = {
   selected: boolean;
   deleting: boolean;
   pulseKey: number | null;
-  reveal: { key: number; delay: number } | null;
   drillable?: boolean;
   onOpen: (node: DiskNode) => void;
 };
@@ -34,7 +32,7 @@ type Props = {
 const UNIT: Partial<Record<DiskNode["category"], string>> = { files: "unit.folders", aiModels: "unit.models", apps: "unit.apps" };
 
 // One D1 tile: badge + name + meta, big size, top items as rows, insight chips.
-export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, scopeBits, selected, deleting, pulseKey, reveal, drillable = node.children.length > 0, onOpen }: Props) {
+export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, scopeBits, selected, deleting, pulseKey, drillable = node.children.length > 0, onOpen }: Props) {
   const c = categories[scheme][node.category];
   const cells = cell.colSpan * cell.rowSpan;
   const size = formatBytes(node.size, units);
@@ -55,20 +53,22 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
     .map((k) => disk.nodes[k])
     .filter((k) => k.size > 0)
     .sort((a, b) => Number(!!a.readOnly) - Number(!!b.readOnly) || b.size - a.size);
+  // The AI Models tile previews models, which sit under each tool's folder.
+  const listed = node.depth === 1 && node.category === "aiModels" ? modelRows(disk, node.id) : kids;
 
   // Rows: XL tiles show five items plus "+N more"; L tiles show their top three.
   const rowRoom = Math.floor((heightPx - 160 - sizeFont) / (d1.row.height + d1.row.stackGap));
   const maxRows = sizeFont === d1.tile.sizeXL ? 6 : sizeFont === d1.tile.sizeL ? 3 : 0;
   // Single items (apps, models, files) show no rows: their parts aren't separate choices.
   const rowCount = drillable && widthPx >= 220 ? Math.max(0, Math.min(maxRows, rowRoom)) : 0;
-  let rows = kids.slice(0, rowCount);
+  let rows = listed.slice(0, rowCount);
   let more: { count: number; size: number } | null = null;
-  if (rowCount >= 5 && kids.length > rowCount) {
-    rows = kids.slice(0, rowCount - 1);
-    const rest = kids.slice(rowCount - 1);
+  if (rowCount >= 5 && listed.length > rowCount) {
+    rows = listed.slice(0, rowCount - 1);
+    const rest = listed.slice(rowCount - 1);
     more = { count: rest.length, size: rest.reduce((s, k) => s + k.size, 0) };
   }
-  const maxKid = Math.max(1, ...kids.map((k) => k.size));
+  const maxKid = Math.max(1, ...listed.map((k) => k.size));
   const large = rows.length > 0;
   // The tile shell paints on the first frame. Rows and chips follow on the next, so the
   // opening composite is the blocks themselves. They are on screen within a frame.
@@ -84,6 +84,8 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
     ? t("home.metaCount", { share: shareText, count, unit: t(unitKey) })
     : large
       ? t("home.metaCount", { share: shareText, count, unit: t("unit.items") })
+      : node.kind === "model" && node.model
+        ? modelCaption(node)
       : node.kind === "app" && node.app && widthPx >= 340
         ? node.app.neverOpened
           ? t("app.neverOpened")
@@ -111,24 +113,16 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
     "--badge-shadow": c.shadow,
   } as CSSProperties;
 
+  // A plain button. A scale or layout transform gives every tile its own backing store,
+  // several MB each, for as long as the window is open.
   return (
-    <motion.button
+    <button
       type="button"
-      layout
       data-tile-id={node.id}
-      className={`tile focus-ring ${selected || checked ? "is-selected" : ""} ${dimmed ? "is-dimmed" : ""} ${tickable ? "has-tick" : ""} ${tickable && (selecting || checked) ? "is-ticking" : ""}`}
+      className={`tile focus-ring ${selected || checked ? "is-selected" : ""} ${dimmed ? "is-dimmed" : ""} ${deleting ? "is-deleting" : ""} ${tickable ? "has-tick" : ""} ${tickable && (selecting || checked) ? "is-ticking" : ""}`}
       style={style}
       aria-label={`${node.name}, ${size.value} ${size.unit}`}
       onClick={() => onOpen(node)}
-      initial={reveal ? { opacity: 0, scale: 0.94 } : false}
-      animate={deleting ? { opacity: 0, scale: 0.85 } : { opacity: dimmed ? d1.dimmed : 1, scale: 1 }}
-      transition={
-        deleting
-          ? { duration: duration.base, ease: ease.inOut }
-          : reveal
-            ? { ...spring.soft, delay: reveal.delay, opacity: { duration: duration.slow, ease: ease.out, delay: reveal.delay } }
-            : spring.soft
-      }
     >
       <span className="tile-glow" aria-hidden />
       <span className={`tile-head ${short ? "is-short" : ""}`}>
@@ -213,7 +207,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
         </span>
       )}
       {pulseKey !== null && <span key={pulseKey} className="tile-pulse" aria-hidden />}
-    </motion.button>
+    </button>
   );
 }
 
@@ -222,6 +216,7 @@ function Row({ node, max, units, dimmed }: { node: DiskNode; max: number; units:
     <span className={`tile-row ${dimmed ? "is-dimmed" : ""}`}>
       <Icon name={iconFor(node)} tone={node.category} size={16} />
       <MiddleEllipsisInline text={node.name} />
+      {node.model?.quantization && <span className="text-caption text-muted">{node.model.quantization}</span>}
       <SizeBar fraction={node.size / max} />
       <span className="tile-row-size">{fmt(node.size, units)}</span>
     </span>
@@ -238,6 +233,22 @@ function SizeBar({ fraction }: { fraction: number }) {
       <span className="size-bar-fill" style={{ transform: `scaleX(${Math.max(0.02, Math.min(1, fraction))})` }} />
     </span>
   );
+}
+
+/** Model rows for the AI Models tile: the model itself, not the shard files inside it. */
+function modelRows(disk: Disk, id: number): DiskNode[] {
+  const out: DiskNode[] = [];
+  const walk = (nid: number, underModel: boolean) => {
+    for (const c of disk.nodes[nid].children) {
+      const k = disk.nodes[c];
+      if (k.size <= 0) continue;
+      if (k.kind === "model" && !underModel) out.push(k);
+      else walk(c, underModel || k.kind === "model");
+    }
+  };
+  walk(id, false);
+  out.sort((a, b) => b.size - a.size);
+  return out;
 }
 
 /** Items of a kind anywhere under a node (models inside project folders, apps inside app folders). */

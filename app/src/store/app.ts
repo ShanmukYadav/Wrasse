@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type DiskNode, type FreeWhy, type PathRemoval, type ScannedFile, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { type DiskNode, type FreeWhy, type LoadedModel, type PathRemoval, type ScannedFile, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type CategoryId, type DiskFilters, type FilterId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -118,6 +118,8 @@ type State = {
   fileCaution: { files: ScannedFile[]; run: () => void } | null;
   /** Dry-run: actions only report what they would do (dev builds start in it every launch). */
   dryRun: boolean;
+  /** Models Ollama or LM Studio currently have loaded. Empty until a lens or detail panel asks. */
+  loadedModels: LoadedModel[];
 };
 
 type Actions = {
@@ -157,6 +159,10 @@ type Actions = {
   restoreEntries: (items: TrayItem[]) => void;
   /** Undo (toast, ⌘Z, ⌘K): puts back what the last move to the tray moved. */
   undoLastMove: () => void;
+  /** Reads which models are loaded. Does not unload or remove anything. */
+  refreshLoaded: () => void;
+  /** Asks Ollama to unload one model. */
+  unloadModel: (name: string) => void;
   setTrayOpen: (open: boolean) => void;
   /** Moves files picked by path (Large & Old, Duplicates) to the tray; resolves to the paths moved. */
   moveFilesToTray: (run: () => Promise<PathRemoval>) => Promise<string[]>;
@@ -252,14 +258,19 @@ export const useApp = create<State & Actions>((set, get) => {
     if (!result) return;
     if (result.dryRun) {
       set({ selected: null, detailOpen: false });
-      return get().notify(t("dryRun.trayToast", { count: result.done.length, size: fmtBytes(result.bytes) }), { label: t("dryRun.turnOff"), run: () => get().setOverlay("settings") });
+      const released = result.done.filter((d) => !d.entry && items.some((n) => n.id === d.id && n.model?.removal === "ollama"));
+      const key = released.length && released.length === result.done.length ? "dryRun.deleteToast" : "dryRun.trayToast";
+      return get().notify(t(key, { count: result.done.length, size: fmtBytes(result.bytes) }), { label: t("dryRun.turnOff"), run: () => get().setOverlay("settings") });
     }
     const entries = new Map(result.done.map((d) => [d.id, d.entry]));
     const moved = items.filter((n) => entries.has(n.id));
+    // Ollama's own removal has no tray entry and can't be undone. Quarantine does.
+    const trayMoved = moved.filter((n) => entries.get(n.id));
+    const released = moved.filter((n) => !entries.get(n.id));
     // One flight per tile involved (many files can share a tile).
     const flights: Flight[] = [];
     const seen = new Set<number>();
-    for (const n of moved) {
+    for (const n of trayMoved) {
       const tile = visibleTileOf(disk, focus, n.id);
       if (tile === null || seen.has(tile) || flights.length >= 12) continue;
       seen.add(tile);
@@ -271,25 +282,30 @@ export const useApp = create<State & Actions>((set, get) => {
     }
     const at = Date.now();
     const batch = `session-${batchId + 1}`;
-    const trayItems: TrayItem[] = moved.map((n) => ({ id: n.id, name: n.name, size: n.size, entry: entries.get(n.id), path: n.path, batch, at }));
+    const trayItems: TrayItem[] = trayMoved.map((n) => ({ id: n.id, name: n.name, size: n.size, entry: entries.get(n.id), path: n.path, batch, at }));
+    const releasedBytes = released.reduce((s, n) => s + n.size, 0);
     set((s) => ({
       disk: result.disk,
       diskVersion: s.diskVersion + 1,
       tray: [...s.tray, ...trayItems],
-      batches: moved.length ? [{ id: ++batchId, at: Date.now(), items: trayItems, state: "inTray" as const }, ...s.batches] : s.batches,
+      batches: trayItems.length ? [{ id: ++batchId, at: Date.now(), items: trayItems, state: "inTray" as const }, ...s.batches] : s.batches,
       flights: [...s.flights, ...flights],
       selected: null,
       detailOpen: false,
       checked: s.checked.filter((c) => !moved.some((n) => n.id === c)),
-      plan: remainingPlan(s.plan, moved.map((n) => n.id)),
-      lastMove: moved.length ? trayItems : s.lastMove,
+      plan: countFreed(remainingPlan(s.plan, moved.map((n) => n.id)), releasedBytes),
+      lastMove: trayItems.length ? trayItems : s.lastMove,
     }));
-    for (const n of moved) log(t("audit.quarantined"), n.path, n.size);
-    record(moved, "inTray", entries);
-    if (moved.length) {
+    for (const n of trayMoved) log(t("audit.quarantined"), n.path, n.size);
+    for (const n of released) log(t("audit.deleted"), n.path, n.size);
+    record(trayMoved, "inTray", entries);
+    record(released, "deleted");
+    if (trayItems.length) {
       const size = fmtBytes(trayItems.reduce((s, i) => s + i.size, 0));
-      get().notify(t("tray.movedToast", { count: moved.length, size }), { label: t("tray.undo"), run: () => get().undoLastMove() });
+      get().notify(t("tray.movedToast", { count: trayItems.length, size }), { label: t("tray.undo"), run: () => get().undoLastMove() });
       void syncTray();
+    } else if (released.length) {
+      get().notify(t("model.removed", { count: released.length, size: fmtBytes(releasedBytes) }));
     }
     reportSkipped(result.skipped);
     ascendIfEmpty();
@@ -458,6 +474,7 @@ export const useApp = create<State & Actions>((set, get) => {
     fileCaution: null,
     deleted: [],
     dryRun: false,
+    loadedModels: [],
 
     setInfo: (info) => set({ info }),
     setSystemScheme: (systemScheme) => set({ systemScheme }),
@@ -518,7 +535,9 @@ export const useApp = create<State & Actions>((set, get) => {
       if (trash !== undefined) return set({ confirmDelete: { ids: [trash], kind: "emptyTrash", handPicked }, detailOpen: false });
       const ok = ids.filter((id) => deletable(disk, id));
       if (!ok.length) return get().notify(ids.some((id) => cautionFor(disk, id).kind === "category") ? t("delete.categoryToast") : t("delete.blockedToast"));
-      if (strongest(disk, ok) === "none") return get().addToTray(ok, false, handPicked);
+      const ollama = ok.some((id) => disk.nodes[id].model?.removal === "ollama");
+      // Ollama may remove the model itself. That has to be confirmed, because it can't be undone.
+      if (strongest(disk, ok) === "none" && !ollama) return get().addToTray(ok, false, handPicked);
       set({ confirmDelete: { ids: ok, kind: "caution", handPicked }, detailOpen: false });
     },
     requestDeleteNow: (ids) => set({ confirmDelete: { ids, kind: "deleteNow", handPicked: true }, detailOpen: false }),
@@ -590,6 +609,19 @@ export const useApp = create<State & Actions>((set, get) => {
 
     restoreTray: () => void restoreItems(get().tray),
     restoreEntries: (items) => void restoreItems(items),
+    refreshLoaded: () => {
+      void api.loadedModels().then((loadedModels) => set({ loadedModels })).catch(() => {});
+    },
+    unloadModel: (name) => {
+      void (async () => {
+        const result = await api.unloadModel(name).catch(failed);
+        if (!result) return;
+        if (result.dryRun) return get().notify(t("dryRun.unloadToast", { name }));
+        get().notify(t("model.unloaded", { name }));
+        const loadedModels = await api.loadedModels().catch(() => get().loadedModels);
+        set({ loadedModels });
+      })();
+    },
     undoLastMove: () => {
       const keys = new Set(get().tray.map((i) => i.entry ?? String(i.id)));
       const items = get().lastMove.filter((i) => keys.has(i.entry ?? String(i.id)));
@@ -694,7 +726,7 @@ export const useApp = create<State & Actions>((set, get) => {
     scanDisk: async () => {
       if (get().scan === "scanning") return;
       clearTimeout(scanTimer);
-      // The sonar runs while the scan does; tiles re-reveal with one last sweep when it lands.
+      // The sonar runs while the scan does, then the tiles settle on the result.
       set((s) => ({ scan: "scanning", scanProgress: null, focus: s.disk.root, lens: "all", plan: null, selected: null, detailOpen: false, viewMode: "map" }));
       const off = api.onScanProgress((p) => set({ scanProgress: p }));
       try {
