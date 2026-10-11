@@ -40,7 +40,7 @@ read the files under "Read first".
   iCloud-only (dataless) files are untouchable.
 - **Dry run:** dev builds start every launch in dry run; while it's off the DEV badge is a red LIVE
   badge. `clean.sh` keeps the tray unless `--all` (asks first).
-- **Idle memory budget:** 140 MB on macOS, and a first-minute peak of 400 MB, both for Wrasse's
+- **Idle memory budget:** 100 MB on macOS, and a first-minute peak of 200 MB, both for Wrasse's
   own tree only (`scripts/check-idle-memory.sh`, `scripts/wrasse-tree.py`). Don't keep scans in
   memory; Tauri commands read the saved scan or tree on demand.
 - Repo-local git identity is the owner's noreply address (already configured). Commit messages
@@ -57,7 +57,7 @@ scripts/check-windows-compile.sh
 ./dev.sh cargo test --workspace          # 81 tests in wrasse-core, all passing
 ./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
 (cd app && ../dev.sh npm run build)
-scripts/check-idle-memory.sh             # with Wrasse quit; peak 400 MB, idle 140 MB
+scripts/check-idle-memory.sh             # with Wrasse quit; peak 200 MB, idle 100 MB
 ```
 
 The hook is enabled with `git config core.hooksPath scripts/hooks` (already set). Clippy isn't in
@@ -228,7 +228,10 @@ Follow-up fixes accepted with the checkpoint:
   near 3 s (app 37, WebContent 26, GPU 47, Networking 6). Idle at 60/70/80 s: **75.5, 75.5,
   75.4, 75.5, 75.4 MB**, flat across the three samples, app at 36 MB every time. Both budgets
   pass (peak 400, idle 140). WebContent high-water on the diagnostic launch after the ring cap
-  was 26.5 MB, with one 16.4 MB graphics surface.
+  was 26.5 MB, with one 16.4 MB graphics surface. On 2026-10-11 the owner locked the macOS
+  budgets to a first-minute peak of 200 MB and idle of 100 MB. One cold launch against those
+  limits peaked at **116.1 MB** and idled at **75.5, 75.5, 75.5 MB**. The check passed. A later
+  launch over either limit fails it.
 
 **Stop here.** Windows is deferred. Phase 4 is started, and this step is the checkpoint. Don't
 open AI models, diagnostics, or developer junk until the owner says to continue.

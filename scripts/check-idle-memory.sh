@@ -10,15 +10,15 @@
 # Other apps' WebKit processes are not counted. See scripts/wrasse-tree.py.
 #
 # Two budgets, both phys_footprint (the Memory column in Activity Monitor):
-#   peak  the highest simultaneous total during the first 60 s (default 400 MB)
-#   idle  the worst of three samples taken at 60 s, 70 s and 80 s (default 140 MB)
+#   peak  the highest simultaneous total during the first 60 s (default 200 MB)
+#   idle  the worst of three samples taken at 60 s, 70 s and 80 s (default 100 MB)
 # WRASSE_PEAK_LIMIT_MB and WRASSE_IDLE_LIMIT_MB override them.
 # macOS only. Needs a logged-in session because it opens the window.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-IDLE_MB="${WRASSE_IDLE_LIMIT_MB:-140}"
-PEAK_MB="${WRASSE_PEAK_LIMIT_MB:-400}"
+IDLE_MB="${WRASSE_IDLE_LIMIT_MB:-100}"
+PEAK_MB="${WRASSE_PEAK_LIMIT_MB:-200}"
 APP="target/release/wrasse-app"
 LAUNCHES=1
 BUILD=1
