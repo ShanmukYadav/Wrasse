@@ -126,6 +126,24 @@ export const mockApi: WrasseApi = {
     zeroOut(disk, disk.ghostId);
     return disk;
   },
+  async spaceReport(before, freedNow) {
+    const available = 120e9;
+    const expected = before === null ? undefined : before + freedNow;
+    return {
+      available,
+      importantAvailable: available + 6.1e9,
+      purgeable: 6.1e9,
+      snapshots: ["com.apple.TimeMachine.2026-10-11-120000.local"],
+      snapshotBytes: 6.1e9,
+      trashBytes: 1.2e9,
+      trayBytes: 0.4e9,
+      expectedAvailable: expected,
+      gap: expected === undefined ? 0 : Math.max(0, expected - available),
+    };
+  },
+  async delegateAction() {
+    return { bytes: 0, dryRun: true };
+  },
   async quitApp(disk, appId) {
     disk.nodes[appId].running = false;
     return { disk, quit: true };

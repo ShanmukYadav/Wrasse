@@ -183,6 +183,19 @@ fn main() {
                 plan.held_running as f64 / 1e9
             );
         }
+        Some("diagnostics") => {
+            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let tray = wrasse_core::scan::cache::data_dir(APP_ID)
+                .map(|d| wrasse_core::quarantine::size_on_disk(&d.join("Quarantine")))
+                .unwrap_or(0);
+            let report = wrasse_core::diagnostics::measure(&home, tray);
+            println!("{}", serde_json::to_string_pretty(&report).unwrap());
+        }
+        Some("devjunk") => {
+            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let extras = wrasse_core::devjunk::live_extras(&home);
+            println!("{}", serde_json::to_string_pretty(&extras).unwrap());
+        }
         Some("apps") => {
             let home = wrasse_core::platform::home_dir().expect("no home folder");
             let apps = wrasse_core::platform::installed_apps(&home);
@@ -194,7 +207,7 @@ fn main() {
             println!("{}", serde_json::to_string_pretty(&v).unwrap());
         }
         _ => println!(
-            "wrasse {}\nusage: wrasse scan [folder]",
+            "wrasse {}\nusage: wrasse scan [folder] | diagnostics | devjunk",
             wrasse_core::VERSION
         ),
     }

@@ -516,6 +516,18 @@ pub fn run_delegated(action: &crate::safety::Delegated, brew: Option<&Path>) -> 
             Delegated::FinderMoveToTrash { path } => macos::commands::finder_move_to_trash(path),
             Delegated::OllamaRm { model } => ollama_delete(model),
             Delegated::OllamaStop { model } => ollama_stop(model),
+            Delegated::ThinLocalSnapshots { bytes } => {
+                macos::commands::thin_local_snapshots(*bytes)
+            }
+            Delegated::BrewCleanup => match brew {
+                Some(b) => macos::commands::brew_cleanup(b),
+                None => Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Homebrew isn't installed",
+                )),
+            },
+            Delegated::DockerPrune => macos::commands::docker_prune(),
+            Delegated::SimctlDeleteUnavailable => macos::commands::simctl_delete_unavailable(),
         };
         #[allow(unreachable_code)]
         {
@@ -539,6 +551,74 @@ pub fn valid_cask_token(token: &str) -> bool {
 /// Where Homebrew may live; only these are ever run, and only when owned by the current user.
 pub fn brew_binaries() -> &'static [&'static str] {
     &["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
+}
+
+/// Docker's own binary. Wrasse never opens Docker's disk image; it only runs docker.
+pub fn docker_bin() -> Option<PathBuf> {
+    [
+        "/usr/local/bin/docker",
+        "/opt/homebrew/bin/docker",
+        "/Applications/Docker.app/Contents/Resources/bin/docker",
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .find(|p| p.is_file())
+}
+
+/// `tmutil listlocalsnapshots` for `/` and the Data volume. Empty when it can't be read.
+pub fn snapshot_list_text() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        return macos::commands::snapshot_list_text();
+    }
+    #[allow(unreachable_code)]
+    String::new()
+}
+
+/// `(available, important_available)` from NSURL. `None` when the keys can't be read.
+pub fn volume_capacities() -> Option<(u64, u64)> {
+    #[cfg(target_os = "macos")]
+    {
+        return macos::commands::volume_capacities();
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
+/// Bytes `brew cleanup -s --dry-run` would free. `None` when Homebrew isn't there.
+pub fn brew_cleanup_preview() -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    {
+        let text = macos::commands::brew_cleanup_dry_run()?;
+        return Some(crate::devjunk::parse_brew_cleanup(&text));
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
+/// Reclaimable images, containers and build cache from `docker system df`.
+/// `None` when Docker isn't running. Volumes are not included.
+pub fn docker_reclaimable() -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    {
+        let text = macos::commands::docker_df_text()?;
+        return Some(crate::devjunk::parse_docker_df(&text));
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
+/// Unavailable simulators: `(bytes on disk, count)`. Listing only.
+pub fn unavailable_simulators(home: &Path) -> Option<(u64, u32)> {
+    #[cfg(target_os = "macos")]
+    {
+        return macos::commands::unavailable_simulators(home);
+    }
+    #[allow(unreachable_code)]
+    {
+        let _ = home;
+        None
+    }
 }
 
 /// Homebrew's Caskrooms, next to the binaries above.

@@ -110,7 +110,8 @@ pub async fn scan(app: AppHandle, state: State<'_, ScanState>) -> Result<UiDisk,
     }
     let disk = result
         .map_err(|e| e.to_string())?
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())
+        .map(decorate)?;
     if cfg!(debug_assertions) {
         let s = &disk.summary;
         println!(
@@ -169,7 +170,20 @@ pub fn pause_scan(state: State<'_, ScanState>, paused: bool) {
 
 #[tauri::command]
 pub fn cached_scan(app: AppHandle) -> Option<UiDisk> {
-    cache_dir(&app).and_then(|d| session::cached(&d))
+    cache_dir(&app)
+        .and_then(|d| session::cached(&d))
+        .map(decorate)
+}
+
+/// Snapshot space and live developer previews. Both are reads. They are applied
+/// here, not inside `scan_volume`, so a fixture scan never lists this Mac's snapshots.
+fn decorate(mut disk: UiDisk) -> UiDisk {
+    wrasse_core::diagnostics::attach_ghost(&mut disk, wrasse_core::diagnostics::held_now());
+    if let Some(home) = platform::home_dir() {
+        let extras = wrasse_core::devjunk::live_extras(&home);
+        wrasse_core::devjunk::attach_live(&mut disk, &extras);
+    }
+    disk
 }
 
 #[tauri::command]

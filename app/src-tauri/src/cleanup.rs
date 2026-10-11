@@ -332,6 +332,49 @@ pub fn purge_items(state: State<'_, CleanupState>, ids: Vec<String>) -> Result<u
     })
 }
 
+/// Free space, purgeable space, local snapshots, Trash and the tray. Read-only.
+/// `before` plus `freed_now` is what a cleanup was expected to leave free.
+#[tauri::command]
+pub fn space_report(
+    state: State<'_, CleanupState>,
+    before: Option<u64>,
+    freed_now: u64,
+) -> Result<wrasse_core::diagnostics::Report, String> {
+    with_ctx(&state, |ctx| {
+        let tray = quarantine::size_on_disk(&ctx.data_dir.join("Quarantine"));
+        let report = wrasse_core::diagnostics::measure(&ctx.home, tray);
+        Ok(match before {
+            Some(b) => wrasse_core::diagnostics::with_expectation(report, b, freed_now),
+            None => report,
+        })
+    })
+}
+
+/// One delegated cleanup: snapshots, Homebrew, Docker, unavailable simulators, or the Trash.
+/// The byte count for snapshots is measured here. Dev builds stay in dry run.
+#[tauri::command]
+pub fn run_delegate(state: State<'_, CleanupState>, action: String) -> Result<u64, String> {
+    let dry_run = state.dry_run.load(Ordering::Relaxed);
+    with_ctx(&state, |ctx| {
+        let delegated = match action.as_str() {
+            "emptyTrash" => Delegated::EmptyTrash,
+            "thinSnapshots" => {
+                let report = wrasse_core::diagnostics::measure(&ctx.home, 0);
+                let bytes = wrasse_core::diagnostics::thin_request(
+                    report.snapshots.len(),
+                    report.purgeable,
+                );
+                Delegated::ThinLocalSnapshots { bytes }
+            }
+            "brewCleanup" => Delegated::BrewCleanup,
+            "dockerPrune" => Delegated::DockerPrune,
+            "deleteUnavailableSimulators" => Delegated::SimctlDeleteUnavailable,
+            _ => return Err("that action isn't available".into()),
+        };
+        safety::delegate(ctx, delegated, dry_run).map_err(|e| e.to_string())
+    })
+}
+
 /// Empties the Trash through the OS. Not undoable.
 #[tauri::command]
 pub fn empty_trash(state: State<'_, CleanupState>) -> Result<u64, String> {

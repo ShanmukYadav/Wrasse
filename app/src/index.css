@@ -794,6 +794,37 @@ html:not(.is-glass) .glass-css {
   color: var(--c-text-muted);
 }
 
+/* Expected versus actual free space. Same dashed surface as the snapshot tile.
+   It sits in the layout. No opacity and no transform, so it is not its own layer. */
+.space-report {
+  flex: none;
+  margin: 8px var(--d1-grid-pad-x) 0;
+  padding: 8px var(--d1-ghost-pad-x);
+  border-radius: var(--d1-ghost-radius);
+  border: var(--d1-ghost-line);
+  background: var(--d1-ghost-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.space-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--d1-ghost-hint-size);
+  min-width: 0;
+}
+.space-strong {
+  font-size: var(--d1-ghost-title-size);
+  font-weight: var(--w-size);
+}
+.space-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
 /* ---- Scan ------------------------------------------------------------------------------ */
 
 .sonar {

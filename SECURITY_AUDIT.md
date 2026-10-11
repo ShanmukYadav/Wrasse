@@ -109,7 +109,9 @@ Read-only, through `platform::macos::commands::run_readonly`, which refuses anyt
 ```
 <!-- /AUDIT -->
 
-`tmutil` is allowed only as `tmutil isexcluded`. The others each have their own narrowly named
+`tmutil` is allowed only as `tmutil isexcluded <absolute path>` and as
+`tmutil listlocalsnapshots` of `/` or `/System/Volumes/Data` (listing local snapshots;
+it does not thin them). The others each have their own narrowly named
 function, with arguments passed as argv (never through a shell):
 
 - `tmutil addexclusion <Wrasse data folder>`: keeps Wrasse's own folder out of Time Machine
@@ -142,6 +144,19 @@ and logs it (dry run reports them without running):
   and blobs no other manifest uses instead, and does not call this action.
 - `OllamaStop`: POST `{"model":"...","keep_alive":0}` to `http://127.0.0.1:11434/api/generate`,
   the same request `ollama stop` sends. Same name check. The weights stay on disk.
+- `ThinLocalSnapshots`: `tmutil thinlocalsnapshots / <bytes> 4`. `bytes` is measured again
+  on this Mac (local snapshot names, and purgeable space while any exist). 0 is refused.
+  Not undoable. The unprivileged command runs first. If it fails, the same command is asked
+  through macOS's administrator prompt (`osascript` … `with administrator privileges`).
+  If that prompt hasn't finished after 2 minutes, only that `osascript` is stopped.
+- `BrewCleanup`: `brew cleanup -s` with `HOMEBREW_NO_AUTO_UPDATE=1`. The binary must be
+  `/opt/homebrew/bin/brew` or `/usr/local/bin/brew` and owned by the user. Homebrew itself
+  is not removed. Not undoable. A preview (`brew cleanup -s --dry-run`) is separate and
+  removes nothing.
+- `DockerPrune`: `docker system prune -f` with no `--volumes`, and only after `docker info`
+  succeeds. Docker's disk image is never opened or deleted. Not undoable.
+- `SimctlDeleteUnavailable`: `/usr/bin/xcrun simctl delete unavailable`. Not undoable.
+  Listing unavailable devices is a separate read-only command.
 
 For both app actions the app must be an `.app` directly in (or one folder inside)
 `/Applications` or `~/Applications`, on the startup disk, not protected, not on the Never touch
@@ -154,6 +169,10 @@ BrewUninstallCask
 FinderMoveToTrash
 OllamaRm
 OllamaStop
+ThinLocalSnapshots
+BrewCleanup
+DockerPrune
+SimctlDeleteUnavailable
 ```
 <!-- /AUDIT -->
 

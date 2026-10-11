@@ -54,7 +54,7 @@ scripts/check-security-audit.sh
 scripts/check-windows-compile.sh
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
-./dev.sh cargo test --workspace          # 102 tests in wrasse-core, all passing
+./dev.sh cargo test --workspace          # 116 tests in wrasse-core, all passing
 ./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
 (cd app && ../dev.sh npm run build)
 scripts/check-idle-memory.sh             # with Wrasse quit; peak 200 MB, idle 100 MB
@@ -253,7 +253,17 @@ Follow-up fixes accepted with the checkpoint:
 
 **Stop here.** Windows is deferred. AI models are at the checkpoint, including project models
 (Your call, never pre-selected), project Hugging Face caches, the iCloud-copy warning, and the
-two-format note. Don't open diagnostics or developer junk until the owner says to continue.
+two-format note. Space diagnostics and developer junk are in. After a cleanup, and from
+"Why isn't this free?", a dashed card shows expected versus actual free space, purgeable space,
+the Trash and the tray. Local Time Machine snapshots are the dashed tile, with Free now through
+`safety::delegate` (macOS asks for a password only if the unprivileged thin fails). Developer
+junk covers stale `node_modules` and Cargo `target/` (90 days), package caches, Python and conda
+envs, Xcode DerivedData and archives, and read-only previews for Homebrew cleanup, Docker and
+unavailable simulators. The Wrasse checkout and its `.toolchain` stay Keep. On this Mac the
+snapshot list and the developer list are read-only: nothing was thinned or removed. Two later
+cold launches of this build, autoscan on, peaked at **508.1 MB** (t=4s) and **657.0 MB** (t=17s).
+Idle samples were **139.0, 128.9, 128.9 MB** and **129.0, 129.0, 129.0 MB**. Both budgets miss.
+The peak budget stays **200 MB** and the idle budget stays **100 MB**.
 
 ### Other open issues
 
@@ -265,8 +275,8 @@ two-format note. Don't open diagnostics or developer junk until the owner says t
 
 ## Phase 4 and later
 
-The owner said "start". This checkpoint is the polish notes and the UI fixes above. AI models,
-diagnostics, and developer junk wait for the next "continue". See PLAN.md §11 (Phase 4: AI models,
-diagnostics, developer junk; Phase 5: polish, including the first-run idle memory; Phase 6:
-release). Plan each area in `docs/phaseN-plan.md` with decisions and recommendations, and stop
-before the next area.
+The owner said "start", then approved AI models and the three follow-ups, then said to continue
+into diagnostics and developer junk. Those three Phase 4 areas are in. Phase 5 (polish, including
+the first-run idle memory) and Phase 6 (release) wait for the next approval. See PLAN.md §11.
+Plan each area in `docs/phaseN-plan.md` with decisions and recommendations, and stop before the
+next area.

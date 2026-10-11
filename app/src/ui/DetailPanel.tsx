@@ -153,6 +153,10 @@ function Detail({ id }: { id: number }) {
             )}
             {n.kind === "app" || n.appBundle ? (
               <AppActions appId={n.kind === "app" ? n.id : n.parent} />
+            ) : n.delegate ? (
+              <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => requestDelete([n.id])} {...pressable}>
+                <Icon name="trash" size={16} /> {n.delegateAction === "thinSnapshots" ? t("detail.freeNowSize", { size: sizeText }) : n.delegateAction === "emptyTrash" ? t("detail.emptyTrash") : t("detail.runCleanup")}
+              </motion.button>
             ) : n.leftover ? (
               <motion.button type="button" className="btn btn-primary btn-wide focus-ring" onClick={() => requestDelete([n.id])} {...pressable}>
                 <Icon name="tray" size={16} /> {t("detail.remove", { size: sizeText })}

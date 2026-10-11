@@ -155,8 +155,15 @@ function PlanMeter({ plan }: { plan: Plan }) {
     return `${f.value} ${f.unit}`;
   };
   // Apps that Homebrew or Finder remove open their uninstall sheet instead of going in bulk.
+  // A tool's own cleanup (brew, Docker, simulators) confirms on its own and never goes to the tray.
   const routeOf = (id: number) => disk.nodes[id]?.app?.route.kind ?? "tray";
-  const bulk = (id: number) => routeOf(id) === "tray";
+  const bulk = (id: number) => routeOf(id) === "tray" && !disk.nodes[id]?.delegate;
+  const cleanupLabel = (id: number) => {
+    const action = disk.nodes[id]?.delegateAction;
+    if (action === "thinSnapshots") return t("home.ghostFree");
+    if (action === "emptyTrash") return t("detail.emptyTrash");
+    return t("detail.runCleanup");
+  };
   const picked = plan.ids.filter((id) => !plan.off.includes(id) && bulk(id));
   const pickedBytes = picked.reduce((s, id) => s + (plan.bytes[id] ?? 0), 0);
   // Progress: freed for good, pending in the tray (since the plan started), and still to do.
@@ -233,7 +240,12 @@ function PlanMeter({ plan }: { plan: Plan }) {
                 </span>
                 <span className="plan-size tabular">{fmt(plan.bytes[id] ?? n.size)}</span>
               </button>
-              {viaSheet && (
+              {viaSheet && disk.nodes[id]?.delegate && (
+                <button type="button" className="link focus-ring plan-uninstall" onClick={() => requestDelete([id])}>
+                  {cleanupLabel(id)}
+                </button>
+              )}
+              {viaSheet && !disk.nodes[id]?.delegate && (
                 <button type="button" className="link focus-ring plan-uninstall" onClick={() => openUninstall(id)}>
                   {t("plan.uninstall")}
                 </button>

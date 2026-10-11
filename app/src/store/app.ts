@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type DiskNode, type FreeWhy, type LoadedModel, type PathRemoval, type ScannedFile, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { type DiskNode, type FreeWhy, type LoadedModel, type PathRemoval, type ScannedFile, type SpaceReport, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type CategoryId, type DiskFilters, type FilterId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -37,7 +37,11 @@ export type ConfirmKind =
   /** Delete for good, Empty tray, Empty Trash: "Not undoable". */
   | "deleteNow"
   | "emptyTray"
-  | "emptyTrash";
+  | "emptyTrash"
+  /** Thin local snapshots. Not undoable. */
+  | "thinSnapshots"
+  /** Homebrew cleanup, Docker prune, or unavailable simulators. Not undoable. */
+  | "devDelegate";
 
 /** A short message; with `action`, a button (e.g. Undo) and a longer stay. */
 export type Toast = { key: number; text: string; action?: { label: string; run: () => void } };
@@ -118,6 +122,8 @@ type State = {
   fileCaution: { files: ScannedFile[]; run: () => void } | null;
   /** Dry-run: actions only report what they would do (dev builds start in it every launch). */
   dryRun: boolean;
+  /** Expected versus actual free space, after a cleanup or when the user asks. */
+  spaceReport: SpaceReport | null;
   /** Models Ollama or LM Studio currently have loaded. Empty until a lens or detail panel asks. */
   loadedModels: LoadedModel[];
 };
@@ -167,6 +173,8 @@ type Actions = {
   /** Moves files picked by path (Large & Old, Duplicates) to the tray; resolves to the paths moved. */
   moveFilesToTray: (run: () => Promise<PathRemoval>) => Promise<string[]>;
   freeGhost: () => void;
+  /** Shows why free space is not what a cleanup was expected to leave. Read-only. */
+  explainSpace: () => void;
   planFree: (bytes: number) => void;
   clearPlan: () => void;
   togglePlanItem: (id: number) => void;
@@ -251,6 +259,7 @@ export const useApp = create<State & Actions>((set, get) => {
   /** Delete (to the tray): the core decides; only what it actually moved flies to the tray. */
   async function moveToTray(ids: number[], confirmed: boolean, handPicked: boolean) {
     const { disk, focus } = get();
+    const before = await spaceAvailable();
     // Keep items only move after the user confirmed the caution sheet; blocked ones never.
     const items = ids.map((id) => disk.nodes[id]).filter((n) => n && deletable(disk, n.id) && (confirmed || n.safety !== "keep"));
     if (!items.length) return;
@@ -258,6 +267,7 @@ export const useApp = create<State & Actions>((set, get) => {
     if (!result) return;
     if (result.dryRun) {
       set({ selected: null, detailOpen: false });
+      await publishSpace(before, 0);
       const released = result.done.filter((d) => !d.entry && items.some((n) => n.id === d.id && n.model?.removal === "ollama"));
       const key = released.length && released.length === result.done.length ? "dryRun.deleteToast" : "dryRun.trayToast";
       return get().notify(t(key, { count: result.done.length, size: fmtBytes(result.bytes) }), { label: t("dryRun.turnOff"), run: () => get().setOverlay("settings") });
@@ -284,6 +294,7 @@ export const useApp = create<State & Actions>((set, get) => {
     const batch = `session-${batchId + 1}`;
     const trayItems: TrayItem[] = trayMoved.map((n) => ({ id: n.id, name: n.name, size: n.size, entry: entries.get(n.id), path: n.path, batch, at }));
     const releasedBytes = released.reduce((s, n) => s + n.size, 0);
+    await publishSpace(before, releasedBytes);
     set((s) => ({
       disk: result.disk,
       diskVersion: s.diskVersion + 1,
@@ -405,11 +416,54 @@ export const useApp = create<State & Actions>((set, get) => {
     });
   }
 
+  async function spaceAvailable(): Promise<number | null> {
+    const report = await api.spaceReport(null, 0).catch(() => null);
+    return report ? report.available : null;
+  }
+
+  async function publishSpace(before: number | null, freedNow: number) {
+    if (before === null) return;
+    const spaceReport = await api.spaceReport(before, freedNow).catch(() => null);
+    if (spaceReport) set({ spaceReport });
+  }
+
+  async function runDelegated(id: number) {
+    const node = get().disk.nodes[id];
+    const action = node?.delegateAction;
+    if (!node || !action) return;
+    const before = await spaceAvailable();
+    const result = await api.delegateAction(action).catch(failed);
+    if (!result) return;
+    await publishSpace(before, result.dryRun ? 0 : result.bytes);
+    if (result.dryRun) return get().notify(t("dryRun.delegateToast", { name: node.name }));
+    if (action === "thinSnapshots") {
+      const report = get().spaceReport;
+      set((s) => {
+        const disk = s.disk;
+        const ghost = disk.ghostId >= 0 ? disk.nodes[disk.ghostId] : undefined;
+        if (ghost && report) {
+          ghost.size = report.snapshotBytes;
+          if (report.snapshotBytes === 0) {
+            const parent = ghost.parent >= 0 ? disk.nodes[ghost.parent] : undefined;
+            if (parent) parent.children = parent.children.filter((c) => c !== ghost.id);
+            disk.ghostId = -1;
+          }
+        }
+        return { disk, diskVersion: s.diskVersion + 1, selected: null, detailOpen: false };
+      });
+      log(t("audit.snapshotsThinned"), node.path, result.bytes);
+    }
+    get().notify(t("space.done", { name: node.name }));
+    ascendIfEmpty();
+  }
+
   async function emptyTrash(id: number) {
     const { disk } = get();
     const n = disk.nodes[id];
+    const before = await spaceAvailable();
     const result = await api.emptyTrash(disk, id).catch(failed);
     if (!result) return;
+    await publishSpace(before, result.dryRun ? 0 : result.bytes);
     if (result.dryRun) return get().notify(t("dryRun.trashToast", { size: fmtBytes(result.bytes) }));
     // What Finder moved to the Trash for this plan is freed now too.
     set((s) => ({ disk: result.disk, diskVersion: s.diskVersion + 1, selected: null, detailOpen: false, plan: s.plan ? { ...s.plan, freed: s.plan.freed + result.bytes, inTrash: 0 } : null }));
@@ -474,6 +528,7 @@ export const useApp = create<State & Actions>((set, get) => {
     fileCaution: null,
     deleted: [],
     dryRun: false,
+    spaceReport: null,
     loadedModels: [],
 
     setInfo: (info) => set({ info }),
@@ -530,10 +585,17 @@ export const useApp = create<State & Actions>((set, get) => {
     clearChecks: () => set({ checked: [] }),
     requestDelete: (ids, handPicked = true) => {
       const { disk } = get();
-      // The Trash is emptied through the OS, and that's not undoable: always confirm.
-      const trash = ids.find((id) => disk.nodes[id]?.delegate);
-      if (trash !== undefined) return set({ confirmDelete: { ids: [trash], kind: "emptyTrash", handPicked }, detailOpen: false });
-      const ok = ids.filter((id) => deletable(disk, id));
+      // The OS does these. They are not undoable, so always confirm, and don't send them to the tray.
+      // A mixed selection keeps the files on the normal path; the tool action is confirmed on its own.
+      const delegated = ids.filter((id) => disk.nodes[id]?.delegate);
+      const files = ids.filter((id) => !disk.nodes[id]?.delegate);
+      if (delegated.length > 0 && files.length === 0) {
+        const id = delegated[0];
+        const action = disk.nodes[id].delegateAction ?? "emptyTrash";
+        const kind: ConfirmKind = action === "thinSnapshots" ? "thinSnapshots" : action === "emptyTrash" ? "emptyTrash" : "devDelegate";
+        return set({ confirmDelete: { ids: [id], kind, handPicked }, detailOpen: false });
+      }
+      const ok = files.filter((id) => deletable(disk, id));
       if (!ok.length) return get().notify(ids.some((id) => cautionFor(disk, id).kind === "category") ? t("delete.categoryToast") : t("delete.blockedToast"));
       const ollama = ok.some((id) => disk.nodes[id].model?.removal === "ollama");
       // Ollama may remove the model itself. That has to be confirmed, because it can't be undone.
@@ -552,6 +614,7 @@ export const useApp = create<State & Actions>((set, get) => {
       else if (c.kind === "deleteNow") get().deleteNow(c.ids);
       else if (c.kind === "emptyTray") get().emptyTray();
       else if (c.kind === "emptyTrash") void emptyTrash(c.ids[0]);
+      else if (c.kind === "thinSnapshots" || c.kind === "devDelegate") void runDelegated(c.ids[0]);
     },
     cancelDelete: () => set({ confirmDelete: null }),
     openFileCaution: (files, run) => set({ fileCaution: { files, run }, confirmDelete: null }),
@@ -571,8 +634,10 @@ export const useApp = create<State & Actions>((set, get) => {
         const { disk } = get();
         const items = ids.map((id) => disk.nodes[id]).filter((n) => n && n.safety === "safe" && deletable(disk, n.id));
         if (!items.length) return get().notify(t("delete.notSafeToast"));
+        const before = await spaceAvailable();
         const result = await api.remove(disk, items.map((n) => n.id), { handPicked: true, deleteNow: true }).catch(failed);
         if (!result) return;
+        await publishSpace(before, result.dryRun ? 0 : result.bytes);
         if (result.dryRun) return get().notify(t("dryRun.deleteToast", { count: result.done.length, size: fmtBytes(result.bytes) }));
         const done = new Set(result.done.map((d) => d.id));
         const gone = items.filter((n) => done.has(n.id));
@@ -592,8 +657,10 @@ export const useApp = create<State & Actions>((set, get) => {
       void (async () => {
         const { tray } = get();
         if (!tray.length) return;
+        const before = await spaceAvailable();
         const result = await api.emptyTray(tray).catch(failed);
         if (!result) return;
+        await publishSpace(before, result.dryRun ? 0 : result.bytes);
         if (result.dryRun) return get().notify(t("dryRun.emptyTrayToast", { size: fmtBytes(result.bytes) }));
         set((s) => ({
           tray: [],
@@ -632,8 +699,10 @@ export const useApp = create<State & Actions>((set, get) => {
     setTrayOpen: (open) => set({ trayOpen: open }),
     moveFilesToTray: async (run) => {
       if (readOnly()) return [];
+      const before = await spaceAvailable();
       const r = await run().catch(failed);
       if (!r) return [];
+      await publishSpace(before, 0);
       if (r.dryRun) {
         get().notify(t("dryRun.trayToast", { count: r.done.length, size: fmtBytes(r.bytes) }), { label: t("dryRun.turnOff"), run: () => get().setOverlay("settings") });
         return [];
@@ -674,14 +743,10 @@ export const useApp = create<State & Actions>((set, get) => {
       const { disk } = get();
       const ghost = disk.nodes[disk.ghostId];
       if (!ghost || ghost.size === 0) return;
-      const size = ghost.size;
-      set({ selected: null, detailOpen: false });
-      log(t("audit.snapshotsThinned"), "/", size);
-      set((s) => ({ deleted: [{ id: ghost.id, name: ghost.name, path: ghost.path, size, category: ghost.category, what: "snapshots", at: Date.now(), status: "deleted" }, ...s.deleted] }));
-      void api.thinSnapshots(disk).then((d) => {
-        set((s) => ({ disk: d, diskVersion: s.diskVersion + 1 }));
-        ascendIfEmpty();
-      });
+      set({ confirmDelete: { ids: [ghost.id], kind: "thinSnapshots", handPicked: true }, detailOpen: false });
+    },
+    explainSpace: () => {
+      void api.spaceReport(null, 0).then((spaceReport) => set({ spaceReport })).catch((e) => failed(e));
     },
 
     planFree: (bytes) => {

@@ -4,7 +4,7 @@
 import { inTauri, type AppInfo } from "../lib/backend";
 import { mockApi } from "../mock/api";
 import { tauriApi } from "./tauri";
-import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel } from "./types";
+import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, SpaceReport } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -51,6 +51,10 @@ export interface WrasseApi {
   neverTouch(path: string, on: boolean): Promise<string[]>;
   /** Thins local Time Machine snapshots, freeing the "held by snapshots" space. */
   thinSnapshots(disk: Disk): Promise<Disk>;
+  /** Free space, purgeable space, snapshots, Trash and the tray. Read-only. */
+  spaceReport(before: number | null, freedNow: number): Promise<SpaceReport>;
+  /** Runs one delegated cleanup. Dev builds are in dry run, so this reports without doing it. */
+  delegateAction(action: string): Promise<{ bytes: number; dryRun: boolean }>;
   /** Asks a running app to quit (before uninstalling it); waits up to 10 s. */
   quitApp(disk: Disk, appId: number): Promise<{ disk: Disk; quit: boolean }>;
   /** Free Up Space: what to remove to free `target` bytes, best first. `gone` are nodes

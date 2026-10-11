@@ -36,10 +36,16 @@ const FINDER_PARTLY_DONE: &str =
 /// Programs that only read state.
 const READ_ONLY: [&str; 3] = ["/usr/bin/pmset", "/usr/sbin/lsof", "/usr/bin/tmutil"];
 
-/// Runs an allowlisted, read-only program. `tmutil` is allowed only for `isexcluded`.
+/// Runs an allowlisted, read-only program. `tmutil` is allowed only for `isexcluded`
+/// and for `listlocalsnapshots` of `/` or `/System/Volumes/Data`.
 pub fn run_readonly(program: &str, args: &[&str]) -> io::Result<Output> {
-    let allowed = READ_ONLY.contains(&program)
-        && (program != "/usr/bin/tmutil" || args.first() == Some(&"isexcluded"));
+    let tmutil_ok = matches!(
+        args,
+        ["isexcluded", _]
+            | ["listlocalsnapshots", "/"]
+            | ["listlocalsnapshots", "/System/Volumes/Data"]
+    );
+    let allowed = READ_ONLY.contains(&program) && (program != "/usr/bin/tmutil" || tmutil_ok);
     if !allowed {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -123,6 +129,190 @@ pub fn finder_move_to_trash(path: &Path) -> io::Result<()> {
         FINDER_ASK_TIMEOUT,
         FINDER_PARTLY_DONE,
     )?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ))
+    }
+}
+
+/// Local Time Machine snapshot names for the two volumes that can hold them.
+pub fn snapshot_list_text() -> String {
+    let mut out = String::new();
+    for mount in ["/", "/System/Volumes/Data"] {
+        if let Ok(got) = run_readonly("/usr/bin/tmutil", &["listlocalsnapshots", mount]) {
+            out.push_str(&String::from_utf8_lossy(&got.stdout));
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// Free space, and free space including what macOS can reclaim for an important allocation.
+pub fn volume_capacities() -> Option<(u64, u64)> {
+    unsafe {
+        let pool = objc_autoreleasePoolPush();
+        let got = volume_capacities_in_pool();
+        objc_autoreleasePoolPop(pool);
+        got
+    }
+}
+
+/// AppleScript that asks for an administrator password and thins snapshots.
+/// `bytes` is a number, so the script text cannot be changed by it.
+pub fn thin_admin_source(bytes: u64) -> String {
+    format!(
+        "do shell script \"/usr/bin/tmutil thinlocalsnapshots / {bytes} 4\" with administrator privileges"
+    )
+}
+
+/// Thins local snapshots. Tries without a password first. If that fails, macOS asks
+/// through its own administrator prompt. Called only from `safety::delegate`.
+pub fn thin_local_snapshots(bytes: u64) -> io::Result<()> {
+    if bytes == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "no space held by snapshots",
+        ));
+    }
+    let amount = bytes.to_string();
+    let out = Command::new("/usr/bin/tmutil")
+        .args(["thinlocalsnapshots", "/", &amount, "4"])
+        .output()?;
+    if out.status.success() {
+        return Ok(());
+    }
+    let source = thin_admin_source(bytes);
+    let admin = run_osascript(
+        &["-e", &source],
+        FINDER_ASK_TIMEOUT,
+        "Thinning snapshots stopped after 2 minutes and may be partly done.",
+    )?;
+    if admin.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(
+            String::from_utf8_lossy(&admin.stderr).trim().to_string(),
+        ))
+    }
+}
+
+/// `brew cleanup -s --dry-run`. Nothing is removed. `None` when Homebrew isn't installed.
+pub fn brew_cleanup_dry_run() -> Option<String> {
+    let brew = crate::platform::brew_binaries()
+        .iter()
+        .copied()
+        .find(|b| Path::new(b).is_file())?;
+    let out = Command::new(brew)
+        .args(["cleanup", "-s", "--dry-run"])
+        .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+        .env("HOMEBREW_NO_ANALYTICS", "1")
+        .env("HOMEBREW_NO_ENV_HINTS", "1")
+        .output()
+        .ok()?;
+    if out.stdout.is_empty() && !out.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// `brew cleanup -s`. Called only from `safety::delegate`.
+pub fn brew_cleanup(brew: &Path) -> io::Result<()> {
+    let out = Command::new(brew)
+        .args(["cleanup", "-s"])
+        .env("HOMEBREW_NO_AUTO_UPDATE", "1")
+        .env("HOMEBREW_NO_ANALYTICS", "1")
+        .env("HOMEBREW_NO_ENV_HINTS", "1")
+        .output()?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ))
+    }
+}
+
+/// `docker system df`, after `docker info` succeeds. `None` when Docker isn't running.
+pub fn docker_df_text() -> Option<String> {
+    let bin = crate::platform::docker_bin()?;
+    let info = Command::new(&bin).arg("info").output().ok()?;
+    if !info.status.success() {
+        return None;
+    }
+    let df = Command::new(&bin).args(["system", "df"]).output().ok()?;
+    if !df.status.success() {
+        return None;
+    }
+    Some(String::from_utf8_lossy(&df.stdout).into_owned())
+}
+
+/// `docker system prune -f`. Volumes are not removed. Called only from `safety::delegate`.
+pub fn docker_prune() -> io::Result<()> {
+    let Some(bin) = crate::platform::docker_bin() else {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Docker isn't running",
+        ));
+    };
+    let info = Command::new(&bin).arg("info").output()?;
+    if !info.status.success() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "Docker isn't running",
+        ));
+    }
+    let out = Command::new(&bin)
+        .args(["system", "prune", "-f"])
+        .output()?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ))
+    }
+}
+
+/// Unavailable simulator device ids, and how much their device folders hold. Listing only.
+pub fn unavailable_simulators(home: &Path) -> Option<(u64, u32)> {
+    let out = Command::new("/usr/bin/xcrun")
+        .args(["simctl", "list", "devices", "unavailable"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let ids = crate::devjunk::parse_unavailable_simulators(&text);
+    let mut bytes = 0u64;
+    let mut count = 0u32;
+    for id in ids {
+        if !valid_sim_id(&id) {
+            continue;
+        }
+        let path = home
+            .join("Library/Developer/CoreSimulator/Devices")
+            .join(&id);
+        bytes += crate::quarantine::size_on_disk(&path);
+        count += 1;
+    }
+    Some((bytes, count))
+}
+
+fn valid_sim_id(id: &str) -> bool {
+    (8..=64).contains(&id.len())
+        && id.contains('-')
+        && id.chars().all(|c| c.is_ascii_hexdigit() || c == '-')
+}
+
+/// `xcrun simctl delete unavailable`. Called only from `safety::delegate`.
+pub fn simctl_delete_unavailable() -> io::Result<()> {
+    let out = Command::new("/usr/bin/xcrun")
+        .args(["simctl", "delete", "unavailable"])
+        .output()?;
     if out.status.success() {
         Ok(())
     } else {
@@ -338,6 +528,96 @@ unsafe fn msg_bool(recv: *mut c_void, sel: *mut c_void) -> bool {
     f(recv, sel) != 0
 }
 
+unsafe fn msg_u64(recv: *mut c_void, sel: *mut c_void) -> u64 {
+    type F = unsafe extern "C" fn(*mut c_void, *mut c_void) -> u64;
+    let f: F = std::mem::transmute(objc_msgSend as *const ());
+    f(recv, sel)
+}
+
+unsafe fn msg_id_err(
+    recv: *mut c_void,
+    sel: *mut c_void,
+    arg: *mut c_void,
+    err: *mut *mut c_void,
+) -> *mut c_void {
+    type F = unsafe extern "C" fn(
+        *mut c_void,
+        *mut c_void,
+        *mut c_void,
+        *mut *mut c_void,
+    ) -> *mut c_void;
+    let f: F = std::mem::transmute(objc_msgSend as *const ());
+    f(recv, sel, arg, err)
+}
+
+/// NSURL volume capacity keys. The Data volume is where the user's files live; `/` is
+/// the sealed system snapshot and reports the same free space.
+unsafe fn volume_capacities_in_pool() -> Option<(u64, u64)> {
+    let nsstring = objc_getClass(c"NSString".as_ptr());
+    let nsarray = objc_getClass(c"NSArray".as_ptr());
+    let nsurl = objc_getClass(c"NSURL".as_ptr());
+    if nsstring.is_null() || nsarray.is_null() || nsurl.is_null() {
+        return None;
+    }
+    for mount in [c"/System/Volumes/Data".as_ptr(), c"/".as_ptr()] {
+        if let Some(pair) = capacities_of(nsstring, nsarray, nsurl, mount) {
+            return Some(pair);
+        }
+    }
+    None
+}
+
+unsafe fn capacities_of(
+    nsstring: *mut c_void,
+    nsarray: *mut c_void,
+    nsurl: *mut c_void,
+    mount: *const c_char,
+) -> Option<(u64, u64)> {
+    let path = msg_cstr(nsstring, sel(c"stringWithUTF8String:"), mount);
+    if path.is_null() {
+        return None;
+    }
+    let url = msg_id(nsurl, sel(c"fileURLWithPath:"), path);
+    if url.is_null() {
+        return None;
+    }
+    let k1 = msg_cstr(
+        nsstring,
+        sel(c"stringWithUTF8String:"),
+        c"NSURLVolumeAvailableCapacityKey".as_ptr(),
+    );
+    let k2 = msg_cstr(
+        nsstring,
+        sel(c"stringWithUTF8String:"),
+        c"NSURLVolumeAvailableCapacityForImportantUsageKey".as_ptr(),
+    );
+    if k1.is_null() || k2.is_null() {
+        return None;
+    }
+    let arr = msg_id(nsarray, sel(c"arrayWithObject:"), k1);
+    if arr.is_null() {
+        return None;
+    }
+    let keys = msg_id(arr, sel(c"arrayByAddingObject:"), k2);
+    if keys.is_null() {
+        return None;
+    }
+    let mut err: *mut c_void = std::ptr::null_mut();
+    let dict = msg_id_err(url, sel(c"resourceValuesForKeys:error:"), keys, &mut err);
+    if dict.is_null() {
+        return None;
+    }
+    let n1 = msg_id(dict, sel(c"objectForKey:"), k1);
+    let n2 = msg_id(dict, sel(c"objectForKey:"), k2);
+    if n1.is_null() || n2.is_null() {
+        return None;
+    }
+    Some((
+        msg_u64(n1, sel(c"unsignedLongLongValue")),
+        msg_u64(n2, sel(c"unsignedLongLongValue")),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -352,6 +632,11 @@ mod tests {
                 "/usr/bin/tmutil",
                 &["addexclusion", "/nonexistent-wrasse"][..],
             ),
+            (
+                "/usr/bin/tmutil",
+                &["thinlocalsnapshots", "/", "1", "4"][..],
+            ),
+            ("/usr/bin/tmutil", &["listlocalsnapshots", "relative"][..]),
             ("/usr/bin/tmutil", &[][..]),
             ("pmset", &["-g", "batt"][..]),
             ("/usr/bin/../bin/pmset", &["-g", "batt"][..]),
@@ -364,6 +649,13 @@ mod tests {
             );
         }
         assert!(run_readonly("/usr/bin/pmset", &["-g", "batt"]).is_ok());
+        assert!(run_readonly("/usr/bin/tmutil", &["listlocalsnapshots", "/"]).is_ok());
+        let script = thin_admin_source(1_000);
+        assert_eq!(
+            script,
+            "do shell script \"/usr/bin/tmutil thinlocalsnapshots / 1000 4\" with administrator privileges"
+        );
+        assert!(!script.contains("thinlocalsnapshots / ;"));
     }
 
     /// A stalled AppleScript is stopped, and only that process. Nothing waits out `delay`.

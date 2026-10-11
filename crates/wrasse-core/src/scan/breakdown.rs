@@ -186,12 +186,74 @@ pub struct UiNode {
     /// That rule's root: removal checks the item stays inside it.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub rule_root: Option<String>,
-    /// Cleaned through the OS rather than item by item (the Trash).
+    /// Cleaned through the OS rather than item by item (the Trash, snapshots, a tool).
     #[serde(skip_serializing_if = "std::ops::Not::not", default)]
     pub delegate: bool,
+    /// Which OS action this node runs: `emptyTrash`, `thinSnapshots`, `brewCleanup`,
+    /// `dockerPrune`, `deleteUnavailableSimulators`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegate_action: Option<String>,
+    /// Developer item: `modules`, `target`, `venv`, `conda`, `cache`, `archive`, `keep`, `delegate`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dev_kind: Option<String>,
     /// Set on a model: which tool, how it's quantized, and how a removal has to work.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<crate::llm::ModelMeta>,
+}
+
+impl UiNode {
+    /// A node with the flags the scanner fills in later left unset.
+    #[allow(clippy::too_many_arguments)]
+    pub fn plain(
+        id: u32,
+        name: impl Into<String>,
+        path: impl Into<String>,
+        parent: i64,
+        depth: u32,
+        category: Category,
+        kind: NodeKind,
+        safety: Safety,
+        why: impl Into<String>,
+    ) -> Self {
+        let path = path.into();
+        Self {
+            id,
+            name: name.into(),
+            path: if path.is_empty() { "/".into() } else { path },
+            size: 0,
+            parent,
+            children: Vec::new(),
+            depth,
+            category,
+            kind,
+            last_opened_days: 0,
+            approx: false,
+            safety,
+            why: why.into(),
+            lenses: 0,
+            deep: 0,
+            match_bytes: MatchBytes::default(),
+            grew_by: 0,
+            shade: 0,
+            duplicate_of: None,
+            read_only: false,
+            rebuildable: false,
+            running: false,
+            app_bundle: false,
+            leftover: None,
+            leftover_meta: None,
+            app: None,
+            orphan: false,
+            aggregate: false,
+            note: None,
+            rule_id: None,
+            rule_root: None,
+            delegate: false,
+            delegate_action: None,
+            dev_kind: None,
+            model: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -200,7 +262,7 @@ pub struct UiDisk {
     pub nodes: Vec<UiNode>,
     pub root: u32,
     pub capacity: u64,
-    /// The "held by snapshots" node; -1 until Space Diagnostics (Phase 4).
+    /// The "held by snapshots" node, or -1 when no local snapshot is holding space.
     pub ghost_id: i64,
     pub leaf_count: u32,
     pub summary: Summary,
@@ -334,6 +396,9 @@ pub fn build(input: &Input) -> UiDisk {
     // Models anywhere else on the Mac (a project's own cache, downloaded weights).
     let found = b.discover_models(&home_display);
     let dev = b.claim_all(&dev_sources(&home_display));
+    // Project folders (stale node_modules, Cargo target, Python envs) before the home
+    // folder is claimed, so they can move into Developer. The Wrasse checkout is skipped.
+    let projects = b.discover_projects();
     let apps = b.claim_apps();
     let orphans = b.claim_orphans();
     let trash = b.claim(&format!("{home_display}/.Trash"));
@@ -465,6 +530,17 @@ pub fn build(input: &Input) -> UiDisk {
         let n = b.emit(id, dev_node, ctx);
         b.nodes[n as usize].name = label;
     }
+    for (id, kind, project) in projects {
+        let ctx = Ctx {
+            category: Category::Developer,
+            safety: Safety::YourCall,
+            rebuildable: false,
+            leftover: None,
+        };
+        let n = b.emit(id, dev_node, ctx);
+        b.nodes[n as usize].name = crate::devjunk::project_label(kind, &project);
+        b.nodes[n as usize].dev_kind = Some(crate::devjunk::project_kind(kind).into());
+    }
 
     // Apps.
     let apps_node = b.virtual_node(
@@ -530,6 +606,8 @@ pub fn build(input: &Input) -> UiDisk {
         let n = b.emit(t, junk, ctx);
         b.nodes[n as usize].name = "Trash".into();
         b.nodes[n as usize].why = "Files you already moved to the Trash.".into();
+        b.nodes[n as usize].delegate = true;
+        b.nodes[n as usize].delegate_action = Some("emptyTrash".into());
     }
     if let Some(l) = library {
         let ctx = Ctx {
@@ -651,6 +729,10 @@ pub fn build(input: &Input) -> UiDisk {
 
     b.attach_dupes();
     b.finish(root);
+    // Ages are final (a folder's age is its most recent child). Policy then decides
+    // what Free Up Space may offer. The Wrasse checkout stays Keep wherever it sits.
+    b.apply_dev_policy(dev_node);
+    b.protect_wrasse();
     // Drop empty or near-empty categories so the home map only shows what matters.
     for cat in [files, ai_node, dev_node, apps_node, junk, other] {
         if b.nodes[cat as usize].size < MIN_ITEM {
@@ -839,6 +921,13 @@ fn removal_of(tool: crate::llm::ModelTool) -> crate::llm::ModelRemoval {
     }
 }
 
+/// True when `dir` has an entry named `name`. Does not open the file.
+fn has_dir_entry(dir: &str, name: &str) -> bool {
+    std::fs::read_dir(dir)
+        .ok()
+        .is_some_and(|rd| rd.flatten().any(|e| e.file_name() == name))
+}
+
 /// Known developer folders: toolchains, package caches, build products, simulators.
 fn dev_sources(home: &str) -> Vec<(String, String)> {
     let h = |p: &str| format!("{home}/{p}");
@@ -850,6 +939,7 @@ fn dev_sources(home: &str) -> Vec<(String, String)> {
         ("Homebrew".into(), "/usr/local/Homebrew".into()),
         ("npm cache".into(), h(".npm")),
         ("pnpm store".into(), h("Library/pnpm")),
+        ("pnpm store".into(), h(".local/share/pnpm/store")),
         ("Yarn cache".into(), h("Library/Caches/Yarn")),
         ("Bun".into(), h(".bun")),
         ("Cargo".into(), h(".cargo")),
@@ -859,11 +949,15 @@ fn dev_sources(home: &str) -> Vec<(String, String)> {
         ("Maven".into(), h(".m2")),
         ("CocoaPods".into(), h(".cocoapods")),
         ("CocoaPods cache".into(), h("Library/Caches/CocoaPods")),
+        ("NuGet".into(), h(".nuget")),
         ("pip cache".into(), h("Library/Caches/pip")),
         ("pyenv".into(), h(".pyenv")),
         ("Conda".into(), h(".conda")),
         ("Miniconda".into(), h("miniconda3")),
+        ("Miniconda".into(), h("Miniconda3")),
         ("Anaconda".into(), h("anaconda3")),
+        ("Miniforge".into(), h("miniforge3")),
+        ("Mambaforge".into(), h("mambaforge")),
         ("Docker CLI".into(), h(".docker")),
         ("Android".into(), h(".android")),
         ("Gems".into(), h(".gem")),
@@ -874,7 +968,7 @@ fn dev_sources(home: &str) -> Vec<(String, String)> {
 fn is_rebuildable_dev(label: &str) -> bool {
     matches!(
         label,
-        "npm cache" | "pnpm store" | "Yarn cache" | "CocoaPods cache" | "pip cache" | "Gradle"
+        "npm cache" | "pnpm store" | "Yarn cache" | "CocoaPods cache" | "pip cache"
     )
 }
 
@@ -1674,6 +1768,155 @@ impl Builder<'_> {
         }
     }
 
+    /// Stale project folders and Python envs, claimed so they show under Developer.
+    /// Anything inside the Wrasse checkout (it contains `.toolchain`) stays put.
+    fn discover_projects(&mut self) -> Vec<(u32, crate::devjunk::ProjectItem, String)> {
+        struct Frame {
+            id: u32,
+            in_modules: bool,
+            in_wrasse: bool,
+        }
+        let mut stack = vec![Frame {
+            id: self.tree.root(),
+            in_modules: false,
+            in_wrasse: false,
+        }];
+        let mut hits = Vec::new();
+        while let Some(frame) = stack.pop() {
+            if self.carved.contains(&frame.id) || self.inside_carved(frame.id) {
+                continue;
+            }
+            let node = self.tree.node(frame.id);
+            if node.kind == Kind::File {
+                continue;
+            }
+            let name = self.tree.name(frame.id);
+            let child_names: Vec<&str> = self
+                .tree
+                .children(frame.id)
+                .map(|c| self.tree.name(c))
+                .collect();
+            let wrasse_here = frame.in_wrasse || crate::devjunk::is_wrasse_root(&child_names);
+            let parent = node.parent;
+            let parent_name = if parent == super::tree::NONE {
+                ""
+            } else {
+                self.tree.name(parent)
+            };
+            let grand = if parent == super::tree::NONE {
+                super::tree::NONE
+            } else {
+                self.tree.node(parent).parent
+            };
+            let grand_name = if grand == super::tree::NONE {
+                ""
+            } else {
+                self.tree.name(grand)
+            };
+            let parent_children: Vec<&str> = if parent == super::tree::NONE {
+                Vec::new()
+            } else {
+                self.tree
+                    .children(parent)
+                    .map(|c| self.tree.name(c))
+                    .collect()
+            };
+            let age = self.input.today.saturating_sub(node.last_used_day);
+            // Small files are not nodes in the tree. A `pyvenv.cfg` or `Cargo.toml` is
+            // almost always smaller than that, so look the name up on disk.
+            let mut children = child_names.clone();
+            if matches!(name, "venv" | ".venv" | "env")
+                && has_dir_entry(&self.tree.path(frame.id), "pyvenv.cfg")
+                && !children.contains(&"pyvenv.cfg")
+            {
+                children.push("pyvenv.cfg");
+            }
+            let mut parent_kids = parent_children.clone();
+            if name == "target"
+                && parent != super::tree::NONE
+                && has_dir_entry(&self.tree.path(parent), "Cargo.toml")
+                && !parent_kids.contains(&"Cargo.toml")
+            {
+                parent_kids.push("Cargo.toml");
+            }
+            if !wrasse_here {
+                if let Some(kind) = crate::devjunk::project_item(&crate::devjunk::ProjectSpot {
+                    name,
+                    children: &children,
+                    parent_children: &parent_kids,
+                    parent_name,
+                    grandparent_name: grand_name,
+                    age_days: age,
+                    in_modules: frame.in_modules,
+                    in_wrasse: false,
+                }) {
+                    if self.size(frame.id) >= MIN_ITEM {
+                        if let Some(id) = self.claim_id(frame.id) {
+                            let project = match kind {
+                                crate::devjunk::ProjectItem::Conda => name.to_string(),
+                                _ => {
+                                    if parent_name.is_empty() {
+                                        "Project".into()
+                                    } else {
+                                        parent_name.to_string()
+                                    }
+                                }
+                            };
+                            hits.push((id, kind, project));
+                            continue;
+                        }
+                    }
+                }
+            }
+            let in_modules = frame.in_modules || name == "node_modules";
+            for c in self.tree.children(frame.id) {
+                stack.push(Frame {
+                    id: c,
+                    in_modules,
+                    in_wrasse: wrasse_here,
+                });
+            }
+        }
+        hits
+    }
+
+    /// Applies developer policy once folder ages include their newest child.
+    fn apply_dev_policy(&mut self, dev: u32) {
+        let mut stack = vec![dev];
+        while let Some(id) = stack.pop() {
+            let kids = self.nodes[id as usize].children.clone();
+            stack.extend(kids);
+            if id == dev {
+                continue;
+            }
+            let path = self.nodes[id as usize].path.clone();
+            let age = self.nodes[id as usize].last_opened_days;
+            let Some(policy) = crate::devjunk::policy_for(&path, age) else {
+                continue;
+            };
+            let n = &mut self.nodes[id as usize];
+            n.safety = policy.safety;
+            n.rebuildable = policy.rebuildable;
+            n.read_only = policy.read_only;
+            n.dev_kind = policy.dev_kind.map(str::to_string);
+            n.why = policy.why;
+        }
+    }
+
+    /// The Wrasse checkout and its toolchain are never offered and never removed.
+    fn protect_wrasse(&mut self) {
+        for n in &mut self.nodes {
+            if crate::devjunk::wrasse_path(&n.path) {
+                n.safety = Safety::Keep;
+                n.read_only = true;
+                n.rebuildable = false;
+                n.why =
+                    "Part of the Wrasse project, including its toolchain. Wrasse leaves it alone."
+                        .into();
+            }
+        }
+    }
+
     fn claim_all(&mut self, sources: &[(String, String)]) -> Vec<(String, u32)> {
         sources
             .iter()
@@ -1902,45 +2145,17 @@ impl Builder<'_> {
     ) -> u32 {
         let id = self.nodes.len() as u32;
         let depth = parent.map_or(0, |p| self.nodes[p as usize].depth + 1);
-        self.nodes.push(UiNode {
+        self.nodes.push(UiNode::plain(
             id,
-            name: name.into(),
-            path: if path.is_empty() {
-                "/".into()
-            } else {
-                path.into()
-            },
-            size: 0,
-            parent: parent.map_or(-1, i64::from),
-            children: Vec::new(),
+            name,
+            path,
+            parent.map_or(-1, i64::from),
             depth,
             category,
             kind,
-            last_opened_days: 0,
-            approx: false,
             safety,
-            why: why.into(),
-            lenses: 0,
-            deep: 0,
-            match_bytes: MatchBytes::default(),
-            grew_by: 0,
-            shade: 0,
-            duplicate_of: None,
-            read_only: false,
-            rebuildable: false,
-            running: false,
-            app_bundle: false,
-            leftover: None,
-            leftover_meta: None,
-            app: None,
-            orphan: false,
-            aggregate: false,
-            note: None,
-            rule_id: None,
-            rule_root: None,
-            delegate: false,
-            model: None,
-        });
+            why,
+        ));
         if let Some(p) = parent {
             self.nodes[p as usize].children.push(id);
         }
@@ -2425,6 +2640,147 @@ mod tests {
         assert!(disk.nodes[0].match_bytes.ai_models >= 40_000_000);
         assert!(disk.nodes[0].match_bytes.dev >= 20_000_000);
         assert!(disk.nodes[0].match_bytes.junk >= 12_000_000);
+        crate::platform::remove_test_dir(&root);
+    }
+
+    /// Stale project folders move into Developer. The Wrasse checkout does not.
+    /// A Python env in Documents is shown and is not pre-selected.
+    #[test]
+    fn developer_junk_is_claimed_and_the_wrasse_checkout_is_not() {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("wrasse-devjunk-{nanos}"));
+        let home = root.join("Users/me");
+        let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000);
+        let times = fs::FileTimes::new().set_accessed(old).set_modified(old);
+        let age = |path: &Path| {
+            fn rec(p: &Path, times: fs::FileTimes) {
+                let meta = fs::symlink_metadata(p).unwrap();
+                if meta.is_dir() {
+                    for entry in fs::read_dir(p).unwrap() {
+                        rec(&entry.unwrap().path(), times);
+                    }
+                }
+                fs::File::options()
+                    .read(true)
+                    .open(p)
+                    .unwrap()
+                    .set_times(times)
+                    .unwrap();
+            }
+            rec(path, times);
+        };
+
+        write(
+            &home.join("Projects/web/node_modules/pkg/index.js"),
+            12_000_000,
+        );
+        write(&home.join("Projects/web/package.json"), 20);
+        age(&home.join("Projects/web/node_modules"));
+        write(
+            &home.join("Projects/fresh/node_modules/pkg/index.js"),
+            12_000_000,
+        );
+        write(&home.join("Documents/Wrasse/.toolchain/rust/README"), 20);
+        write(
+            &home.join("Documents/Wrasse/target/debug/wrasse"),
+            12_000_000,
+        );
+        write(&home.join("Documents/Wrasse/Cargo.toml"), 20);
+        age(&home.join("Documents/Wrasse"));
+        write(&home.join("Documents/app/.venv/pyvenv.cfg"), 30);
+        write(&home.join("Documents/app/.venv/lib/python"), 12_000_000);
+        age(&home.join("Documents/app/.venv"));
+        write(&home.join("code/api/Cargo.toml"), 20);
+        write(&home.join("code/api/target/debug/api"), 12_000_000);
+        age(&home.join("code/api/target"));
+        write(
+            &home.join("Library/Containers/com.docker.docker/Data/vms/disk"),
+            12_000_000,
+        );
+
+        let tree = scan(&root, &ScanControl::default()).unwrap();
+        let prefix = root.to_string_lossy().into_owned();
+        let scanned = tree.node(0).size;
+        let input = Input {
+            tree: &tree,
+            display_prefix: &prefix,
+            home: Some(PathBuf::from("/Users/me")),
+            volumes: Volumes {
+                capacity: scanned * 4,
+                available: scanned,
+                os_used: 0,
+            },
+            volume_name: "Test HD".into(),
+            previous: None,
+            running: vec![],
+            today: 20_000,
+            env: HashMap::new(),
+            apps: &[],
+            orphans: &[],
+            hf_models: &|_: &Path| Vec::new(),
+        };
+        let disk = build(&input);
+        let find = |name: &str| disk.nodes.iter().find(|n| n.name == name && n.size > 0);
+        let modules = find("web · node_modules").expect("stale node_modules");
+        assert_eq!(modules.category, Category::Developer);
+        assert_eq!(modules.dev_kind.as_deref(), Some("modules"));
+        assert!(modules.rebuildable);
+        assert_eq!(modules.safety, Safety::Safe);
+        assert!(find("fresh · node_modules").is_none());
+        let fresh = disk
+            .nodes
+            .iter()
+            .find(|n| n.path.ends_with("/Projects/fresh/node_modules"))
+            .expect("recent node_modules stays in the project");
+        assert_ne!(fresh.category, Category::Developer);
+
+        let wrasse = disk
+            .nodes
+            .iter()
+            .find(|n| n.path.contains("/Documents/Wrasse/target"))
+            .expect("wrasse target stays visible");
+        assert_ne!(wrasse.category, Category::Developer);
+        assert!(wrasse.read_only && wrasse.safety == Safety::Keep);
+
+        let venv = find("app · Python").expect("documents venv");
+        assert_eq!(venv.dev_kind.as_deref(), Some("venv"));
+        assert_eq!(venv.safety, Safety::YourCall);
+        assert!(!venv.rebuildable);
+
+        let target = find("api · target").expect("cargo target");
+        assert!(target.rebuildable && target.safety == Safety::Safe);
+        assert_eq!(target.dev_kind.as_deref(), Some("target"));
+
+        let docker = disk
+            .nodes
+            .iter()
+            .find(|n| n.path.contains("com.docker.docker") && n.name == "Docker")
+            .expect("docker");
+        assert!(docker.read_only && docker.safety == Safety::Keep);
+
+        let limits = crate::rank::Limits {
+            hand_pick_only: vec![PathBuf::from("/Users/me/Documents")],
+            ..Default::default()
+        };
+        let (offered, _, _) = crate::rank::candidates(&disk, &limits);
+        let offered_paths: Vec<&str> = offered
+            .iter()
+            .map(|c| disk.nodes[c.id as usize].path.as_str())
+            .collect();
+        assert!(offered_paths
+            .iter()
+            .any(|p| p.ends_with("/Projects/web/node_modules")));
+        assert!(offered_paths
+            .iter()
+            .any(|p| p.ends_with("/code/api/target")));
+        assert!(offered_paths.iter().all(|p| !p.contains("/Documents/")));
+        assert!(offered_paths.iter().all(|p| !p.contains("/Wrasse")));
+        assert!(offered_paths
+            .iter()
+            .all(|p| !p.contains("com.docker.docker")));
         crate::platform::remove_test_dir(&root);
     }
 

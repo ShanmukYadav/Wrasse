@@ -109,6 +109,8 @@ pub fn run() {
             cleanup::restore_items,
             cleanup::purge_items,
             cleanup::empty_trash,
+            cleanup::space_report,
+            cleanup::run_delegate,
             cleanup::junk_report,
             cleanup::never_touch,
             cleanup::never_touch_list,

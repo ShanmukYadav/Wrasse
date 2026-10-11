@@ -61,8 +61,12 @@ export type DiskNode = {
   /** The junk rule covering this item; `why` then holds its explanation ("Why is this safe?"). */
   ruleId?: string;
   ruleRoot?: string;
-  /** Cleaned through the OS (the Trash) rather than item by item. */
+  /** Cleaned through the OS (the Trash, snapshots, a tool) rather than item by item. */
   delegate?: boolean;
+  /** `emptyTrash`, `thinSnapshots`, `brewCleanup`, `dockerPrune`, `deleteUnavailableSimulators`. */
+  delegateAction?: string;
+  /** Developer item: modules, target, venv, conda, cache, archive, keep, delegate. */
+  devKind?: string;
   /** Set on a model: which tool owns it, and how a removal is checked. */
   model?: ModelMeta;
 };
@@ -323,6 +327,23 @@ export type DiskSummary = {
   hardlinksDeduped: number;
   cloneSharedBytes: number;
   cancelled: boolean;
+};
+
+/** Why deleted space has not come back yet (PLAN.md §6.7). */
+export type SpaceReport = {
+  available: number;
+  importantAvailable: number;
+  /** macOS reclaims this when an app needs the space. */
+  purgeable: number;
+  snapshots: string[];
+  /** Estimated bytes local Time Machine snapshots are holding. 0 when there are none. */
+  snapshotBytes: number;
+  trashBytes: number;
+  trayBytes: number;
+  /** Set after a cleanup: free space expected once `freedNow` had left the disk. */
+  expectedAvailable?: number;
+  /** Expected free space that is not free yet. */
+  gap: number;
 };
 
 export type Disk = {

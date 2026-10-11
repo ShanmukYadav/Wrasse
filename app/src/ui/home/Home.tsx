@@ -8,6 +8,7 @@ import { useScheme } from "../../lib/prefs";
 import { duration, ease } from "../../motion/tokens";
 import { useApp } from "../../store/app";
 import { GhostTile } from "./GhostTile";
+import { SpaceReportCard } from "./SpaceReport";
 import { gridLayout, type Cell } from "./gridLayout";
 import { Sonar } from "./Sonar";
 import { Icon } from "../../design/icons/Icon";
@@ -70,6 +71,7 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   const pulse = useApp((s) => s.pulse);
   const units = useApp((s) => s.info?.units ?? "decimal");
   const scheme = useScheme();
+  const spaceReport = useApp((s) => s.spaceReport);
   const { setFocus, select, freeGhost, setViewMode } = useApp.getState();
 
   // Cell size, so tiles can decide how many rows they fit.
@@ -165,6 +167,7 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   if (root) {
     return (
       <div className="level">
+        {spaceReport && <SpaceReportCard />}
         {banner}
         <div ref={gridRef} className="home-grid">
           {tiles}

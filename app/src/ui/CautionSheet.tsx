@@ -11,7 +11,7 @@ import { useApp, type ConfirmKind } from "../store/app";
 
 // Confirms a removal before it happens:
 // - "caution": OS folders (Documents, Desktop, …) and data marked Keep; needs "I understand".
-// - "deleteNow", "emptyTray", "emptyTrash": gone for good; labeled "Not undoable".
+// - "deleteNow", "emptyTray", "emptyTrash", "thinSnapshots", "devDelegate": gone for good; labeled "Not undoable".
 // For items it asks the core for a preview first, so it can say what will be skipped (and why)
 // and warn when iCloud syncs an item to the user's other devices.
 export function CautionSheet() {
@@ -67,6 +67,10 @@ function Sheet({ ids, kind, handPicked }: { ids: number[]; kind: ConfirmKind; ha
       ? t("confirm.emptyTrayTitle", { count: tray.length })
       : kind === "emptyTrash"
         ? t("confirm.emptyTrashTitle")
+        : kind === "thinSnapshots"
+          ? t("confirm.thinTitle")
+          : kind === "devDelegate"
+            ? t("confirm.devTitle", { name: items[0]?.name ?? "" })
         : items.length === 1
           ? t("caution.titleOne", { name: items[0].name })
           : t("caution.titleMany", { count: items.length });
@@ -75,6 +79,10 @@ function Sheet({ ids, kind, handPicked }: { ids: number[]; kind: ConfirmKind; ha
       ? t("confirm.emptyTrayBody")
       : kind === "emptyTrash"
         ? t("confirm.emptyTrashBody")
+        : kind === "thinSnapshots"
+          ? t("confirm.thinBody")
+          : kind === "devDelegate"
+            ? items[0]?.why || t("confirm.devBody")
         : kind === "deleteNow"
           ? t("confirm.deleteNowBody")
           : serverRm
@@ -120,7 +128,7 @@ function Sheet({ ids, kind, handPicked }: { ids: number[]; kind: ConfirmKind; ha
             <Icon name="cloud" tone="warning" size={16} /> {t("confirm.synced", { count: synced })}
           </p>
         )}
-        {kind !== "emptyTrash" && (
+        {kind !== "emptyTrash" && kind !== "thinSnapshots" && kind !== "devDelegate" && (
           <ul className="caution-list">
             {listed.slice(0, 5).map((it) => (
               <li key={it.key} className="caution-item">
@@ -159,6 +167,10 @@ function Sheet({ ids, kind, handPicked }: { ids: number[]; kind: ConfirmKind; ha
                 ? t("confirm.emptyTrayButton", { size: fmt(total) })
                 : kind === "emptyTrash"
                   ? t("confirm.emptyTrashButton", { size: fmt(items[0]?.size ?? 0) })
+                  : kind === "thinSnapshots"
+                    ? t("confirm.thinButton", { size: fmt(items[0]?.size ?? 0) })
+                    : kind === "devDelegate"
+                      ? t("confirm.devButton", { size: fmt(items[0]?.size ?? 0) })
                   : t("confirm.deleteNowButton", { size: fmt(total) })}
           </motion.button>
         </div>

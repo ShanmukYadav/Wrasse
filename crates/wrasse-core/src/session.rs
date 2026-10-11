@@ -197,6 +197,7 @@ fn annotate(disk: &mut UiDisk, matches: &[crate::rules::Match]) {
         n.why = m.explanation.clone();
         n.rebuildable = m.regenerates;
         n.delegate = m.delegate.is_some();
+        n.delegate_action = m.delegate.as_ref().map(|d| d.action_name().to_string());
         n.safety = match m.safety {
             crate::safety::Safety::Safe => breakdown::Safety::Safe,
             crate::safety::Safety::YourCall => breakdown::Safety::YourCall,

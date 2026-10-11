@@ -172,7 +172,28 @@ export const tauriApi: WrasseApi = {
   junk: () => invoke<JunkReport>("junk_report"),
   neverTouch: (path, on) => invoke<string[]>("never_touch", { path, on }),
 
-  thinSnapshots: () => Promise.reject(new Error("Snapshot thinning arrives with Space Diagnostics (Phase 4).")),
+  async thinSnapshots(disk) {
+    const status = await invoke<{ dryRun: boolean }>("cleanup_status");
+    const before = await invoke<import("./types").SpaceReport>("space_report", { before: null, freedNow: 0 });
+    const bytes = await invoke<number>("run_delegate", { action: "thinSnapshots" });
+    const report = await invoke<import("./types").SpaceReport>("space_report", { before: before.available, freedNow: status.dryRun ? 0 : bytes });
+    const ghost = disk.nodes[disk.ghostId];
+    if (!status.dryRun && ghost) {
+      ghost.size = report.snapshotBytes;
+      if (report.snapshotBytes === 0) {
+        const parent = disk.nodes[ghost.parent];
+        if (parent) parent.children = parent.children.filter((id) => id !== ghost.id);
+        disk.ghostId = -1;
+      }
+    }
+    return disk;
+  },
+  spaceReport: (before, freedNow) => invoke("space_report", { before, freedNow }),
+  async delegateAction(action) {
+    const status = await invoke<{ dryRun: boolean }>("cleanup_status");
+    const bytes = await invoke<number>("run_delegate", { action });
+    return { bytes, dryRun: status.dryRun };
+  },
   async quitApp(disk, appId) {
     const app = disk.nodes[appId];
     const r = await invoke<{ quit: boolean }>("quit_app", { bundle: app.path });

@@ -636,6 +636,32 @@ pub enum Delegated {
     OllamaRm { model: String },
     /// `ollama stop`: POST `/api/generate` with `keep_alive` 0. The model stays on disk.
     OllamaStop { model: String },
+    /// `tmutil thinlocalsnapshots / <bytes> 4`. Not undoable. `bytes` is measured again
+    /// on the Mac before this runs; 0 is refused.
+    ThinLocalSnapshots { bytes: u64 },
+    /// `brew cleanup -s`. Homebrew itself stays. Not undoable.
+    BrewCleanup,
+    /// `docker system prune -f` (no `--volumes`), only while Docker is running.
+    DockerPrune,
+    /// `xcrun simctl delete unavailable`. Not undoable.
+    SimctlDeleteUnavailable,
+}
+
+impl Delegated {
+    /// The UI's name for this action. Stable across versions.
+    pub fn action_name(&self) -> &'static str {
+        match self {
+            Self::EmptyTrash => "emptyTrash",
+            Self::BrewUninstallCask { .. } => "brewUninstall",
+            Self::FinderMoveToTrash { .. } => "finderTrash",
+            Self::OllamaRm { .. } => "ollamaRm",
+            Self::OllamaStop { .. } => "ollamaStop",
+            Self::ThinLocalSnapshots { .. } => "thinSnapshots",
+            Self::BrewCleanup => "brewCleanup",
+            Self::DockerPrune => "dockerPrune",
+            Self::SimctlDeleteUnavailable => "deleteUnavailableSimulators",
+        }
+    }
 }
 
 /// Why a delegated action was refused before running.
@@ -778,6 +804,41 @@ pub fn delegate_with(
             } else {
                 Ok((format!("ollama stop {model}"), 0, None))
             }
+        }
+        Delegated::ThinLocalSnapshots { bytes } => {
+            if *bytes == 0 {
+                Err(refuse("no space held by snapshots"))
+            } else {
+                Ok((
+                    format!("tmutil thinlocalsnapshots / {bytes} 4"),
+                    *bytes,
+                    None,
+                ))
+            }
+        }
+        Delegated::BrewCleanup => {
+            let brew = brew_binary(ctx);
+            if brew.is_none() && !dry_run {
+                Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Homebrew isn't installed",
+                ))
+            } else {
+                Ok(("brew cleanup -s".to_string(), 0, brew))
+            }
+        }
+        Delegated::DockerPrune => {
+            if !dry_run && platform::docker_bin().is_none() {
+                Err(io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "Docker isn't running",
+                ))
+            } else {
+                Ok(("docker system prune -f".to_string(), 0, None))
+            }
+        }
+        Delegated::SimctlDeleteUnavailable => {
+            Ok(("xcrun simctl delete unavailable".to_string(), 0, None))
         }
     };
     let (target, bytes, brew) = match checked {
@@ -1173,6 +1234,35 @@ mod tests {
             io::ErrorKind::PermissionDenied,
             "past the list check, the test build stops before the OS"
         );
+        crate::platform::remove_test_dir(&base);
+    }
+
+    /// Snapshot thinning, brew, Docker and simulators: dry run reports them and does not run them.
+    /// A request of 0 bytes is refused before any program starts.
+    #[test]
+    fn delegated_cleanups_dry_run_without_running() {
+        let (base, ctx) = setup("delegate-preview");
+        let err = delegate(&ctx, Delegated::ThinLocalSnapshots { bytes: 0 }, true).unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+        assert!(err.to_string().contains("no space held by snapshots"));
+        assert_eq!(
+            delegate(&ctx, Delegated::ThinLocalSnapshots { bytes: 1000 }, true).unwrap(),
+            1000
+        );
+        assert!(delegate(&ctx, Delegated::BrewCleanup, true).is_ok());
+        assert!(delegate(&ctx, Delegated::DockerPrune, true).is_ok());
+        assert!(delegate(&ctx, Delegated::SimctlDeleteUnavailable, true).is_ok());
+        assert_eq!(
+            Delegated::ThinLocalSnapshots { bytes: 1000 }.action_name(),
+            "thinSnapshots"
+        );
+        assert_eq!(Delegated::BrewCleanup.action_name(), "brewCleanup");
+        assert_eq!(Delegated::DockerPrune.action_name(), "dockerPrune");
+        assert_eq!(
+            Delegated::SimctlDeleteUnavailable.action_name(),
+            "deleteUnavailableSimulators"
+        );
+        assert_eq!(Delegated::EmptyTrash.action_name(), "emptyTrash");
         crate::platform::remove_test_dir(&base);
     }
 

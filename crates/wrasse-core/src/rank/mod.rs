@@ -198,7 +198,7 @@ pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) 
     let mut stack: Vec<u32> = vec![disk.root];
     while let Some(id) = stack.pop() {
         let n = &nodes[id as usize];
-        if !attached(n) {
+        if !attached(n) || crate::devjunk::wrasse_path(&n.path) {
             continue;
         }
         let descend = |stack: &mut Vec<u32>| stack.extend(n.children.iter().copied());
@@ -283,12 +283,38 @@ pub fn candidates(disk: &UiDisk, limits: &Limits) -> (Vec<Candidate>, u64, u64) 
                     descend(&mut stack);
                 }
             }
-            // Developer: folders the tools rebuild (node_modules, build products), whole.
+            // Developer: rebuildable caches whole, and stale envs or archives. Docker,
+            // Homebrew and the Wrasse checkout are shown and never offered. A tool's own
+            // cleanup (brew, docker, simulators) is offered as one action.
             Category::Developer => {
-                if n.rebuildable && allowed(n) {
-                    push(single(n, Why::Rebuilds));
-                } else {
-                    descend(&mut stack);
+                if n.read_only || crate::devjunk::wrasse_path(&n.path) {
+                    continue;
+                }
+                if n.delegate
+                    && n.delegate_action.is_some()
+                    && n.size > 0
+                    && attached(n)
+                    && !under(&n.path, &limits.hand_pick_only)
+                    && !under(&n.path, &limits.never_touch)
+                {
+                    push(single(n, Why::Unused));
+                    continue;
+                }
+                match crate::devjunk::rank_why(
+                    n.rebuildable,
+                    n.dev_kind.as_deref(),
+                    n.last_opened_days,
+                ) {
+                    Some(crate::devjunk::RankWhy::Rebuilds) if allowed(n) => {
+                        push(single(n, Why::Rebuilds));
+                    }
+                    Some(crate::devjunk::RankWhy::Unused) if allowed(n) => {
+                        push(single(n, Why::Unused));
+                    }
+                    // Hand-pick and other project items stay visible and are not opened up.
+                    Some(_) => {}
+                    None if n.dev_kind.is_some() => {}
+                    None => descend(&mut stack),
                 }
             }
             // AI models, whole.
