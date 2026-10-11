@@ -13,6 +13,21 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const MODEL_ENV: [&str; 3] = ["OLLAMA_MODELS", "HF_HOME", "HF_HUB_CACHE"];
 
 pub fn scan_volume(control: &ScanControl, cache_dir: Option<&Path>) -> io::Result<UiDisk> {
+    let disk = scan_into_disk(control, cache_dir)?;
+    // The walk, the previous tree and the app list drop with `scan_into_disk`. Hand those
+    // pages back, then once more after the caller has serialized `disk` and the scan threads
+    // have exited. Without the second pass a launch sometimes keeps the scan's high-water.
+    platform::release_free_memory();
+    let _ = std::thread::Builder::new()
+        .name("wrasse-release".into())
+        .spawn(|| {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            platform::release_free_memory();
+        });
+    Ok(disk)
+}
+
+fn scan_into_disk(control: &ScanControl, cache_dir: Option<&Path>) -> io::Result<UiDisk> {
     let (root, prefix) = platform::scan_root();
     // The change-log position goes with the tree, taken *before* walking so that anything that
     // changes during the walk is replayed next time.
@@ -79,7 +94,6 @@ pub fn scan_volume(control: &ScanControl, cache_dir: Option<&Path>) -> io::Resul
         }
     }
     drop(tree);
-    platform::release_free_memory();
     Ok(disk)
 }
 

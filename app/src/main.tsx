@@ -15,6 +15,13 @@ if (import.meta.env.DEV && inTauri) {
 // Publish tokens before the first paint so nothing flashes unstyled.
 applyTokens(systemScheme(), navigator.userAgent.includes("Windows") ? "windows" : "macos");
 
+// Backdrop blur waits until the first paint has landed, then the glass fills stay as they are.
+requestAnimationFrame(() => {
+  requestAnimationFrame(() => {
+    document.documentElement.classList.add("is-glass");
+  });
+});
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App />

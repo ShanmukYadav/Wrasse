@@ -193,6 +193,18 @@ button {
   cursor: pointer;
 }
 
+/* Backdrop blur turns on with html.is-glass, after the first paint. The fill is already there. */
+html:not(.is-glass) .command-bar,
+html:not(.is-glass) .command-results,
+html:not(.is-glass) .plan-meter,
+html:not(.is-glass) .lens-bar,
+html:not(.is-glass) .lens-filter-pop,
+html:not(.is-glass) .scope-banner,
+html:not(.is-glass) .glass-css {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* ---- Command bar ---------------------------------------------------------------------- */
 
 .command-wrap {
@@ -793,16 +805,22 @@ button {
   inset: 0 0 var(--d1-grid-pad-bottom) 0;
   pointer-events: none;
   overflow: hidden;
+  --sonar-ring: 720px;
+  animation: sonar-in 0.35s ease both;
 }
 .sonar-ring {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 160vmax;
-  height: 160vmax;
-  margin: -80vmax 0 0 -80vmax;
+  /* Layout size is capped. A 160vmax ring is ~1888px on the default window, and at 2x
+     WebKit tiles that square out to a 4096px backing store (~64 MB) per ring. The sweep
+     scales this smaller square up to the same visual diameter. Transform only, so the
+     backing store stays the layout size. */
+  width: var(--sonar-ring);
+  height: var(--sonar-ring);
+  margin: calc(var(--sonar-ring) / -2) 0 0 calc(var(--sonar-ring) / -2);
   border-radius: 50%;
-  border: 2px solid;
+  border: 1px solid;
   animation: sonar-sweep var(--sonar-dur) cubic-bezier(0.22, 1, 0.36, 1) infinite both;
 }
 .sonar-mark {
@@ -859,9 +877,14 @@ button {
   color: var(--c-text-muted);
 }
 /* They repeat only while a scan runs (the component unmounts when it ends); transform and opacity only. */
+@keyframes sonar-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 @keyframes sonar-sweep {
-  from { transform: scale(0.05); opacity: 0.9; }
-  to { transform: scale(1); opacity: 0; }
+  /* 0.131×720px and 2.622×720px are the old 0.05×160vmax and 1×160vmax diameters. */
+  from { transform: scale(0.131); opacity: 0.9; }
+  to { transform: scale(2.622); opacity: 0; }
 }
 @keyframes sonar-mark {
   0% { transform: scale(0.9); opacity: 0; }

@@ -208,19 +208,27 @@ Follow-up fixes accepted with the checkpoint:
   for that app (`scripts/wrasse-tree.py`). A WebKit process owned by another app is left out.
   From a shell, macOS names the shell as the responsible process and launchd as the parent, so
   the service list is what still ties the helpers to this app.
-- Five cold launches with that checker, autoscan on. Simultaneous peak in the first minute:
-  **493.3, 484.3, 523.3, 471.4, 478.4 MB**, each at 2–3 s. At that moment WebContent was about
-  310–330 MB and the GPU helper about 120–130 MB; the app was 34–70 MB and Networking about 5 MB.
-  Per-process high-water across the minute: app about 70 MB, WebContent about 390 MB, GPU about
-  140 MB, Networking about 5 MB. Those highs are not the same instant. The 400 MB peak budget
-  is not met. Idle at 60/70/80 s: **117.0, 117.0, 153.0, 116.9, 118.0 MB**. The 153 MB launch
-  is the app staying at its 70 MB scan high-water after WebKit had settled to 61 + 17 + 5; the
-  other four released the app back to 34–35 MB. No cut has been made. To get the first minute
-  under 400 MB, the webview's first paint has to allocate less: lazy-render the tiles and drop
-  composited layers (the backdrop blur and the sonar). Deferring the scan avoids stacking the
-  app's 70 MB on that paint, and it is what kept one launch at 153 MB idle, but the paint alone
-  is already about 450 MB, so deferring it does not land under 400. Waiting for approval before
-  changing that.
+- Five cold launches with that checker, before the launch-memory cut, autoscan on. Simultaneous
+  peak in the first minute: **493.3, 484.3, 523.3, 471.4, 478.4 MB**, each at 2–3 s. Idle at
+  60/70/80 s: **117.0, 117.0, 153.0, 116.9, 118.0 MB**. The 153 MB launch was the app staying at
+  its 70 MB scan high-water after WebKit had settled.
+- Launch memory, measured before the cut with `vmmap` on Wrasse's own WebContent and GPU
+  processes at about 2.5 s. The scan sent to the webview is the whole UI tree and it is small:
+  `scan-cache.json` is 0.91 MB, 2,260 nodes; the root plus its children is 2.5 KB. There is no
+  full-window canvas (one 300×150 measure canvas for middle-ellipsis). No icon atlas and no
+  webfont files (`__FONT_DATA` was 2 KB; no Image I/O region). The spike was graphics surfaces.
+  WebContent's physical footprint high-water was 394.5 MB, of which three surfaces were 64.5 MB
+  each (4096×4128, the tile size WebKit uses for a `160vmax` sonar ring: about 1888 CSS pixels,
+  3776 device pixels at 2×, rounded out to 4096). GPU high-water on that launch was 141.2 MB.
+  JS heap inside WebKit Malloc was about 23 MB allocated.
+- After the cut (rings laid out at 720px and scaled to the same visual diameter, tile rows and
+  chips on the frame after the shell, backdrop blur and the sonar after the first paint, and a
+  second `malloc_zone_pressure_relief` 500 ms after the scan drops its tree). Five cold launches,
+  autoscan on, 2026-10-11. Simultaneous peaks: **114.9, 116.0, 116.0, 116.1, 116.1 MB**, each
+  near 3 s (app 37, WebContent 26, GPU 47, Networking 6). Idle at 60/70/80 s: **75.5, 75.5,
+  75.4, 75.5, 75.4 MB**, flat across the three samples, app at 36 MB every time. Both budgets
+  pass (peak 400, idle 140). WebContent high-water on the diagnostic launch after the ring cap
+  was 26.5 MB, with one 16.4 MB graphics surface.
 
 **Stop here.** Windows is deferred. Phase 4 is started, and this step is the checkpoint. Don't
 open AI models, diagnostics, or developer junk until the owner says to continue.

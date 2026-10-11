@@ -1,5 +1,5 @@
 import { AnimatePresence, LayoutGroup, motion } from "motion/react";
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { DiskNode } from "../../api";
 import { categories, d1 } from "../../design/tokens";
 import { t } from "../../i18n";
@@ -18,6 +18,20 @@ import { Tile, type TileMetrics } from "./Tile";
 
 const MORE_ID = -2;
 
+// Turns on `ms` after `on` becomes true, and off again as soon as `on` is false.
+function useDelayed(on: boolean, ms: number): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    if (!on) {
+      setReady(false);
+      return;
+    }
+    const id = window.setTimeout(() => setReady(true), ms);
+    return () => window.clearTimeout(id);
+  }, [on, ms]);
+  return ready;
+}
+
 // Home: one level of the disk at a time. Moving between levels is a short crossfade: no zoom,
 // no sweep, no staggered reveal (the user found those distracting).
 export function Home() {
@@ -26,6 +40,8 @@ export function Home() {
   const scan = useApp((s) => s.scan);
   const scanKey = useApp((s) => s.scanKey);
   const visible = useApp((s) => s.viewMode === "map");
+  // Sonar mounts after the first paint and fades in, so its rings are not in the opening composite.
+  const showSonar = useDelayed(scan === "scanning", 400);
   return (
     <motion.main
       className="home"
@@ -39,7 +55,7 @@ export function Home() {
           <Level key={focus} focus={focus} root={focus === disk.root} />
         </AnimatePresence>
       </LayoutGroup>
-      {scan === "scanning" && <Sonar key={scanKey} />}
+      {showSonar && <Sonar key={scanKey} />}
     </motion.main>
   );
 }
