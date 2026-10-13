@@ -4,21 +4,28 @@
 #   scripts/check-idle-memory.sh                 build the release app, one launch
 #   scripts/check-idle-memory.sh --no-build      measure the existing release build
 #   scripts/check-idle-memory.sh --launches 5    repeat the cold launch this many times
+#   scripts/check-idle-memory.sh --full-scan     one launch with a throwaway data folder, so the
+#                                                scan reads the whole disk; checks the peak during it
 #
 # The tree is the app pid plus WebKit WebContent, GPU and Networking helpers that
 # belong to it (parent chain, responsible pid, or that app's launchd services).
 # Other apps' WebKit processes are not counted. See scripts/wrasse-tree.py.
 #
-# Two budgets, both phys_footprint (the Memory column in Activity Monitor):
-#   peak  the highest simultaneous total during the first 60 s (default 200 MB)
-#   idle  the worst of three samples taken at 60 s, 70 s and 80 s (default 100 MB)
-# WRASSE_PEAK_LIMIT_MB and WRASSE_IDLE_LIMIT_MB override them.
+# Budgets (PLAN.md §8), all phys_footprint (the Memory column in Activity Monitor):
+#   peak  the highest simultaneous total during the first 60 s (250 MB)
+#   idle  the worst of three samples taken at 60 s, 70 s and 80 s, window open (100 MB)
+#   scan  with --full-scan: the highest total while a full scan runs, first 150 s (300 MB)
+# The owner accepted ~1% over these on 2026-10-13 (101 / 253 / 303 MB); the check still reports
+# against the budgets themselves. A feature that breaks one is fixed, never the budget.
+# WRASSE_PEAK_LIMIT_MB, WRASSE_IDLE_LIMIT_MB and WRASSE_SCAN_LIMIT_MB override them.
 # macOS only. Needs a logged-in session because it opens the window.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 IDLE_MB="${WRASSE_IDLE_LIMIT_MB:-100}"
-PEAK_MB="${WRASSE_PEAK_LIMIT_MB:-200}"
+PEAK_MB="${WRASSE_PEAK_LIMIT_MB:-250}"
+SCAN_MB="${WRASSE_SCAN_LIMIT_MB:-300}"
+FULL_SCAN=0
 APP="target/release/wrasse-app"
 LAUNCHES=1
 BUILD=1
@@ -26,6 +33,7 @@ BUILD=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-build) BUILD=0; shift ;;
+    --full-scan) FULL_SCAN=1; shift ;;
     --launches)
       [[ $# -ge 2 ]] || { echo "check-idle-memory: --launches needs a number"; exit 2; }
       LAUNCHES="$2"
@@ -106,6 +114,15 @@ over() { awk -v v="$1" -v l="$2" 'BEGIN { exit !(v > l) }'; }
 fail=0
 worst_peak=0
 worst_idle=0
+WINDOW=60
+if [[ "$FULL_SCAN" -eq 1 ]]; then
+  # A throwaway data folder: no saved scan or scan tree, so the launch scan reads everything.
+  # The real data folder (tray, logs, cache) is not touched.
+  WRASSE_DATA_DIR=$(mktemp -d -t wrasse-fullscan)
+  export WRASSE_DATA_DIR
+  LAUNCHES=1
+  WINDOW=150
+fi
 
 for launch in $(seq 1 "$LAUNCHES"); do
   echo "=== launch $launch ==="
@@ -122,7 +139,7 @@ for launch in $(seq 1 "$LAUNCHES"); do
   while true; do
     now=$(date +%s)
     elapsed=$((now - start))
-    if [[ "$elapsed" -gt 60 ]]; then
+    if [[ "$elapsed" -gt "$WINDOW" ]]; then
       break
     fi
     if ! kill -0 "$app_pid" 2>/dev/null; then
@@ -147,7 +164,9 @@ for launch in $(seq 1 "$LAUNCHES"); do
 
   idle_worst=0
   idle_line=""
-  for sample in 1 2 3; do
+  samples="1 2 3"
+  [[ "$FULL_SCAN" -eq 1 ]] && samples=""
+  for sample in $samples; do
     measure
     echo "idle sample $sample: ${total_mb} MB (app ${app_mb} web ${web_mb} gpu ${gpu_mb} net ${net_mb} other ${other_mb})"
     idle_line="${idle_line}${total_mb} "
@@ -175,6 +194,16 @@ for launch in $(seq 1 "$LAUNCHES"); do
 done
 trap - EXIT
 
+if [[ "$FULL_SCAN" -eq 1 ]]; then
+  [[ "$WRASSE_DATA_DIR" == */wrasse-fullscan* ]] && rm -rf "$WRASSE_DATA_DIR"
+  echo "Peak during a full scan ${worst_peak} MB (budget ${SCAN_MB} MB)."
+  if over "$worst_peak" "$SCAN_MB"; then
+    echo "Memory during a full scan ${worst_peak} MB is over the ${SCAN_MB} MB budget."
+    exit 1
+  fi
+  echo "Full-scan memory check passed: ${worst_peak} MB."
+  exit 0
+fi
 echo "Worst simultaneous peak ${worst_peak} MB (budget ${PEAK_MB} MB)."
 echo "Worst idle sample ${worst_idle} MB (budget ${IDLE_MB} MB)."
 if over "$worst_peak" "$PEAK_MB"; then
