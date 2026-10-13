@@ -204,3 +204,15 @@ fn annotate(disk: &mut UiDisk, matches: &[crate::rules::Match]) {
         };
     }
 }
+
+/// Adds what this Mac shows right now to a scan: space held by local snapshots and live developer
+/// previews. Both are reads. Kept out of [`scan_volume`] so a fixture scan never lists this Mac's
+/// snapshots.
+pub fn decorate(mut disk: UiDisk) -> UiDisk {
+    crate::diagnostics::attach_ghost(&mut disk, crate::diagnostics::held_now());
+    if let Some(home) = crate::platform::home_dir() {
+        let extras = crate::devjunk::live_extras(&home);
+        crate::devjunk::attach_live(&mut disk, &extras);
+    }
+    disk
+}
