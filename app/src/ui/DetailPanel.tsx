@@ -10,7 +10,7 @@ import { useScheme } from "../lib/prefs";
 import { duration, ease, spring } from "../motion/tokens";
 import { pressable } from "../motion/variants";
 import { useApp } from "../store/app";
-import { isDrillable } from "./home/nodes";
+import { isDrillable } from "../features/home/nodes";
 import { loadedFor, toolName, usedLabel } from "./modelLine";
 
 // Detail panel (D1): white glass, 330px, slides in from the right.

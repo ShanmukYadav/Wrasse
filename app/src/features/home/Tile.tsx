@@ -8,8 +8,8 @@ import { useTilePaint } from "../../design/tilePaint";
 import { t } from "../../i18n";
 import { bytesText, formatBytes, type UnitSystem } from "../../lib/format";
 import type { Cell } from "./gridLayout";
-import { modelCaption } from "../modelLine";
-import { matchesScope } from "../scope";
+import { modelCaption } from "../../ui/modelLine";
+import { matchesScope } from "../../ui/scope";
 
 export type TileMetrics = { cellW: number; cellH: number };
 

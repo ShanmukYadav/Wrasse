@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ancestors } from "../../api";
-import { activeFilters } from "../scope";
+import { activeFilters } from "../../ui/scope";
 import { Bytes } from "../../shared/Bytes";
 import { Icon } from "../../design/icons/Icon";
 import { trafficLights } from "../../design/tokens";
@@ -9,7 +9,7 @@ import { inTauri } from "../../api/env";
 import { duration, ease } from "../../motion/tokens";
 import { pressable } from "../../motion/variants";
 import { trayBytes, useApp, usedBytes } from "../../store/app";
-import { CommandBar } from "../CommandBar";
+import { CommandBar } from "../../ui/CommandBar";
 
 // D1 header: window controls, location, command bar, free space and Scan.
 export function Header() {

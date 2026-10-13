@@ -14,8 +14,8 @@ import { gridLayout, type Cell } from "./gridLayout";
 import { Sonar } from "./Sonar";
 import { Icon } from "../../design/icons/Icon";
 import { isDrillable } from "./nodes";
-import { ScopeEmpty } from "../ScopeEmpty";
-import { filtersOn, scopeBits, visibleRows } from "../scope";
+import { ScopeEmpty } from "../../ui/ScopeEmpty";
+import { filtersOn, scopeBits, visibleRows } from "../../ui/scope";
 import { Tile, type TileMetrics } from "./Tile";
 
 const MORE_ID = -2;

@@ -14,8 +14,8 @@ import {
 } from "../design/tokens";
 import { t } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
-import { Tile } from "./home/Tile";
-import type { Cell } from "./home/gridLayout";
+import { Tile } from "../features/home/Tile";
+import type { Cell } from "../features/home/gridLayout";
 import { useApp } from "../store/app";
 
 const TONES = Object.keys(tones.dark) as Tone[];
