@@ -20,7 +20,7 @@ const DetailPanel = deferred(() => import("./features/browse/DetailPanel").then(
 const CautionSheet = deferred(() => import("./features/cleanup/CautionSheet").then((m) => m.CautionSheet), (s) => s.confirmDelete !== null || s.fileCaution !== null);
 const Onboarding = deferred(() => import("./ui/Onboarding").then((m) => m.Onboarding), (s) => s.overlay === "onboarding");
 const Overlays = deferred(() => import("./ui/Overlays").then((m) => m.Overlays), (s) => s.overlay !== null && s.overlay !== "design" && s.overlay !== "onboarding");
-const UninstallSheet = deferred(() => import("./ui/UninstallSheet").then((m) => m.UninstallSheet), (s) => s.uninstall !== null);
+const UninstallSheet = deferred(() => import("./features/apps/UninstallSheet").then((m) => m.UninstallSheet), (s) => s.uninstall !== null);
 
 export function App() {
   const scheme = useScheme();

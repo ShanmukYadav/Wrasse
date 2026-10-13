@@ -1,15 +1,15 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState, type CSSProperties } from "react";
-import { Icon } from "../design/icons/Icon";
-import { attached } from "../api";
-import { iconFor } from "../design/icons/semantic";
-import { categories } from "../design/tokens";
-import { t } from "../i18n";
-import { bytesText } from "../lib/format";
-import { useScheme } from "../lib/prefs";
-import { duration, ease, spring } from "../motion/tokens";
-import { pressable } from "../motion/variants";
-import { useApp } from "../store/app";
+import { Icon } from "../../design/icons/Icon";
+import { attached } from "../../api";
+import { iconFor } from "../../design/icons/semantic";
+import { categories } from "../../design/tokens";
+import { t } from "../../i18n";
+import { bytesText } from "../../lib/format";
+import { useScheme } from "../../lib/prefs";
+import { duration, ease, spring } from "../../motion/tokens";
+import { pressable } from "../../motion/variants";
+import { useApp } from "../../store/app";
 
 // Uninstall confirm sheet: the app bundle plus a checklist of leftovers, all moved to quarantine.
 export function UninstallSheet() {
