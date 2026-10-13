@@ -2,21 +2,21 @@
 // variants, color tokens, the type scale and sample blocks of each item type in both themes.
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, type CSSProperties } from "react";
-import { LENS_BIT, type Disk } from "../api/types";
-import { BrandMark } from "../design/brand/BrandMark";
-import { Icon } from "../design/icons/Icon";
-import { ICONS, type IconName } from "../design/icons/nodes";
-import { iconFor } from "../design/icons/semantic";
-import { themeVars } from "../design/apply";
+import { LENS_BIT, type Disk } from "../../api/types";
+import { BrandMark } from "../../design/brand/BrandMark";
+import { Icon } from "../../design/icons/Icon";
+import { ICONS, type IconName } from "../../design/icons/nodes";
+import { iconFor } from "../../design/icons/semantic";
+import { themeVars } from "../../design/apply";
 import {
   brand, categories, chips, icon as iconTokens, lensColors, palette, tones, type as typeScale,
   type Category, type LensId, type Scheme, type Tone,
-} from "../design/tokens";
-import { t } from "../i18n";
-import { duration, ease, spring } from "../motion/tokens";
-import { Tile } from "../features/home/Tile";
-import type { Cell } from "../features/home/gridLayout";
-import { useApp } from "../store/app";
+} from "../../design/tokens";
+import { t } from "../../i18n";
+import { duration, ease, spring } from "../../motion/tokens";
+import { Tile } from "../home/Tile";
+import type { Cell } from "../home/gridLayout";
+import { useApp } from "../../store/app";
 
 const TONES = Object.keys(tones.dark) as Tone[];
 const ICON_NAMES = Object.keys(ICONS) as IconName[];

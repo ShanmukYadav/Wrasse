@@ -15,7 +15,7 @@ import { Toast } from "./shared/Toast";
 import { deferred } from "./shared/Deferred";
 
 // Closed at launch: loaded on first use (see ui/Deferred.tsx).
-const DesignPage = deferred(() => import("./ui/DesignPage").then((m) => m.DesignPage), (s) => s.overlay === "design");
+const DesignPage = deferred(() => import("./features/design-page/DesignPage").then((m) => m.DesignPage), (s) => s.overlay === "design");
 const DetailPanel = deferred(() => import("./features/browse/DetailPanel").then((m) => m.DetailPanel), (s) => s.detailOpen || s.selected !== null);
 const CautionSheet = deferred(() => import("./features/cleanup/CautionSheet").then((m) => m.CautionSheet), (s) => s.confirmDelete !== null || s.fileCaution !== null);
 const Onboarding = deferred(() => import("./features/onboarding/Onboarding").then((m) => m.Onboarding), (s) => s.overlay === "onboarding");
