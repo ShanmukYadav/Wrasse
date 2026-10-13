@@ -55,7 +55,7 @@ scripts/check-windows-compile.sh
 ./dev.sh cargo fmt --all --check
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
 ./dev.sh cargo test --workspace          # 116 tests in wrasse-core, all passing
-./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
+./dev.sh node --experimental-strip-types app/tests/scope.test.ts
 (cd app && ../dev.sh npm run build)
 scripts/check-idle-memory.sh             # with Wrasse quit; peak 200 MB, idle 100 MB
 ```

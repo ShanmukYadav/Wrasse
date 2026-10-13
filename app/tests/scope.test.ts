@@ -1,8 +1,8 @@
 // The See button count is the number of rows the list shows for the same scope.
-// Run: ./dev.sh node --experimental-strip-types app/src/ui/scope.test.ts
-import { LENS_BIT, type Disk, type DiskNode } from "../api/types.ts";
-import type { CategoryId, DiskFilters } from "../design/tokens";
-import { buttonBytes, buttonCount, scopeSummary, showAllScope, visibleRows } from "./scope.ts";
+// Run: ./dev.sh node --experimental-strip-types app/tests/scope.test.ts (or npm test)
+import { LENS_BIT, type Disk, type DiskNode } from "../src/api/types.ts";
+import type { CategoryId, DiskFilters } from "../src/design/tokens";
+import { buttonBytes, buttonCount, scopeSummary, showAllScope, visibleRows } from "../src/ui/scope.ts";
 
 const AI = LENS_BIT.aiModels;
 const GREW = LENS_BIT.grew;
