@@ -8,7 +8,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 export RUSTUP_HOME="$ROOT/.toolchain/rustup"
 export CARGO_HOME="$ROOT/.toolchain/cargo"
 export npm_config_cache="$ROOT/.npm-cache"
-export PATH="$CARGO_HOME/bin:$ROOT/.toolchain/node/bin:$PATH"
+# The GitHub CLI and its settings live in the toolchain too (gh keeps the token in the keychain).
+export GH_CONFIG_DIR="$ROOT/.toolchain/gh/config"
+export PATH="$CARGO_HOME/bin:$ROOT/.toolchain/node/bin:$ROOT/.toolchain/gh/bin:$PATH"
 
 # Only exec when run directly with arguments, not when sourced.
 if [[ "${BASH_SOURCE[0]}" == "$0" && $# -gt 0 ]]; then
