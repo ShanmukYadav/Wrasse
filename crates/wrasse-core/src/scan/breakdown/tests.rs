@@ -1,4 +1,5 @@
 use super::*;
+use crate::platform::Volumes;
 use crate::scan::{scan, ScanControl};
 use std::fs;
 use std::io::Write;
