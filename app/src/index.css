@@ -568,16 +568,23 @@ html:not(.is-glass) .glass-css {
   flex-shrink: 0;
   box-shadow: var(--d1-tile-badge-shadow) var(--badge-shadow);
 }
+.tile-title {
+  /* Name and meta on one line when both fit. When they don't, the meta wraps under the name, and
+     space-between puts a line's only item at the start. Names wrap; they are never cut short. */
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 8px;
+}
 .tile-name {
   font-size: var(--d1-tile-name-size);
   font-weight: var(--w-size);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.25;
   min-width: 0;
-}
-.tile-name-keep {
-  flex-shrink: 0;
+  overflow-wrap: anywhere;
 }
 .tile-head.is-short {
   flex: 1;
@@ -592,7 +599,6 @@ html:not(.is-glass) .glass-css {
   flex-shrink: 0;
 }
 .tile-meta {
-  margin-left: auto;
   font-size: var(--d1-tile-meta-size);
   color: var(--c-text-muted);
   white-space: nowrap;
@@ -622,11 +628,11 @@ html:not(.is-glass) .glass-css {
   gap: var(--d1-row-stack-gap);
 }
 .tile-row {
-  height: var(--d1-row-height);
+  min-height: var(--d1-row-height);
   display: flex;
   align-items: center;
   gap: var(--d1-row-gap);
-  padding: 0 var(--d1-row-pad-x);
+  padding: 7px var(--d1-row-pad-x);
   border-radius: var(--d1-row-radius);
   background: var(--d1-row-surface);
 }
@@ -638,8 +644,15 @@ html:not(.is-glass) .glass-css {
   min-width: 0;
   font-size: var(--d1-row-font-size);
   font-weight: var(--w-name);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.tile-row-tag {
+  margin-left: 6px;
+  font-size: var(--t-caption, 12px);
+  font-weight: normal;
+  color: var(--c-text-muted);
   white-space: nowrap;
-  overflow: hidden;
 }
 .size-bar {
   width: var(--d1-row-bar-w);
@@ -674,20 +687,20 @@ html:not(.is-glass) .glass-css {
   gap: 8px;
 }
 .tile-chips {
+  /* Chips wrap whole onto more lines; the tile drops them if it runs out of room (Tile.tsx). */
   display: flex;
   flex-wrap: wrap;
-  overflow: hidden;
-  max-height: 27px; /* one line of chips; extra chips wrap out of view instead of overflowing */
   gap: var(--d1-chip-gap);
   min-width: 0;
   flex: 1;
 }
 .chip {
+  max-width: 100%;
   font-size: var(--d1-chip-font-size);
   font-weight: var(--w-name);
   padding: var(--d1-chip-padding);
   border-radius: var(--r-pill);
-  white-space: nowrap;
+  white-space: normal;
 }
 .chip-amber {
   background: var(--chip-amber-bg);

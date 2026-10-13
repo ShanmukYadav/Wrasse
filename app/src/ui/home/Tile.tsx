@@ -1,4 +1,4 @@
-import { useRef, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { api, deletable, type Disk, type DiskNode } from "../../api";
 import { useApp } from "../../store/app";
 import { Icon } from "../../design/icons/Icon";
@@ -8,7 +8,6 @@ import { useTilePaint } from "../../design/tilePaint";
 import { t } from "../../i18n";
 import { formatBytes, type UnitSystem } from "../../lib/format";
 import type { Cell } from "./gridLayout";
-import { MiddleEllipsis } from "./MiddleEllipsis";
 import { modelCaption } from "../modelLine";
 import { matchesScope } from "../scope";
 
@@ -43,8 +42,8 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   // Small tiles degrade gracefully so the size is always fully visible:
   // short tiles become one line (name + size), medium tiles drop the chips.
   const short = heightPx < d1.tile.shortBelow;
-  const showChips = !short && heightPx >= d1.tile.chipsFrom && widthPx >= d1.tile.chipsMinWidth;
-  const fittedSizeFont = Math.min(sizeFont, Math.max(d1.tile.sizeS, (heightPx - (showChips ? 112 : 78)) * 0.9));
+  const chipsRoom = !short && heightPx >= d1.tile.chipsFrom && widthPx >= d1.tile.chipsMinWidth;
+  const fittedSizeFont = Math.min(sizeFont, Math.max(d1.tile.sizeS, (heightPx - (chipsRoom ? 112 : 78)) * 0.9));
   const share = Math.round((node.size / Math.max(1, parentSize)) * 100);
   const shareText = share < 1 ? "<1" : share;
   // Category tiles count in their own unit (folders, models, apps). Junk and the rest count items.
@@ -61,7 +60,14 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   const rowRoom = Math.floor((heightPx - 160 - sizeFont) / (d1.row.height + d1.row.stackGap));
   const maxRows = sizeFont === d1.tile.sizeXL ? 6 : sizeFont === d1.tile.sizeL ? 3 : 0;
   // Single items (apps, models, files) show no rows: their parts aren't separate choices.
-  const rowCount = drillable && widthPx >= 220 ? Math.max(0, Math.min(maxRows, rowRoom)) : 0;
+  const fitRows = drillable && widthPx >= 220 ? Math.max(0, Math.min(maxRows, rowRoom)) : 0;
+  // Names are never cut short: they wrap instead, so a row can take two lines. When the tile then
+  // runs out of room, it drops a row (into "+N more"), then its chips, until everything fits.
+  const fitKey = `${node.id}:${widthPx}:${heightPx}:${listed.length}`;
+  const [fit, setFit] = useState({ key: fitKey, drop: 0 });
+  const drop = fit.key === fitKey ? fit.drop : 0;
+  const rowCount = Math.max(0, fitRows - drop);
+  const chipsFit = drop <= fitRows;
   let rows = listed.slice(0, rowCount);
   let more: { count: number; size: number } | null = null;
   if (rowCount >= 5 && listed.length > rowCount) {
@@ -88,6 +94,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
             : t("app.opened", { when: t("detail.daysAgo", { count: node.lastOpenedDays }) })
         : "";
   const insights = api.insights(disk, node.id);
+  const showChips = chipsRoom && chipsFit;
   // Ticks for bulk delete: shown on hover, and on every tile once something is ticked.
   const checked = useApp((s) => s.checked.includes(node.id));
   const selecting = useApp((s) => s.checked.length > 0);
@@ -98,6 +105,10 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   // The fill and corner glow as images (see design/tilePaint.ts).
   const paintRef = useRef<HTMLButtonElement>(null);
   useTilePaint(paintRef, c.from, c.to, { color: c.glow, size: d1.tile.glowSize });
+  useLayoutEffect(() => {
+    const el = paintRef.current;
+    if (el && el.scrollHeight > el.clientHeight + 1 && drop <= fitRows) setFit({ key: fitKey, drop: drop + 1 });
+  });
   const style = {
     gridColumn: `${cell.col} / span ${cell.colSpan}`,
     gridRow: `${cell.row} / span ${cell.rowSpan}`,
@@ -129,16 +140,17 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
             <Icon name={iconFor(node)} tone="white" size={20} />
           </span>
         )}
-        <span className="tile-name">{node.name}</span>
-        {short ? (
-          <>
-            {node.depth === 1 && <span className="tile-meta">{t("home.metaShare", { share: shareText })}</span>}
-            <span className="tile-size-inline">
-              {size.value} {size.unit}
-            </span>
-          </>
-        ) : (
-          meta && <span className="tile-meta">{meta}</span>
+        {/* Name and meta share a line when they fit; otherwise the meta moves under the name. */}
+        <span className="tile-title">
+          <span className="tile-name">{node.name}</span>
+          {short
+            ? node.depth === 1 && <span className="tile-meta">{t("home.metaShare", { share: shareText })}</span>
+            : meta && <span className="tile-meta">{meta}</span>}
+        </span>
+        {short && (
+          <span className="tile-size-inline">
+            {size.value} {size.unit}
+          </span>
         )}
       </span>
       {!short && (
@@ -152,7 +164,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
       {large && (
         <span className="tile-rows">
           {rows.map((k) => (
-            <Row key={k.id} node={k} max={maxKid} units={units} dimmed={!dimmed && scopeBits !== 0 && !matchesScope(disk, k.id, scopeBits)} />
+            <Row key={k.id} node={k} max={maxKid} units={units} bar={widthPx >= d1.tile.rowBarMinWidth} dimmed={!dimmed && scopeBits !== 0 && !matchesScope(disk, k.id, scopeBits)} />
           ))}
           {more && (
             <span className="tile-row">
@@ -160,7 +172,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
               <span className="tile-row-name">
                 {node.category === "files" ? t("home.moreFolders", { count: more.count }) : t("home.more", { count: more.count })}
               </span>
-              <SizeBar fraction={more.size / maxKid} />
+              {widthPx >= d1.tile.rowBarMinWidth && <SizeBar fraction={more.size / maxKid} />}
               <span className="tile-row-size">{fmt(more.size, units)}</span>
             </span>
           )}
@@ -177,7 +189,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
                 </span>
               ))}
           </span>
-          {widthPx >= d1.tile.chipsMinWidth && (
+          {widthPx >= d1.tile.openMinWidth && (
             <span className="tile-open" aria-hidden>
               {drillable ? t("home.open") : t("home.details")}
             </span>
@@ -208,20 +220,21 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   );
 }
 
-function Row({ node, max, units, dimmed }: { node: DiskNode; max: number; units: UnitSystem; dimmed: boolean }) {
+function Row({ node, max, units, bar, dimmed }: { node: DiskNode; max: number; units: UnitSystem; bar: boolean; dimmed: boolean }) {
+  // The quantization tag wraps with the name, and is left out when the name already says it.
+  const quant = node.model?.quantization;
+  const tag = quant && !node.name.toLowerCase().includes(quant.toLowerCase()) ? quant : null;
   return (
     <span className={`tile-row ${dimmed ? "is-dimmed" : ""}`}>
       <Icon name={iconFor(node)} tone={node.category} size={16} />
-      <MiddleEllipsisInline text={node.name} />
-      {node.model?.quantization && <span className="text-caption text-muted">{node.model.quantization}</span>}
-      <SizeBar fraction={node.size / max} />
+      <span className="tile-row-name">
+        {node.name}
+        {tag && <span className="tile-row-tag">{tag}</span>}
+      </span>
+      {bar && <SizeBar fraction={node.size / max} />}
       <span className="tile-row-size">{fmt(node.size, units)}</span>
     </span>
   );
-}
-
-function MiddleEllipsisInline({ text }: { text: string }) {
-  return <MiddleEllipsis text={text} className="tile-row-name" />;
 }
 
 function SizeBar({ fraction }: { fraction: number }) {

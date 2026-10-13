@@ -171,7 +171,9 @@ export const d1 = {
     selectionWidth: 2.5,
     shortBelow: 100, // px tile height: below this, one line (name + size)
     chipsFrom: 150, // px tile height needed to show insight chips
-    chipsMinWidth: 150, // px tile width needed for chips and "Open →"
+    chipsMinWidth: 150, // px tile width needed for chips
+    openMinWidth: 240, // px tile width needed for "Open →" beside the chips
+    rowBarMinWidth: 300, // px tile width needed for the size bar in item rows
     inlineSize: 15,
   },
   row: { height: 38, radius: 10, padX: 10, gap: 10, bg: "rgba(255, 255, 255, 0.72)", bgDark: "rgba(255, 255, 255, 0.06)", fontSize: 13, iconSize: 16, barW: 54, barH: 5, barRadius: 3, sizeW: 58, stackGap: 6 },

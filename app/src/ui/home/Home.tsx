@@ -227,9 +227,11 @@ function MoreTile({ cell, focus, count, size, onOpen }: { cell: Cell; focus: Dis
         <span className="tile-badge">
           <Icon name="list" tone="white" size={20} />
         </span>
-        <span className="tile-name tile-name-keep">{t("home.more", { count })}</span>
-        <span className="tile-meta">
-          {f.value} {f.unit}
+        <span className="tile-title">
+          <span className="tile-name">{t("home.more", { count })}</span>
+          <span className="tile-meta">
+            {f.value} {f.unit}
+          </span>
         </span>
       </span>
       <span className="tile-spacer" />
