@@ -9,7 +9,7 @@
 3. **Never touch the real home folder or the Windows registry in development.** Destructive code is tested only against `wrasse-fixtures` temp dirs, fakes and dry-run.
 4. **Tokens only.** Every animation uses `app/src/motion/tokens.ts` (or the variants built from it), and every color, gradient, radius, shadow, blur and type size comes from `app/src/design/tokens.ts`. No ad-hoc values in components or CSS. Animate only `transform` and `opacity`.
 5. `wrasse-core` has **no Tauri dependency**; the app and CLI are thin wrappers.
-6. Platform-specific code lives in `crates/wrasse-core/src/platform/` behind the `Platform` trait. The UI has no `if mac / if windows` logic beyond labels and shortcuts.
+6. Platform-specific code lives in `crates/wrasse-core/src/platform/`: one file per area (`scanning`, `apps`, `protect`, `commands`, `power`, `ollama`), each a small function that dispatches with `cfg` to `macos/` or `windows/`, plus the `Platform` trait for labels (name, file manager, units). Outside `platform/`, only the choice of bundled rule pack (`rules/`) looks at the OS. The UI has no `if mac / if windows` logic beyond labels and shortcuts.
 7. Every cleanup target is a TOML rule with a test, or a `safety::delegate` action with a test.
 8. Every user-facing string goes through `t()` in `app/src/i18n`.
 9. Keep dependencies minimal; justify additions against the budgets in PLAN.md §8.

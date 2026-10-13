@@ -30,14 +30,7 @@ pub fn data_dir(identifier: &str) -> Option<PathBuf> {
     if let Some(dir) = std::env::var_os("WRASSE_DATA_DIR") {
         return Some(PathBuf::from(dir));
     }
-    let home = crate::platform::home_dir()?;
-    if cfg!(target_os = "macos") {
-        Some(home.join("Library/Application Support").join(identifier))
-    } else if cfg!(windows) {
-        std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join(identifier))
-    } else {
-        Some(home.join(".local/share").join(identifier))
-    }
+    crate::platform::app_data_root().map(|root| root.join(identifier))
 }
 
 pub(crate) fn save(dir: &Path, disk: &UiDisk, scanned_at: u64) -> io::Result<()> {

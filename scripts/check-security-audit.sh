@@ -42,7 +42,7 @@ code_delegated=$(awk '/pub enum Delegated/{on=1;next} on && /^}/{on=0} on' crate
   sed -nE 's/^[[:space:]]*([A-Z][A-Za-z]*)(,| \{.*)$/\1/p')
 compare delegated-actions "$code_delegated"
 
-code_suffixes=$(awk '/fn protected_name_suffixes/{on=1;next} on && /\]/{print; on=0} on' crates/wrasse-core/src/platform/mod.rs |
+code_suffixes=$(awk '/fn protected_name_suffixes/{on=1;next} on && /\]/{print; on=0} on' crates/wrasse-core/src/platform/protect.rs |
   grep -oE '"\.[a-z]+"' | tr -d '"' | sed 's/.*/`&`/' | paste -sd, - | sed 's/,/, /g')
 compare library-suffixes "$code_suffixes"
 
