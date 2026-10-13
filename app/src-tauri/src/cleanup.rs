@@ -427,15 +427,9 @@ pub struct QuitResult {
 /// an app opened or quit elsewhere shows its real state. Read-only.
 #[tauri::command]
 pub async fn running_apps(bundles: Vec<PathBuf>) -> Result<Vec<PathBuf>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let running = platform::running_executables();
-        bundles
-            .into_iter()
-            .filter(|b| uninstall::runs_from(b, &running))
-            .collect()
-    })
-    .await
-    .map_err(|e| e.to_string())
+    tauri::async_runtime::spawn_blocking(move || uninstall::running_of(bundles))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Asks the app at `bundle` to quit (never forces it) and waits up to 10 s for it to close.
@@ -444,19 +438,9 @@ pub async fn quit_app(bundle: PathBuf) -> Result<QuitResult, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let home = platform::home_dir().ok_or("no home folder")?;
         let app = platform::app_at(&home, &bundle).ok_or("that app isn't installed")?;
-        let id = app.id.ok_or("the app has no bundle identifier")?;
-        let running = || uninstall::runs_from(&bundle, &platform::running_executables());
-        if !running() {
-            return Ok(QuitResult { quit: true });
-        }
-        platform::quit_app(&id).map_err(|e| e.to_string())?;
-        for _ in 0..40 {
-            std::thread::sleep(std::time::Duration::from_millis(250));
-            if !running() {
-                return Ok(QuitResult { quit: true });
-            }
-        }
-        Ok(QuitResult { quit: false })
+        let quit = uninstall::quit_and_wait(&app, std::time::Duration::from_secs(10))
+            .map_err(|e| e.to_string())?;
+        Ok(QuitResult { quit })
     })
     .await
     .map_err(|e| e.to_string())?

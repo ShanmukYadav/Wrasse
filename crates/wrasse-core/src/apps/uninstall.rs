@@ -142,6 +142,37 @@ pub fn uninstall(
     Ok(out)
 }
 
+/// Of `bundles`, the apps running right now. Read-only.
+pub fn running_of(bundles: Vec<PathBuf>) -> Vec<PathBuf> {
+    let running = crate::platform::running_executables();
+    bundles
+        .into_iter()
+        .filter(|b| runs_from(b, &running))
+        .collect()
+}
+
+/// Asks `app` to quit (never forces it) and waits up to `wait` for it to close. True once it
+/// isn't running.
+pub fn quit_and_wait(app: &App, wait: std::time::Duration) -> io::Result<bool> {
+    let running = || runs_from(&app.bundle, &crate::platform::running_executables());
+    if !running() {
+        return Ok(true);
+    }
+    let id = app
+        .id
+        .as_deref()
+        .ok_or_else(|| io::Error::other("the app has no bundle identifier"))?;
+    crate::platform::quit_app(id)?;
+    let started = std::time::Instant::now();
+    while started.elapsed() < wait {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        if !running() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Whether the app at `bundle` is running, given `running` (executable paths). Its extensions
 /// and helpers don't count (see [`crate::platform::is_app_process`]).
 pub fn runs_from(bundle: &Path, running: &[PathBuf]) -> bool {

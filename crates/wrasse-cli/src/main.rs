@@ -24,7 +24,7 @@
 //!                          with --orphans, data folders whose app is gone. Read-only.
 
 use std::path::PathBuf;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use wrasse_core::scan::{scan, ScanControl};
 
 fn main() {
@@ -140,24 +140,10 @@ fn main() {
             let home = wrasse_core::platform::home_dir().expect("no home folder");
             let app =
                 wrasse_core::platform::app_at(&home, &bundle).expect("that app isn't installed");
-            let running = || {
-                wrasse_core::apps::uninstall::runs_from(
-                    &app.bundle,
-                    &wrasse_core::platform::running_executables(),
-                )
-            };
-            if running() {
-                if let Err(e) =
-                    wrasse_core::platform::quit_app(app.id.as_deref().unwrap_or_default())
-                {
-                    eprintln!("error: {e}");
-                }
-                let started = Instant::now();
-                while running() && started.elapsed().as_secs() < 10 {
-                    std::thread::sleep(std::time::Duration::from_millis(250));
-                }
+            match wrasse_core::apps::uninstall::quit_and_wait(&app, Duration::from_secs(10)) {
+                Ok(closed) => println!("{}", if closed { "closed" } else { "still open" }),
+                Err(e) => eprintln!("error: {e}"),
             }
-            println!("{}", if running() { "still open" } else { "closed" });
         }
         Some("free") => {
             let gb: f64 = args
