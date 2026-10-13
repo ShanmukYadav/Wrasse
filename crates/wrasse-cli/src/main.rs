@@ -154,11 +154,7 @@ fn main() {
             let (disk, _) = wrasse_core::scan::cache::load(&dir).expect("scan in the app first");
             let home = wrasse_core::platform::home_dir().expect("no home folder");
             let limits = wrasse_core::rank::Limits {
-                hand_pick_only: wrasse_core::platform::protected_paths(&home, &dir)
-                    .into_iter()
-                    .filter(|p| p.protection == wrasse_core::platform::Protection::HandPickOnly)
-                    .map(|p| p.path)
-                    .collect(),
+                hand_pick_only: wrasse_core::platform::hand_pick_only(&home, &dir),
                 ..Default::default()
             };
             let plan = wrasse_core::rank::plan(&disk, (gb * 1e9) as u64, &limits);

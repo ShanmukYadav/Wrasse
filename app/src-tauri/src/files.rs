@@ -22,15 +22,6 @@ fn today() -> u32 {
         / 86_400) as u32
 }
 
-/// Documents, Desktop and iCloud Drive: picked by hand only.
-fn hand_pick_places(home: &Path, data: &Path) -> Vec<PathBuf> {
-    platform::protected_paths(home, data)
-        .into_iter()
-        .filter(|p| p.protection == platform::Protection::HandPickOnly)
-        .map(|p| p.path)
-        .collect()
-}
-
 /// The biggest files in the home folder of at least `min_bytes` (at most 500), with last use.
 #[tauri::command]
 pub async fn large_files(app: AppHandle, min_bytes: u64) -> Result<Vec<files::BigFile>, String> {
@@ -99,7 +90,7 @@ pub async fn find_duplicates(
             let (_, prefix) = platform::scan_root();
             let candidates = files::files_over(&saved.tree, prefix, &home, dupes::MIN_BYTES);
             drop(saved);
-            let places = hand_pick_places(&home, &dir);
+            let places = platform::hand_pick_only(&home, &dir);
             let hand = |p: &Path| places.iter().any(|d| p.starts_with(d));
             Ok(dupes::find(candidates, &hand, today(), &worker))
         })

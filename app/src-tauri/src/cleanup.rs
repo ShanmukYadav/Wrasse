@@ -486,11 +486,7 @@ pub fn plan_free(
     let never_touch = with_ctx(&state, |ctx| Ok(ctx.exclusions.paths.clone()))?;
     let limits = rank::Limits {
         gone: gone.into_iter().collect(),
-        hand_pick_only: platform::protected_paths(&home, &dir)
-            .into_iter()
-            .filter(|p| p.protection == platform::Protection::HandPickOnly)
-            .map(|p| p.path)
-            .collect(),
+        hand_pick_only: platform::hand_pick_only(&home, &dir),
         never_touch,
     };
     Ok(rank::plan(&disk, target, &limits))

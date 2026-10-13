@@ -369,6 +369,15 @@ pub struct Protected {
     pub protection: Protection,
 }
 
+/// Documents, Desktop and iCloud Drive: places whose items are only ever picked by hand.
+pub fn hand_pick_only(home: &Path, wrasse_data: &Path) -> Vec<PathBuf> {
+    protected_paths(home, wrasse_data)
+        .into_iter()
+        .filter(|p| p.protection == Protection::HandPickOnly)
+        .map(|p| p.path)
+        .collect()
+}
+
 /// The hardcoded protected locations for this OS. Rules and settings can't override them.
 pub fn protected_paths(home: &Path, wrasse_data: &Path) -> Vec<Protected> {
     #[allow(unused_mut)] // extended per OS below
