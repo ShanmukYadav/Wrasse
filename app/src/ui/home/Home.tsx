@@ -2,6 +2,7 @@ import { AnimatePresence, LayoutGroup, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { DiskNode } from "../../api";
 import { categories, d1 } from "../../design/tokens";
+import { useTilePaint } from "../../design/tilePaint";
 import { t } from "../../i18n";
 import { formatBytes } from "../../lib/format";
 import { useScheme } from "../../lib/prefs";
@@ -182,7 +183,7 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   return (
     <motion.div className="level" {...fade}>
       {banner}
-      <div className="level-frame" style={frameStyle} />
+      <LevelFrame style={frameStyle} from={c.from} to={c.to} />
       <div ref={gridRef} className="home-grid level-grid">
         {tiles}
       </div>
@@ -190,11 +191,20 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   );
 }
 
+/** The opened tile's frame behind a drilled-in level; its fill is an image (design/tilePaint.ts). */
+function LevelFrame({ style, from, to }: { style: CSSProperties; from: string; to: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useTilePaint(ref, from, to);
+  return <div ref={ref} className="level-frame" style={style} />;
+}
+
 function MoreTile({ cell, focus, count, size, onOpen }: { cell: Cell; focus: DiskNode; count: number; size: number; onOpen: () => void }) {
   const scheme = useScheme();
   const units = useApp((s) => s.info?.units ?? "decimal");
   const c = categories[scheme][focus.category];
   const f = formatBytes(size, units);
+  const paintRef = useRef<HTMLButtonElement>(null);
+  useTilePaint(paintRef, c.from, c.to, { color: c.glow, size: d1.tile.glowSize });
   const style = {
     gridColumn: `${cell.col} / span ${cell.colSpan}`,
     gridRow: `${cell.row} / span ${cell.rowSpan}`,
@@ -207,6 +217,7 @@ function MoreTile({ cell, focus, count, size, onOpen }: { cell: Cell; focus: Dis
   } as CSSProperties;
   return (
     <button
+      ref={paintRef}
       type="button"
       className="tile tile-more focus-ring"
       style={style}

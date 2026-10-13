@@ -473,7 +473,8 @@ html:not(.is-glass) .glass-css {
   right: var(--d1-grid-pad-x);
   bottom: var(--d1-grid-pad-bottom);
   border-radius: var(--d1-tile-radius);
-  background: linear-gradient(160deg, var(--from) 0%, var(--to) 100%);
+  background-image: var(--fill-img, linear-gradient(160deg, var(--from) 0%, var(--to) 100%));
+  background-size: 100% 100%;
   border: 1px solid var(--tint);
   box-shadow: var(--d1-tile-shadow);
 }
@@ -508,14 +509,26 @@ html:not(.is-glass) .glass-css {
      promotes every tile into its own surface, and the gradient is then stored per tile.
      The corner glow is the first background, so the border radius clips it. */
   background-image:
-    radial-gradient(
-      circle calc(var(--d1-tile-glow-size) / 2) at
-        calc(100% - (var(--d1-tile-glow-size) / 2 + var(--d1-tile-glow-offset)))
-        calc(var(--d1-tile-glow-size) / 2 + var(--d1-tile-glow-offset)),
-      var(--glow) 100%,
-      transparent 100%
+    var(
+      --glow-img,
+      radial-gradient(
+        circle calc(var(--d1-tile-glow-size) / 2) at
+          calc(100% - (var(--d1-tile-glow-size) / 2 + var(--d1-tile-glow-offset)))
+          calc(var(--d1-tile-glow-size) / 2 + var(--d1-tile-glow-offset)),
+        var(--glow) 100%,
+        transparent 100%
+      )
     ),
-    linear-gradient(160deg, var(--from) 0%, var(--to) 100%);
+    var(--fill-img, linear-gradient(160deg, var(--from) 0%, var(--to) 100%));
+  /* With the images (design/tilePaint.ts): the glow circle sits where the radial gradient put it,
+     and the fill stretches over the box and repeats into the border like the gradient did. */
+  background-size:
+    var(--d1-tile-glow-size) var(--d1-tile-glow-size),
+    100% 100%;
+  background-position:
+    right var(--d1-tile-glow-offset) top var(--d1-tile-glow-offset),
+    0 0;
+  background-repeat: no-repeat, repeat;
   border: 1px solid var(--tint);
   box-shadow: var(--d1-tile-shadow);
   text-align: left;
@@ -833,20 +846,12 @@ html:not(.is-glass) .glass-css {
   pointer-events: none;
   overflow: hidden;
 }
-/* The ring grows by width, clipped by .sonar. No transform and no will-change: a scale
-   is stored at the circle's size (a 160vmax ring is about 64 MB). The rings unmount
-   when the scan ends. */
-.sonar-ring {
+/* The rings are drawn on one canvas the size of the scan area (SonarRings.tsx). */
+.sonar-rings {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 8vmax;
-  height: 8vmax;
-  margin: -4vmax 0 0 -4vmax;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  background: none;
-  animation: sonar-sweep var(--sonar-dur) cubic-bezier(0.22, 1, 0.36, 1) infinite both;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 .sonar-mark {
   position: absolute;
@@ -858,17 +863,7 @@ html:not(.is-glass) .glass-css {
 .sonar-mark.is-fade {
   animation-name: sonar-fade;
 }
-.sonar-bubble {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  border: 1px solid;
-  animation: sonar-bubble var(--bubble-dur) cubic-bezier(0.22, 1, 0.36, 1) infinite both;
-}
-.sonar.is-paused .sonar-ring,
-.sonar.is-paused .sonar-mark,
-.sonar.is-paused .sonar-bubble {
+.sonar.is-paused .sonar-mark {
   animation-play-state: paused;
 }
 .sonar-resume {
@@ -902,23 +897,7 @@ html:not(.is-glass) .glass-css {
   font-size: var(--t-caption);
   color: var(--c-text-muted);
 }
-/* 8vmax and 160vmax are the old ring diameters (0.05×160vmax and 1×160vmax).
-   The border fades. The field clips whatever leaves the scan area. */
-@keyframes sonar-sweep {
-  from {
-    width: 8vmax;
-    height: 8vmax;
-    margin: -4vmax 0 0 -4vmax;
-    border-color: var(--sonar-ink);
-  }
-  to {
-    width: 160vmax;
-    height: 160vmax;
-    margin: -80vmax 0 0 -80vmax;
-    border-color: transparent;
-  }
-}
-/* The mark and the bubbles are the elements that move. They unmount when the scan ends. */
+/* The mark is the one element that moves (the canvas draws the rest). It unmounts when the scan ends. */
 @keyframes sonar-mark {
   0% { transform: scale(0.9); opacity: 0; }
   20% { transform: scale(1); opacity: 1; }
@@ -927,11 +906,6 @@ html:not(.is-glass) .glass-css {
 @keyframes sonar-fade {
   0%, 100% { opacity: 0; }
   30%, 70% { opacity: 1; }
-}
-@keyframes sonar-bubble {
-  0% { transform: translateY(0); opacity: 0; }
-  50% { opacity: 0.8; }
-  100% { transform: translateY(-40px); opacity: 0; }
 }
 
 /* ---- Lens bar -------------------------------------------------------------------------- */

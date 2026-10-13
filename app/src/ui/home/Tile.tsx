@@ -1,9 +1,10 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { api, deletable, type Disk, type DiskNode } from "../../api";
 import { useApp } from "../../store/app";
 import { Icon } from "../../design/icons/Icon";
 import { iconFor } from "../../design/icons/semantic";
 import { categories, d1, type Scheme } from "../../design/tokens";
+import { useTilePaint } from "../../design/tilePaint";
 import { t } from "../../i18n";
 import { formatBytes, type UnitSystem } from "../../lib/format";
 import type { Cell } from "./gridLayout";
@@ -101,6 +102,9 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   const tickable = deletable(disk, node.id) && widthPx >= 120;
   const dimmed = scopeBits !== 0 && !matchesScope(disk, node.id, scopeBits);
 
+  // The fill and corner glow as images (see design/tilePaint.ts).
+  const paintRef = useRef<HTMLButtonElement>(null);
+  useTilePaint(paintRef, c.from, c.to, { color: c.glow, size: d1.tile.glowSize });
   const style = {
     gridColumn: `${cell.col} / span ${cell.colSpan}`,
     gridRow: `${cell.row} / span ${cell.rowSpan}`,
@@ -117,6 +121,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   // give every block its own backing store for as long as the window is open.
   return (
     <button
+      ref={paintRef}
       type="button"
       data-tile-id={node.id}
       className={`tile focus-ring ${selected || checked ? "is-selected" : ""} ${dimmed ? "is-dimmed" : ""} ${deleting ? "is-deleting" : ""} ${tickable ? "has-tick" : ""} ${tickable && (selecting || checked) ? "is-ticking" : ""}`}

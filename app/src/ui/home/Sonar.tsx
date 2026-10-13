@@ -5,9 +5,17 @@ import { t } from "../../i18n";
 import { formatBytes } from "../../lib/format";
 import { useApp } from "../../store/app";
 import { MiddleEllipsis } from "./MiddleEllipsis";
+import { SonarRings, type Bubble } from "./SonarRings";
 import { reef } from "../../design/tokens";
 import { useReducedMotion, useScheme } from "../../lib/prefs";
 import { mapMotion } from "../../motion/tokens";
+
+// Where the bubbles sit (golden-angle spiral around the centre) and when each starts.
+const BUBBLES: Bubble[] = Array.from({ length: reef.bubbleCount }, (_, i) => {
+  const a = (i * 137.5 * Math.PI) / 180;
+  const r = 60 + ((i * 53) % 260);
+  return { dx: Math.cos(a) * r, dy: Math.sin(a) * r * 0.6, delay: (r / 320) * mapMotion.sonar * 0.6 };
+});
 
 // The scan: a calm sonar ring sweeping out from the center, the Wrasse mark at its heart and a
 // few bubbles rising, with live progress underneath. Home mounts this only while a scan runs,
@@ -17,7 +25,6 @@ export function Sonar() {
   const reduced = useReducedMotion();
   const vars = {
     "--sonar-dur": `${mapMotion.sonar}s`,
-    "--bubble-dur": `${mapMotion.bubbleRise}s`,
     "--sonar-ink": reef.sonar[scheme],
   } as CSSProperties;
   // The sweep holds still while the scan waits.
@@ -34,30 +41,19 @@ export function Sonar() {
   }
   return (
     <div className={`sonar ${paused ? "is-paused" : ""}`} style={vars}>
-      {/* Two rings, the old 8vmax → 160vmax sweep. Width and border color only. */}
-      {[0, 1].map((i) => (
-        <span key={i} className="sonar-ring" style={{ animationDelay: `${i * 0.35}s` }} />
-      ))}
+      {/* The rings (8vmax → 160vmax) and the rising bubbles, drawn on one canvas. */}
+      <SonarRings
+        duration={mapMotion.sonar}
+        ink={reef.sonar[scheme]}
+        paused={paused}
+        bubbles={BUBBLES}
+        bubbleInk={reef.bubble[scheme]}
+        bubbleDuration={mapMotion.bubbleRise}
+      />
       <span className="sonar-mark">
         <BrandMark size={56} />
       </span>
       <ScanReadout />
-      {Array.from({ length: reef.bubbleCount }, (_, i) => {
-        const a = (i * 137.5 * Math.PI) / 180;
-        const r = 60 + ((i * 53) % 260);
-        return (
-          <span
-            key={i}
-            className="sonar-bubble"
-            style={{
-              left: `calc(50% + ${Math.cos(a) * r}px)`,
-              top: `calc(50% + ${Math.sin(a) * r * 0.6}px)`,
-              borderColor: reef.bubble[scheme],
-              animationDelay: `${(r / 320) * mapMotion.sonar * 0.6}s`,
-            }}
-          />
-        );
-      })}
     </div>
   );
 }
