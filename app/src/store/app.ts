@@ -892,7 +892,35 @@ export function boot() {
     // pushed launch memory over its budget. The saved map is on screen meanwhile; Scan is instant.
     if (onboarded || info.autoScan) window.setTimeout(() => void scanDisk(), LAUNCH_SCAN_DELAY_MS);
     else useApp.setState({ overlay: "onboarding" });
+    watchRunningApps();
   })();
+}
+
+/** How often the running state of apps is re-read while the window is on screen. */
+const RUNNING_POLL_MS = 5000;
+
+/** Keeps "running" on apps true to life: re-reads it when the window comes back into view and
+ *  every few seconds while it's visible, so opening or quitting an app elsewhere shows here. */
+function watchRunningApps() {
+  let busy = false;
+  const refresh = () => {
+    if (busy || document.visibilityState !== "visible") return;
+    busy = true;
+    const disk = useApp.getState().disk;
+    void api
+      .refreshRunning(disk)
+      .then((changed) => {
+        if (changed && useApp.getState().disk === disk) useApp.setState((s) => ({ diskVersion: s.diskVersion + 1 }));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        busy = false;
+      });
+  };
+  window.addEventListener("focus", refresh);
+  document.addEventListener("visibilitychange", refresh);
+  window.setInterval(refresh, RUNNING_POLL_MS);
+  refresh();
 }
 
 /** Drops tray-bound candidates from the plan; the plan ends once nothing is left. */

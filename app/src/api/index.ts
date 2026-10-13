@@ -57,6 +57,9 @@ export interface WrasseApi {
   delegateAction(action: string): Promise<{ bytes: number; dryRun: boolean }>;
   /** Asks a running app to quit (before uninstalling it); waits up to 10 s. */
   quitApp(disk: Disk, appId: number): Promise<{ disk: Disk; quit: boolean }>;
+  /** Re-reads which apps are running and updates `running` on their nodes in place.
+   *  Resolves true when any changed. Read-only. */
+  refreshRunning(disk: Disk): Promise<boolean>;
   /** Free Up Space: what to remove to free `target` bytes, best first. `gone` are nodes
    *  already removed this session. Read-only. */
   planFree(disk: Disk, target: number): Promise<FreePlan>;

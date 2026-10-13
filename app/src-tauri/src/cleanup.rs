@@ -423,6 +423,21 @@ pub struct QuitResult {
     quit: bool,
 }
 
+/// Which of `bundles` are running right now. The UI asks when the window comes back into view, so
+/// an app opened or quit elsewhere shows its real state. Read-only.
+#[tauri::command]
+pub async fn running_apps(bundles: Vec<PathBuf>) -> Result<Vec<PathBuf>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let running = platform::running_executables();
+        bundles
+            .into_iter()
+            .filter(|b| uninstall::runs_from(b, &running))
+            .collect()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Asks the app at `bundle` to quit (never forces it) and waits up to 10 s for it to close.
 #[tauri::command]
 pub async fn quit_app(bundle: PathBuf) -> Result<QuitResult, String> {

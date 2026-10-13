@@ -148,6 +148,9 @@ export const mockApi: WrasseApi = {
     disk.nodes[appId].running = false;
     return { disk, quit: true };
   },
+  async refreshRunning() {
+    return false;
+  },
   async largeFiles(minBytes) {
     return mockLarge(minBytes);
   },

@@ -1981,7 +1981,10 @@ impl Builder<'_> {
             .input
             .running
             .iter()
-            .any(|p| p.starts_with(&bundle_path) || p.starts_with(&info.bundle));
+            .any(|p| {
+                crate::platform::is_app_process(Path::new(&bundle_path), p)
+                    || crate::platform::is_app_process(&info.bundle, p)
+            });
         let system = info.source == Source::System;
         let a = self.virtual_node(
             &info.name,

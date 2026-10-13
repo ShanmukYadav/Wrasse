@@ -196,6 +196,13 @@ pub fn running_executables() -> Vec<PathBuf> {
         .collect()
 }
 
+/// Whether `exe` is the app at `bundle` itself: its executable sits in `Contents/MacOS`. Helpers
+/// that outlive the app (share and notification extensions in `PlugIns`, XPC services, login
+/// items) don't count, so an app that was quit isn't reported as running.
+pub fn is_app_process(bundle: &Path, exe: &Path) -> bool {
+    exe.parent() == Some(bundle.join("Contents/MacOS").as_path())
+}
+
 /// An app bundle's identifier (`CFBundleIdentifier`), e.g. "com.apple.dt.Xcode".
 pub fn bundle_id(app: &Path) -> Option<String> {
     #[cfg(target_os = "macos")]

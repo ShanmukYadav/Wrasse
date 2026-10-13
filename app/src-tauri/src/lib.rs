@@ -118,6 +118,7 @@ pub fn run() {
             cleanup::never_touch_list,
             cleanup::audit_recent,
             cleanup::quit_app,
+            cleanup::running_apps,
             cleanup::uninstall_app,
             cleanup::plan_free,
             files::large_files,

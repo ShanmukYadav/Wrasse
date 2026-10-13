@@ -192,6 +192,29 @@ fn a_running_app_is_never_removed() {
 }
 
 #[test]
+fn an_extension_left_running_is_not_the_app() {
+    let s = setup("extension");
+    let dummy = app(&s, "WrasseDummy.app");
+    // A notification extension keeps running after its app quits (WhatsApp does this).
+    let ext = dummy
+        .bundle
+        .join("Contents/PlugIns/Notify.appex/Contents/MacOS");
+    fs::create_dir_all(&ext).unwrap();
+    let exe = ext.join("Notify");
+    fs::copy("/bin/sleep", &exe).unwrap();
+    let mut child = std::process::Command::new(&exe).arg("30").spawn().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    let running = crate::platform::running_executables();
+    assert!(running.contains(&exe), "the extension is running");
+    assert!(
+        !runs_from(&dummy.bundle, &running),
+        "the app itself isn't running"
+    );
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[test]
 fn homebrew_route_is_validated_and_never_runs_in_tests() {
     let s = setup("brew");
     let cask = app(&s, "WrasseCask.app");

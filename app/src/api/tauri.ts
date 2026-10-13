@@ -200,6 +200,20 @@ export const tauriApi: WrasseApi = {
     if (r.quit) app.running = false;
     return { disk, quit: r.quit };
   },
+  async refreshRunning(disk) {
+    const apps = disk.nodes.filter((n) => n && n.kind === "app" && n.app);
+    if (apps.length === 0) return false;
+    const running = new Set(await invoke<string[]>("running_apps", { bundles: apps.map((n) => n.path) }));
+    let changed = false;
+    for (const n of apps) {
+      const now = running.has(n.path);
+      if (!!n.running !== now) {
+        n.running = now;
+        changed = true;
+      }
+    }
+    return changed;
+  },
   largeFiles: (minBytes) => invoke<BigFile[]>("large_files", { minBytes }),
   async findDuplicates(onProgress) {
     const off = await listen<{ hashed: number; toHash: number }>("dupes-progress", (e) => onProgress(e.payload.hashed, e.payload.toHash));

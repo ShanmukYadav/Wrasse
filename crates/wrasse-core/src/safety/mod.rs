@@ -615,7 +615,7 @@ fn is_app_bundle(path: &Path) -> bool {
 fn app_running(given: &Path, resolved: &Path) -> bool {
     platform::running_executables()
         .iter()
-        .any(|e| e.starts_with(given) || e.starts_with(resolved))
+        .any(|e| platform::is_app_process(given, e) || platform::is_app_process(resolved, e))
 }
 
 /// Delegated OS actions (PLAN.md §4.1): the OS or a tool deletes on Wrasse's behalf. This is the

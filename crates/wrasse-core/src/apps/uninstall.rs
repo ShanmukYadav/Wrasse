@@ -142,7 +142,10 @@ pub fn uninstall(
     Ok(out)
 }
 
-/// Whether any of `running` (executable paths) lives inside `bundle`.
+/// Whether the app at `bundle` is running, given `running` (executable paths). Its extensions
+/// and helpers don't count (see [`crate::platform::is_app_process`]).
 pub fn runs_from(bundle: &Path, running: &[PathBuf]) -> bool {
-    running.iter().any(|p| p.starts_with(bundle))
+    running
+        .iter()
+        .any(|p| crate::platform::is_app_process(bundle, p))
 }
