@@ -1,6 +1,6 @@
 # Codebase audit and structure plan
 
-Status: **plan only, waiting for the owner's approval.** Nothing has been moved. Audited on
+Status: **approved 2026-10-13; in progress.** Steps done are listed in `git log`. Audited on
 2026-10-13 at commit `d90e17f`. Every finding below was checked with a
 tool or by reading the code; where a finding is an inference, it says so.
 
@@ -217,7 +217,10 @@ Every commit is verified by:
 **Rust**
 - R1. Remove `glass/` and its commands (after F2). Re-measure idle.
 - R2. Remove the `startup` stub; move `docs/phase3-plan.md` to `docs/history/`.
-- R3. Move the forbidden-API tests to `crates/wrasse-core/tests/` and adjust the check.
+- R3. ~~Move the forbidden-API tests to `crates/wrasse-core/tests/` and adjust the check.~~
+  **Dropped (2026-10-13).** Tried and reverted: the guard that stops delegated actions from
+  running in tests is `#[cfg(test)]`, which an integration test doesn't set. The moved Finder test
+  really moved its fixture app to the Trash. The tests stay in `safety/`.
 - R4. `pub` → `pub(crate)` pass; delete what nothing uses.
 - R5. Introduce `wrasse_core::Error`, one module per commit.
 - R6. Move logic out of `src-tauri` into core functions (quit-and-wait, Free Up Space limits,
