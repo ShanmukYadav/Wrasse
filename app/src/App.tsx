@@ -4,20 +4,23 @@ import { DevBadge } from "./components/DevBadge";
 import { applyTokens, onSystemSchemeChange } from "./design/apply";
 import { useReducedMotion, useScheme } from "./lib/prefs";
 import { boot, useApp } from "./store/app";
-import { DesignPage } from "./ui/DesignPage";
-import { DetailPanel } from "./ui/DetailPanel";
 import { Flyers } from "./ui/Flyers";
 import { Header } from "./ui/home/Header";
 import { Home } from "./ui/home/Home";
 import { LensBar } from "./ui/LensBar";
 import { ListView } from "./ui/ListView";
-import { CautionSheet } from "./ui/CautionSheet";
-import { Onboarding } from "./ui/Onboarding";
 import { SelectionBar } from "./ui/SelectionBar";
-import { Overlays } from "./ui/Overlays";
 import { QuarantineTray } from "./ui/QuarantineTray";
 import { Toast } from "./ui/Toast";
-import { UninstallSheet } from "./ui/UninstallSheet";
+import { deferred } from "./ui/Deferred";
+
+// Closed at launch: loaded on first use (see ui/Deferred.tsx).
+const DesignPage = deferred(() => import("./ui/DesignPage").then((m) => m.DesignPage), (s) => s.overlay === "design");
+const DetailPanel = deferred(() => import("./ui/DetailPanel").then((m) => m.DetailPanel), (s) => s.detailOpen || s.selected !== null);
+const CautionSheet = deferred(() => import("./ui/CautionSheet").then((m) => m.CautionSheet), (s) => s.confirmDelete !== null || s.fileCaution !== null);
+const Onboarding = deferred(() => import("./ui/Onboarding").then((m) => m.Onboarding), (s) => s.overlay === "onboarding");
+const Overlays = deferred(() => import("./ui/Overlays").then((m) => m.Overlays), (s) => s.overlay !== null && s.overlay !== "design" && s.overlay !== "onboarding");
+const UninstallSheet = deferred(() => import("./ui/UninstallSheet").then((m) => m.UninstallSheet), (s) => s.uninstall !== null);
 
 export function App() {
   const scheme = useScheme();

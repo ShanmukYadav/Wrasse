@@ -25,6 +25,11 @@ struct CacheFile {
 
 /// The app's data folder for this OS.
 pub fn data_dir(identifier: &str) -> Option<PathBuf> {
+    // For measurements (scripts/check-memory.sh --full-scan): a throwaway data folder, so the
+    // app starts with no saved scan and no tray, and the user's real data folder is untouched.
+    if let Some(dir) = std::env::var_os("WRASSE_DATA_DIR") {
+        return Some(PathBuf::from(dir));
+    }
     let home = crate::platform::home_dir()?;
     if cfg!(target_os = "macos") {
         Some(home.join("Library/Application Support").join(identifier))

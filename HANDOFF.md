@@ -146,8 +146,19 @@ Follow-up fixes accepted with the checkpoint:
 - Before release, live-test the Homebrew cask uninstall route and the root-owned Finder Move to
   Trash route. Both are unit-tested only. Homebrew is not installed on this Mac; the Finder route
   needs an administrator password. The same note is in `docs/phase3-plan.md` §9 and PLAN.md Phase 6.
-- `~/WrasseTest/big-file.bin` was restored from the tray (not purged) and is back at that path.
-  The tray no longer lists it.
+- **Correction (2026-10-13):** an earlier version of this line said `~/WrasseTest/big-file.bin` was
+  restored and back at its path. That was true only for about 50 minutes. The audit log
+  (`~/Library/Application Support/com.shanmukyadav.wrasse/logs/actions.log`) shows:
+  - line 81, Sat 10 Oct 19:11:23 IST: `restore` of `~/WrasseTest/big-file.bin`;
+  - line 82, 20:02:07 IST: `quarantine` of the same file (524,288,000 bytes, not a dry run);
+  - line 83, 20:02:31 IST: `purge` of "1 quarantined items" (524,288,000 bytes): the tray
+    entry was emptied, so the file was deleted for good.
+  Who moved it and emptied the tray is **unconfirmed**. The owner isn't sure, and it may have been
+  the owner in the app or an agent (Grok Build). The log had no origin field then. Every line
+  now records one (`ui`, `cli`, `script`, `test`), and AGENTS.md forbids agents from emptying the
+  tray or running Delete now outside fixture folders. The file was a zero-filled test file. It was
+  recreated on 2026-10-13 with `mkfile 500m` and matches `~/WrasseTest-checksums.txt` (see the
+  Phase 4 memory report).
 - With a lens on, the list button is a filled accent button with the live count and size
   ("See 1 file · 629 MB →"). With All selected it stays "List & duplicates →". Choosing a lens
   plays that glow once (opacity and transform, about 600 ms); Reduce Motion skips it. Tiles

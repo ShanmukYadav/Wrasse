@@ -1,13 +1,14 @@
 import { useEffect, useRef } from "react";
 
-// The sonar's rings and bubbles, drawn on one canvas the size of the scan area. Same look as the
-// D1 sweep:
+// The sonar's rings and bubbles, drawn as SVG circles over the scan area. Same look as the D1
+// sweep:
 // - each ring grows from 8vmax to 160vmax across the sonar's duration (cubic-bezier 0.22, 1, 0.36,
 //   1), its 2px border fading from the sonar ink to clear, the second ring 0.35 s behind the first;
 // - each bubble (6px, 1px border) rises 40px while it fades in to 0.8 and out again.
-// Growing a DOM ring by width repainted a 160vmax area (and the tiles under it) every frame, and
-// every animated bubble was a composited layer whose surface WebKit kept after the scan: a canvas
-// keeps one backing store of the scan area instead, dropped when the scan ends.
+// Memory (measured with vmmap): the old DOM rings sat in an overflow clip that made the whole scan
+// area a layer of its own, and every animated bubble was a composited layer; a canvas instead was
+// a window-sized surface buffered three times on the GPU (~55 MB). These circles are attributes
+// repainted in place: they draw into the page's own layer, with no surface of their own.
 
 /** CSS `cubic-bezier(x1, y1, x2, y2)` as a function of progress 0–1. */
 function bezier(x1: number, y1: number, x2: number, y2: number) {
@@ -60,77 +61,69 @@ export function SonarRings({
   bubbleInk: string;
   bubbleDuration: number;
 }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
+  const svg = useRef<SVGSVGElement>(null);
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
 
   useEffect(() => {
-    const el = canvas.current;
-    const ctx = el?.getContext("2d");
-    if (!el || !ctx) return;
+    const el = svg.current;
+    if (!el) return;
+    const rings = Array.from(el.querySelectorAll<SVGCircleElement>("circle.ring"));
+    const dots = Array.from(el.querySelectorAll<SVGCircleElement>("circle.bubble"));
+    const [r, g, b, alpha] = rgba(ink);
+    const [br, bg, bb, balpha] = rgba(bubbleInk);
     let frame = 0;
     let last = performance.now();
     let elapsed = 0;
-    const size = () => {
-      const dpr = window.devicePixelRatio || 1;
-      const r = el.getBoundingClientRect();
-      el.width = Math.max(1, Math.round(r.width * dpr));
-      el.height = Math.max(1, Math.round(r.height * dpr));
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    size();
-    const observer = new ResizeObserver(size);
-    observer.observe(el);
-    // The inks are rgba(r, g, b, a): borders fade by scaling that alpha.
-    const [r, g, b, alpha] = rgba(ink);
-    const [br, bg, bb, balpha] = rgba(bubbleInk);
     const draw = (now: number) => {
       if (!pausedRef.current) elapsed += (now - last) / 1000;
       last = now;
       const w = el.clientWidth;
       const h = el.clientHeight;
       const vmax = Math.max(window.innerWidth, window.innerHeight) / 100;
-      ctx.clearRect(0, 0, w, h);
-      ctx.lineWidth = 2;
-      for (const delay of DELAYS) {
+      DELAYS.forEach((delay, i) => {
+        const ring = rings[i];
         const t = elapsed - delay;
-        if (t < 0) continue;
+        if (!ring) return;
+        if (t < 0) {
+          ring.setAttribute("stroke", "transparent");
+          return;
+        }
         const p = ease((t % duration) / duration);
         const diameter = 8 * vmax + (160 - 8) * vmax * p;
-        // The DOM ring's 2px border sits inside its box: the stroke's centre is 1px in.
-        const radius = diameter / 2 - 1;
-        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${alpha * (1 - p)})`;
-        ctx.beginPath();
-        ctx.arc(w / 2, h / 2, Math.max(0, radius), 0, Math.PI * 2);
-        ctx.stroke();
-      }
+        // The DOM ring's 2px border sat inside its box: the stroke's centre is 1px in.
+        ring.setAttribute("cx", String(w / 2));
+        ring.setAttribute("cy", String(h / 2));
+        ring.setAttribute("r", String(Math.max(0, diameter / 2 - 1)));
+        ring.setAttribute("stroke", `rgba(${r}, ${g}, ${b}, ${alpha * (1 - p)})`);
+      });
       // Bubbles: translateY(0 → -40px) over the whole cycle; opacity 0 → 0.8 → 0, each half eased
       // on its own (CSS applies the timing function per keyframe segment).
-      ctx.lineWidth = 1;
-      for (const bub of bubbles) {
+      bubbles.forEach((bub, i) => {
+        const dot = dots[i];
+        if (!dot) return;
         const t = elapsed - bub.delay;
-        // Before its delay a bubble holds its first frame (opacity 0): nothing to draw.
-        if (t < 0) continue;
-        const p = (t % bubbleDuration) / bubbleDuration;
-        const rise = -40 * ease(p);
-        const opacity = p < 0.5 ? 0.8 * ease(p / 0.5) : 0.8 * (1 - ease((p - 0.5) / 0.5));
-        if (opacity <= 0.001) continue;
-        ctx.strokeStyle = `rgba(${br}, ${bg}, ${bb}, ${balpha * opacity})`;
-        ctx.beginPath();
-        ctx.arc(w / 2 + bub.dx + 3, h / 2 + bub.dy + 3 + rise, 2.5, 0, Math.PI * 2);
-        ctx.stroke();
-      }
+        // Before its delay a bubble holds its first frame (opacity 0).
+        const p = t < 0 ? 0 : (t % bubbleDuration) / bubbleDuration;
+        const opacity = t < 0 ? 0 : p < 0.5 ? 0.8 * ease(p / 0.5) : 0.8 * (1 - ease((p - 0.5) / 0.5));
+        dot.setAttribute("cx", String(w / 2 + bub.dx + 3));
+        dot.setAttribute("cy", String(h / 2 + bub.dy + 3 - 40 * ease(p)));
+        dot.setAttribute("stroke", `rgba(${br}, ${bg}, ${bb}, ${balpha * opacity})`);
+      });
       frame = requestAnimationFrame(draw);
     };
     frame = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      // Let WebKit drop the backing store right away.
-      el.width = 0;
-      el.height = 0;
-    };
+    return () => cancelAnimationFrame(frame);
   }, [duration, ink, bubbles, bubbleInk, bubbleDuration]);
 
-  return <canvas ref={canvas} className="sonar-rings" aria-hidden />;
+  return (
+    <svg ref={svg} className="sonar-rings" aria-hidden>
+      {DELAYS.map((d) => (
+        <circle key={d} className="ring" fill="none" stroke="transparent" strokeWidth={2} />
+      ))}
+      {bubbles.map((_, i) => (
+        <circle key={i} className="bubble" r={2.5} fill="none" stroke="transparent" strokeWidth={1} />
+      ))}
+    </svg>
+  );
 }

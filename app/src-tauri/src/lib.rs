@@ -67,6 +67,8 @@ fn dev_log(message: String) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Every audit-log line from this process says it came from the app (a click).
+    wrasse_core::safety::audit::set_origin(wrasse_core::safety::audit::Origin::Ui);
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // A second launch focuses the existing window instead of starting another instance.

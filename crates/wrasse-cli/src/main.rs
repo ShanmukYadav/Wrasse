@@ -18,6 +18,8 @@
 //!                          ticked by default, or all with --all-leftovers, go to the tray)
 //!   wrasse quit <app bundle>  ask an app to quit (never forced), wait up to 10 s
 //!   wrasse free <GB>       what Free Up Space would pick on the app's last saved scan. Read-only.
+//!
+//! Every audit-log line it writes has "origin": "cli" ("script" with WRASSE_ORIGIN=script).
 //!   wrasse apps [--orphans] list installed apps with source, owner, last use and leftovers (JSON);
 //!                          with --orphans, data folders whose app is gone. Read-only.
 
@@ -26,6 +28,15 @@ use std::time::Instant;
 use wrasse_core::scan::{scan, ScanControl};
 
 fn main() {
+    // Audit-log lines say who acted: the CLI, or a script driving it (WRASSE_ORIGIN=script).
+    use wrasse_core::safety::audit::{set_origin, Origin};
+    set_origin(
+        if std::env::var("WRASSE_ORIGIN").as_deref() == Ok("script") {
+            Origin::Script
+        } else {
+            Origin::Cli
+        },
+    );
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("scan") if args.get(1).map(String::as_str) == Some("--dump") => {

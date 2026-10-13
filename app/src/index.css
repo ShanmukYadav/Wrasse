@@ -840,11 +840,13 @@ html:not(.is-glass) .glass-css {
 
 /* ---- Scan ------------------------------------------------------------------------------ */
 
+/* No overflow clip: the canvas is the size of this box, so nothing overflows. A clip here made
+   the whole scan area a composited layer of its own (another window-sized, triple-buffered
+   surface set, ~49 MB at launch). */
 .sonar {
   position: absolute;
   inset: 0 0 var(--d1-grid-pad-bottom) 0;
   pointer-events: none;
-  overflow: hidden;
 }
 /* The rings are drawn on one canvas the size of the scan area (SonarRings.tsx). */
 .sonar-rings {

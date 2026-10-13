@@ -15,6 +15,23 @@
 9. Keep dependencies minimal; justify additions against the budgets in PLAN.md §8.
 10. Verify OS APIs, paths and command flags against current documentation before relying on them.
 
+## Live actions on the owner's files (agents)
+
+Set by the owner on 2026-10-13, after a test file was moved to the tray and the tray emptied 24
+seconds later, and no record says who did it.
+
+- AI agents never empty the tray, run Delete now, or run any delegated action (emptying the Trash,
+  Homebrew, Finder Move to Trash, `ollama rm`, `docker system prune`, `brew cleanup`, snapshot
+  thinning, simulator deletion) outside fixture folders they created for a test. This holds for
+  the app, the CLI and any script.
+- Live actions on the owner's real files happen only when the owner clicks them in the app.
+- Moving the owner's files to the tray, or restoring them, also needs the owner's explicit
+  request for that step.
+- Every audit-log line records its origin (`ui`, `cli`, `script`, `test`). Run scripts with
+  `WRASSE_ORIGIN=script`.
+- Reports state only what was verified (a command, its output, a measurement, a checksum), never
+  what was assumed. If something wasn't checked, say so.
+
 ## Local toolchain
 
 Everything lives inside this folder; nothing is installed globally. Run every build and run command through `./dev.sh`:

@@ -199,6 +199,8 @@ type Actions = {
 };
 
 const ONBOARDED_KEY = "wrasse.onboarded";
+/** How long after launch the automatic scan starts (see boot()). */
+const LAUNCH_SCAN_DELAY_MS = 6000;
 let flightKey = 0;
 let batchId = 0;
 let scanTimer = 0;
@@ -885,7 +887,10 @@ export function boot() {
     } catch {
       onboarded = false;
     }
-    if (onboarded || info.autoScan) void scanDisk();
+    // The launch scan starts once the first paint has settled. WebKit keeps spare buffers for every
+    // repaint in the first seconds, and a scan (sweep, then the new map) on top of them was what
+    // pushed launch memory over its budget. The saved map is on screen meanwhile; Scan is instant.
+    if (onboarded || info.autoScan) window.setTimeout(() => void scanDisk(), LAUNCH_SCAN_DELAY_MS);
     else useApp.setState({ overlay: "onboarding" });
   })();
 }

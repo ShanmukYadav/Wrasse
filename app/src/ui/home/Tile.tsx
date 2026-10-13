@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useRef, type CSSProperties } from "react";
 import { api, deletable, type Disk, type DiskNode } from "../../api";
 import { useApp } from "../../store/app";
 import { Icon } from "../../design/icons/Icon";
@@ -71,13 +71,6 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   }
   const maxKid = Math.max(1, ...listed.map((k) => k.size));
   const large = rows.length > 0;
-  // The tile shell paints on the first frame. Rows and chips follow on the next, so the
-  // opening composite is the blocks themselves. They are on screen within a frame.
-  const [detail, setDetail] = useState(false);
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setDetail(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
   // Models are counted wherever they sit (a project folder can hold several), apps likewise.
   const count = node.depth === 1 && (node.category === "aiModels" || node.category === "apps") ? countKind(disk, node.id, node.category === "aiModels" ? "model" : "app") : kids.length;
   // Every top-level block shows its share, including Junk, which often has no rows.
@@ -156,7 +149,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
           <span className="tile-size-unit">{size.unit}</span>
         </span>
       )}
-      {large && detail && (
+      {large && (
         <span className="tile-rows">
           {rows.map((k) => (
             <Row key={k.id} node={k} max={maxKid} units={units} dimmed={!dimmed && scopeBits !== 0 && !matchesScope(disk, k.id, scopeBits)} />
@@ -177,7 +170,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
       {!short && (
         <span className="tile-foot">
           <span className="tile-chips">
-            {showChips && detail &&
+            {showChips &&
               insights.map((i) => (
                 <span key={i.text} className={`chip chip-${i.tone}`}>
                   {i.text}
