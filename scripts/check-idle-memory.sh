@@ -15,16 +15,19 @@
 #   peak  the highest simultaneous total during the first 60 s (250 MB)
 #   idle  the worst of three samples taken at 60 s, 70 s and 80 s, window open (100 MB)
 #   scan  with --full-scan: the highest total while a full scan runs, first 150 s (300 MB)
-# The owner accepted ~1% over these on 2026-10-13 (101 / 253 / 303 MB); the check still reports
-# against the budgets themselves. A feature that breaks one is fixed, never the budget.
-# WRASSE_PEAK_LIMIT_MB, WRASSE_IDLE_LIMIT_MB and WRASSE_SCAN_LIMIT_MB override them.
+# These are hard limits with no tolerance (owner, 2026-10-13): anything over fails. A feature that
+# breaks one is fixed, never the budget. WRASSE_PEAK_LIMIT_MB, WRASSE_IDLE_LIMIT_MB and
+# WRASSE_SCAN_LIMIT_MB can only lower them (for experiments); a higher value is ignored.
 # macOS only. Needs a logged-in session because it opens the window.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-IDLE_MB="${WRASSE_IDLE_LIMIT_MB:-100}"
-PEAK_MB="${WRASSE_PEAK_LIMIT_MB:-250}"
-SCAN_MB="${WRASSE_SCAN_LIMIT_MB:-300}"
+lower() { # lower <override> <budget>: the override only when it is below the budget
+  if [[ -n "$1" ]] && awk -v a="$1" -v b="$2" 'BEGIN { exit !(a < b) }'; then echo "$1"; else echo "$2"; fi
+}
+IDLE_MB=$(lower "${WRASSE_IDLE_LIMIT_MB:-}" 100)
+PEAK_MB=$(lower "${WRASSE_PEAK_LIMIT_MB:-}" 250)
+SCAN_MB=$(lower "${WRASSE_SCAN_LIMIT_MB:-}" 300)
 FULL_SCAN=0
 APP="target/release/wrasse-app"
 LAUNCHES=1
