@@ -72,6 +72,9 @@ function byPath(disk: Disk, ids: number[]) {
   return (path: string) => m.get(path) ?? -1;
 }
 
+/** App nodes per scan, found once: the running state is re-read every few seconds. */
+const appNodes = new WeakMap<Disk, DiskNode[]>();
+
 export const tauriApi: WrasseApi = {
   appInfo: () => invoke<AppInfo>("app_info"),
   scan: () => invoke<Disk>("scan"),
@@ -201,7 +204,11 @@ export const tauriApi: WrasseApi = {
     return { disk, quit: r.quit };
   },
   async refreshRunning(disk) {
-    const apps = disk.nodes.filter((n) => n && n.kind === "app" && n.app);
+    let apps = appNodes.get(disk);
+    if (!apps) {
+      apps = disk.nodes.filter((n) => n && n.kind === "app" && n.app);
+      appNodes.set(disk, apps);
+    }
     if (apps.length === 0) return false;
     const running = new Set(await invoke<string[]>("running_apps", { bundles: apps.map((n) => n.path) }));
     let changed = false;
