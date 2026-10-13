@@ -3,7 +3,7 @@ import { type DiskNode, type FreeWhy, type LoadedModel, type PathRemoval, type S
 import { systemScheme } from "../design/apply";
 import { categories, type CategoryId, type DiskFilters, type FilterId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
-import type { AppInfo } from "../lib/backend";
+import type { AppInfo } from "../api/env";
 import { formatBytes } from "../lib/format";
 import { mapMotion } from "../motion/tokens";
 import { showAllScope } from "../ui/scope";

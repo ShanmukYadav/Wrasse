@@ -3,7 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { WrasseApi } from ".";
-import type { AppInfo } from "../lib/backend";
+import type { AppInfo } from "./env";
 import { insights } from "./insights";
 import { detach, detachedRoots, reattach } from "./tree";
 import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, ModelMeta } from "./types";

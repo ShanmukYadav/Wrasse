@@ -2,7 +2,6 @@
 
 mod cleanup;
 mod files;
-mod glass;
 mod scanning;
 
 use serde::Serialize;
@@ -47,16 +46,6 @@ fn system_volume() -> Option<VolumeSpace> {
     platform::system_volume()
 }
 
-#[tauri::command]
-fn glass_support() -> glass::Support {
-    glass::support()
-}
-
-#[tauri::command]
-fn glass_regions(window: tauri::WebviewWindow, regions: Vec<glass::Region>) {
-    glass::set_regions(&window, regions);
-}
-
 /// Dev builds only: lets the UI print benchmark results in the terminal running `tauri dev`.
 #[tauri::command]
 fn dev_log(message: String) {
@@ -83,16 +72,11 @@ pub fn run() {
         .manage(files::DupesState::default())
         .setup(|app| {
             cleanup::init(app.handle());
-            if let Some(window) = app.get_webview_window("main") {
-                glass::install(&window);
-            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
             system_volume,
-            glass_support,
-            glass_regions,
             dev_log,
             scanning::scan,
             scanning::cancel_scan,

@@ -7,7 +7,7 @@ import { t } from "../i18n";
 import { formatBytes } from "../lib/format";
 import { api, MOCK_KEY, mockMode } from "../api";
 import { GB } from "../api/types";
-import { inTauri } from "../lib/backend";
+import { inTauri } from "../api/env";
 import { useApp, type Overlay } from "../store/app";
 
 export type Suggestion = {

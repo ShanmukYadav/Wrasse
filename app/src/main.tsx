@@ -2,7 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { applyTokens, systemScheme } from "./design/apply";
-import { devLog, inTauri } from "./lib/backend";
+import { devLog, inTauri } from "./api/env";
 import "./index.css";
 
 // In dev, surface webview errors in the terminal running `tauri dev`.

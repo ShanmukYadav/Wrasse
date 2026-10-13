@@ -5,7 +5,7 @@ import { Bytes } from "../../components/Bytes";
 import { Icon } from "../../design/icons/Icon";
 import { trafficLights } from "../../design/tokens";
 import { t } from "../../i18n";
-import { inTauri } from "../../lib/backend";
+import { inTauri } from "../../api/env";
 import { duration, ease } from "../../motion/tokens";
 import { pressable } from "../../motion/variants";
 import { trayBytes, useApp, usedBytes } from "../../store/app";

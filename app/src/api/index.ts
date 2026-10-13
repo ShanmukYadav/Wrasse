@@ -1,8 +1,7 @@
 // The one interface the UI uses for data and actions. In the Tauri app it is backed by the Rust
 // core (./tauri.ts); in the browser, and in the app when mock mode is on, by mock data. Nothing
 // outside src/api and src/mock may import from src/mock.
-import { inTauri, type AppInfo } from "../lib/backend";
-import { mockApi } from "../mock/api";
+import { inTauri, type AppInfo } from "./env";
 import { tauriApi } from "./tauri";
 import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, SpaceReport } from "./types";
 
@@ -94,7 +93,9 @@ export function mockMode(): boolean {
   }
 }
 
-export const api: WrasseApi = mockMode() ? mockApi : tauriApi;
+// The mock (fake disk, apps and files) is a separate chunk, loaded only in mock mode, so the app
+// doesn't parse it at every launch.
+export const api: WrasseApi = mockMode() ? (await import("../mock/api")).mockApi : tauriApi;
 
 export * from "./types";
 export * from "./caution";
