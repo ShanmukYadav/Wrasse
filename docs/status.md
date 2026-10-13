@@ -27,7 +27,7 @@ Earlier detail is in `git log` and in this file's history (it was `HANDOFF.md` u
 
 ## Open
 
-- **Idle memory: 105–109 MB against a 100 MB budget** (5 launches, 2026-10-13). Removing the
+- **Idle memory: 105–108 MB against a 100 MB budget** (5 launches, 2026-10-13). Removing the
   unused native glass view and the mock data from the app bundle did not lower it (the build
   before them measured 104–106 MB in the same conditions). Most of the remainder is WebKit's own
   JavaScript heap (a blank page measures 83 MB). A Phase 5 item.
@@ -43,14 +43,14 @@ Earlier detail is in `git log` and in this file's history (it was `HANDOFF.md` u
 - Five test bundles (`WrasseStore….app`, `com.wrasse-test.store`, about 208 KB each) are in the
   owner's Trash from a test run on 2026-10-13. They are fixtures; the owner can delete them.
 
-## Last measurements (2026-10-13, release build, this Mac)
+## Last measurements (2026-10-13, final release build of the day, this Mac)
 
 | Budget | Measured | Limit |
 |---|---|---|
-| First-minute peak | 228–235 MB (5 launches) | 250 MB |
-| Idle | 105–109 MB | 100 MB |
-| Full scan | 237 MB (before the structure work) | 300 MB |
-| .dmg / app | 2.4 MB / 4.9 MB | 15 / 40 MB |
-| Own data | 7 MB (before the structure work) | 200 MB |
+| First-minute peak | 234–240 MB in 4 launches, 252 MB in 1 (0.8% over; the owner accepts ~1%) | 250 MB |
+| Idle | 105–108 MB (5 launches) | 100 MB |
+| Full scan | 228 MB | 300 MB |
+| .dmg / app | 2.4 MB / 4 MB | 15 / 40 MB |
+| Own data | 7 MB | 200 MB |
 
 Tests: 118 in wrasse-core; the scope test (28 scopes).
