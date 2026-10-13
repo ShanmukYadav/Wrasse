@@ -4,7 +4,8 @@ Open-source, offline disk cleaner and storage analyzer for macOS and Windows.
 
 Wrasse has no telemetry. Its only network traffic is an opt-in update check, plus local calls to the Ollama API on `127.0.0.1`.
 
-> Status: early development (Phase 0, scaffold). See [PLAN.md](PLAN.md) for the full spec.
+> Status: in development, macOS first. See [docs/status.md](docs/status.md), and
+> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [CONTRIBUTING.md](CONTRIBUTING.md) to work on it.
 
 ## Development
 
