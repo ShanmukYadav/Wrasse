@@ -1,5 +1,5 @@
-import type { DiskNode, LoadedModel, ModelTool } from "../api";
-import { t } from "../i18n";
+import type { DiskNode, LoadedModel, ModelTool } from "../../api";
+import { t } from "../../i18n";
 
 export function toolName(tool: ModelTool): string {
   return t(`model.tool.${tool}`);

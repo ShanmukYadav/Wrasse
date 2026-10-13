@@ -10,7 +10,7 @@ import { useApp } from "../../store/app";
 import { SafetyLabel } from "../cleanup/Safety";
 import { Icon } from "../../design/icons/Icon";
 import { iconFor, toneFor } from "../../design/icons/semantic";
-import { usedLabel } from "../../ui/modelLine";
+import { usedLabel } from "../models/modelLine";
 import { ScopeEmpty } from "./ScopeEmpty";
 import { scopeBits, visibleRows } from "./scope";
 

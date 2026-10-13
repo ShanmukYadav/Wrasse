@@ -11,7 +11,7 @@ import { duration, ease, spring } from "../../motion/tokens";
 import { pressable } from "../../motion/variants";
 import { useApp } from "../../store/app";
 import { isDrillable } from "../home/nodes";
-import { loadedFor, toolName, usedLabel } from "../../ui/modelLine";
+import { loadedFor, toolName, usedLabel } from "../models/modelLine";
 
 // Detail panel (D1): white glass, 330px, slides in from the right.
 export function DetailPanel() {
