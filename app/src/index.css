@@ -649,7 +649,7 @@ html:not(.is-glass) .glass-css {
 }
 .tile-row-tag {
   margin-left: 6px;
-  font-size: var(--t-caption, 12px);
+  font-size: var(--t-caption);
   font-weight: normal;
   color: var(--c-text-muted);
   white-space: nowrap;
@@ -1375,7 +1375,7 @@ html:not(.is-glass) .glass-css {
 .tray-chevron {
   color: var(--c-text-muted);
   transform: rotate(-90deg);
-  transition: transform var(--dur-fast, 0.15s) ease;
+  transition: transform var(--d-fast) ease;
 }
 .tray-chevron.is-open {
   transform: rotate(90deg);
@@ -1387,7 +1387,7 @@ html:not(.is-glass) .glass-css {
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  border-radius: var(--d1-tile-radius, 20px);
+  border-radius: var(--d1-tile-radius);
 }
 .tray-panel-head {
   display: flex;
@@ -1511,7 +1511,7 @@ html:not(.is-glass) .glass-css {
   border-radius: calc(var(--d1-row-radius) - 4px);
   font: inherit;
   font-weight: var(--w-strong);
-  color: var(--c-on-accent, #fff);
+  color: var(--c-on-accent);
   background: var(--c-accent);
   cursor: pointer;
 }
