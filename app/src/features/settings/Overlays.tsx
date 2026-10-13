@@ -1,17 +1,17 @@
-import { Icon } from "../design/icons/Icon";
+import { Icon } from "../../design/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { Bytes } from "../shared/Bytes";
-import { bytesText } from "../lib/format";
-import { t, type MessageKey } from "../i18n";
-import { duration, ease, spring } from "../motion/tokens";
-import { api, type DiskNode, type JunkMatch, type JunkReport } from "../api";
-import { useApp, type DeletedEntry, type Overlay } from "../store/app";
-import { iconFor } from "../design/icons/semantic";
-import { LargeOld } from "../features/large-old/LargeOld";
-import { categories } from "../design/tokens";
-import { useScheme } from "../lib/prefs";
-import { MiddleEllipsis } from "../shared/MiddleEllipsis";
+import { Bytes } from "../../shared/Bytes";
+import { bytesText } from "../../lib/format";
+import { t, type MessageKey } from "../../i18n";
+import { duration, ease, spring } from "../../motion/tokens";
+import { api, type DiskNode, type JunkMatch, type JunkReport } from "../../api";
+import { useApp, type DeletedEntry, type Overlay } from "../../store/app";
+import { iconFor } from "../../design/icons/semantic";
+import { LargeOld } from "../large-old/LargeOld";
+import { categories } from "../../design/tokens";
+import { useScheme } from "../../lib/prefs";
+import { MiddleEllipsis } from "../../shared/MiddleEllipsis";
 
 export function Overlays() {
   const overlay = useApp((s) => s.overlay);
