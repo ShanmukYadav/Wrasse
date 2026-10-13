@@ -1977,14 +1977,10 @@ impl Builder<'_> {
         let info = &app.info;
         let bundle_path = self.tree.path(app.bundle);
         let display = self.display(&bundle_path);
-        let running = self
-            .input
-            .running
-            .iter()
-            .any(|p| {
-                crate::platform::is_app_process(Path::new(&bundle_path), p)
-                    || crate::platform::is_app_process(&info.bundle, p)
-            });
+        let running = self.input.running.iter().any(|p| {
+            crate::platform::is_app_process(Path::new(&bundle_path), p)
+                || crate::platform::is_app_process(&info.bundle, p)
+        });
         let system = info.source == Source::System;
         let a = self.virtual_node(
             &info.name,
