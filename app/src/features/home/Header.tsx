@@ -9,7 +9,7 @@ import { inTauri } from "../../api/env";
 import { duration, ease } from "../../motion/tokens";
 import { pressable } from "../../motion/variants";
 import { trayBytes, useApp, usedBytes } from "../../store/app";
-import { CommandBar } from "../../ui/CommandBar";
+import { CommandBar } from "../command/CommandBar";
 
 // D1 header: window controls, location, command bar, free space and Scan.
 export function Header() {

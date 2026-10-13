@@ -1,14 +1,14 @@
-import { Icon } from "../design/icons/Icon";
+import { Icon } from "../../design/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { suggest } from "../command/commands";
-import { t } from "../i18n";
-import { duration, ease, spring } from "../motion/tokens";
-import { useApp, type Plan } from "../store/app";
-import { Bytes } from "../shared/Bytes";
-import { iconFor } from "../design/icons/semantic";
-import { bytesText } from "../lib/format";
-import { planReason } from "../features/cleanup/planReason";
+import { suggest } from "./commands";
+import { t } from "../../i18n";
+import { duration, ease, spring } from "../../motion/tokens";
+import { useApp, type Plan } from "../../store/app";
+import { Bytes } from "../../shared/Bytes";
+import { iconFor } from "../../design/icons/semantic";
+import { bytesText } from "../../lib/format";
+import { planReason } from "../cleanup/planReason";
 
 export function CommandBar() {
   const inputRef = useRef<HTMLInputElement>(null);

@@ -1,14 +1,14 @@
 // Command bar: parses what the user typed into ranked, runnable suggestions.
-import type { IconName } from "../design/icons/nodes";
-import { iconFor, toneFor } from "../design/icons/semantic";
-import type { CategoryId, FilterId, Tone } from "../design/tokens";
-import { LENSES } from "../features/browse/lenses";
-import { t } from "../i18n";
-import { formatBytes } from "../lib/format";
-import { api, MOCK_KEY, mockMode } from "../api";
-import { GB } from "../api/types";
-import { inTauri } from "../api/env";
-import { useApp, type Overlay } from "../store/app";
+import type { IconName } from "../../design/icons/nodes";
+import { iconFor, toneFor } from "../../design/icons/semantic";
+import type { CategoryId, FilterId, Tone } from "../../design/tokens";
+import { LENSES } from "../browse/lenses";
+import { t } from "../../i18n";
+import { formatBytes } from "../../lib/format";
+import { api, MOCK_KEY, mockMode } from "../../api";
+import { GB } from "../../api/types";
+import { inTauri } from "../../api/env";
+import { useApp, type Overlay } from "../../store/app";
 
 type Suggestion = {
   key: string;
