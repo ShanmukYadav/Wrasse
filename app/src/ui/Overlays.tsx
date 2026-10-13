@@ -8,7 +8,7 @@ import { duration, ease, spring } from "../motion/tokens";
 import { api, type DiskNode, type JunkMatch, type JunkReport } from "../api";
 import { useApp, type DeletedEntry, type Overlay } from "../store/app";
 import { iconFor } from "../design/icons/semantic";
-import { LargeOld } from "./LargeOld";
+import { LargeOld } from "../features/large-old/LargeOld";
 import { categories } from "../design/tokens";
 import { useScheme } from "../lib/prefs";
 import { MiddleEllipsis } from "../shared/MiddleEllipsis";
