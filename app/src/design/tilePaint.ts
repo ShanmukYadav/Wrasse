@@ -15,7 +15,7 @@ const FILL_SIDE = 16;
 const ASPECT_STEP = 1.25;
 
 /** A CSS `linear-gradient(angle, from 0%, to 100%)` for a `w`×`h` box, as a data URL. */
-export function fillImage(from: string, to: string, w: number, h: number, angleDeg = 160): string {
+function fillImage(from: string, to: string, w: number, h: number, angleDeg = 160): string {
   // Aspect ratios are rounded to steps of 25%, so a screen of tiles shares a handful of images
   // (each one decoded once). On these fills the angle that rounding shifts changes no pixel by
   // more than one 8-bit step.
@@ -51,7 +51,7 @@ export function fillImage(from: string, to: string, w: number, h: number, angleD
 }
 
 /** A filled circle of `color`, `size` CSS px across, drawn at 2x, as a data URL. */
-export function glowImage(color: string, size: number): string {
+function glowImage(color: string, size: number): string {
   const key = `glow|${color}|${size}`;
   const hit = cache.get(key);
   if (hit) return hit;

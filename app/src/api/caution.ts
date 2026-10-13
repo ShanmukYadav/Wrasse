@@ -1,7 +1,7 @@
 // When deleting needs a second look. Pure rules over the tree, shared by every delete entry point.
 import type { Disk, DiskNode } from "./types";
 
-export type Caution =
+type Caution =
   /** Can't be deleted from Wrasse at all (macOS itself, snapshots, app-managed libraries). */
   | { kind: "blocked" }
   /** A whole category on the home screen (Your Files, Apps, AI Models, …): open it to choose. */
@@ -20,7 +20,7 @@ const WIN_HOME = /^[A-Za-z]:\\Users\\[^\\]+(\\(Desktop|Documents|Downloads|Pictu
 const WIN_TOP = /^[A-Za-z]:\\(Windows|Program Files|Program Files \(x86\)|ProgramData|Users)$/;
 
 /** A folder the operating system creates and apps expect to exist. */
-export function isOsFolder(n: DiskNode): boolean {
+function isOsFolder(n: DiskNode): boolean {
   return MAC_HOME.test(n.path) || MAC_TOP.test(n.path) || WIN_HOME.test(n.path) || WIN_TOP.test(n.path);
 }
 

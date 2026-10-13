@@ -13,7 +13,7 @@ export type CategoryId = "all" | "junk" | "apps" | "aiModels" | "dev";
 export type FilterId = "largeOld" | "grew";
 export type DiskFilters = { largeOld: boolean; grew: boolean };
 export type Safety = "safe" | "yourCall" | "keep";
-export type ChipTone = "amber" | "green" | "violet" | "protected";
+type ChipTone = "amber" | "green" | "violet" | "protected";
 
 // UI chrome colors.
 export const palette = {
@@ -79,7 +79,7 @@ export const backdrop: Record<Scheme, string> = {
   dark: "linear-gradient(160deg, #071A1F 0%, #0A1626 60%, #0D1330 100%)",
 };
 
-export type CategoryStyle = {
+type CategoryStyle = {
   accent: string; // icon badge, size bars, selection outline
   ink: string; // big size number, row icons
   from: string; // tile gradient, 160deg
@@ -186,8 +186,6 @@ export const d1 = {
   frameRadius: 14,
 } as const;
 
-// Fixed type scale (px). Names medium, sizes semibold, hints regular at 70% opacity.
-export const typeScale = [12, 13, 15, 17, 22, 28, 40, 64] as const;
 export const type = {
   caption: "12px",
   label: "13px",

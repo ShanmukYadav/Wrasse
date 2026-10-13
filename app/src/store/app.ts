@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { type DiskNode, type FreeWhy, type LoadedModel, type PathRemoval, type ScannedFile, type SpaceReport, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, GB, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
+import { type DiskNode, type FreeWhy, type LoadedModel, type PathRemoval, type ScannedFile, type SpaceReport, type TrayItem, api, detach, mockMode, attached, cautionFor, deletable, categoryForLens, strongest, emptyDisk, lensForFocus, throughSingles, type Disk, type ScanProgress } from "../api";
 import { systemScheme } from "../design/apply";
 import { categories, type CategoryId, type DiskFilters, type FilterId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
@@ -9,12 +9,12 @@ import { mapMotion } from "../motion/tokens";
 import { showAllScope } from "../ui/scope";
 
 export type Overlay = "onboarding" | "junk" | "startup" | "settings" | "audit" | "history" | "design" | "largeOld" | null;
-export type ThemePref = "system" | "dark" | "light";
-export type MotionPref = "system" | "reduce" | "full";
+type ThemePref = "system" | "dark" | "light";
+type MotionPref = "system" | "reduce" | "full";
 
 export type Rect = { x: number; y: number; w: number; h: number };
-export type AuditEntry = { at: number; action: string; target: string; size: number };
-export type Batch = { id: number; at: number; items: TrayItem[]; state: "inTray" | "emptied" | "restored" };
+type AuditEntry = { at: number; action: string; target: string; size: number };
+type Batch = { id: number; at: number; items: TrayItem[]; state: "inTray" | "emptied" | "restored" };
 /** A Free Up Space plan: ranked candidates; `off` are the ones the user unticked. */
 /** One deleted item, for History: what it was, where, how big, and whether it can come back. */
 export type DeletedEntry = {
@@ -44,7 +44,7 @@ export type ConfirmKind =
   | "devDelegate";
 
 /** A short message; with `action`, a button (e.g. Undo) and a longer stay. */
-export type Toast = { key: number; text: string; action?: { label: string; run: () => void } };
+type Toast = { key: number; text: string; action?: { label: string; run: () => void } };
 
 export type Plan = {
   target: number;
@@ -206,7 +206,7 @@ let batchId = 0;
 let scanTimer = 0;
 
 /** The tile currently on screen that is, or contains, a node. */
-export function visibleTileOf(disk: Disk, focus: number, id: number): number | null {
+function visibleTileOf(disk: Disk, focus: number, id: number): number | null {
   for (let n = disk.nodes[id]; n; n = disk.nodes[n.parent]) {
     if (n.parent === focus) return n.id;
     if (n.parent < 0) return null;
@@ -946,10 +946,8 @@ export function trayBytes(tray: TrayItem[]): number {
   return tray.reduce((s, i) => s + i.size, 0);
 }
 
-export const DEFAULT_FREE_TARGET = 30 * GB;
-
 /** What a deleted item was, in the words History uses. */
-export function whatItWas(n: DiskNode): DeletedEntry["what"] {
+function whatItWas(n: DiskNode): DeletedEntry["what"] {
   if (n.kind === "app" || n.appBundle) return "app";
   if (n.leftover) return "appData";
   if (n.kind === "model" || n.category === "aiModels") return "model";

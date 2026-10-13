@@ -4,8 +4,6 @@
 import { LENS_BIT, type Disk } from "../api/types.ts";
 import type { CategoryId, DiskFilters, FilterId } from "../design/tokens";
 
-export const FILTERS_OFF: DiskFilters = { largeOld: false, grew: false };
-
 const EMPTY_KEY = {
   both: "scope.empty.both",
   grew: "scope.empty.grew",
@@ -13,7 +11,7 @@ const EMPTY_KEY = {
   category: "scope.empty.category",
 } as const;
 
-export type EmptyMessageKey = (typeof EMPTY_KEY)[keyof typeof EMPTY_KEY];
+type EmptyMessageKey = (typeof EMPTY_KEY)[keyof typeof EMPTY_KEY];
 
 export function scopeBits(category: CategoryId, filters: DiskFilters): number {
   let bits = 0;

@@ -357,10 +357,6 @@ export type Disk = {
 
 export const LENS_IDS = Object.keys(LENS_BIT) as Exclude<LensId, "all">[];
 
-export function lensMatches(node: DiskNode, lens: LensId): boolean {
-  return lens === "all" || (node.deep & LENS_BIT[lens]) !== 0;
-}
-
 /** False once a node has been removed from its parent (quarantined or deleted); it keeps its parent pointer for restore. */
 export function attached(disk: Disk, id: number): boolean {
   const n = disk.nodes[id];
@@ -384,11 +380,6 @@ export function ancestors(disk: Disk, id: number): number[] {
   const out: number[] = [];
   for (let n = disk.nodes[id]; n.parent >= 0; n = disk.nodes[n.parent]) out.unshift(n.parent);
   return out;
-}
-
-export function isAncestor(disk: Disk, ancestor: number, id: number): boolean {
-  for (let n = disk.nodes[id]; n.parent >= 0; n = disk.nodes[n.parent]) if (n.parent === ancestor) return true;
-  return false;
 }
 
 /** The category that matches the folder you open, so the category bar follows it. Filters stay as they are. */

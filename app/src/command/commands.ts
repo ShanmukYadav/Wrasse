@@ -10,7 +10,7 @@ import { GB } from "../api/types";
 import { inTauri } from "../api/env";
 import { useApp, type Overlay } from "../store/app";
 
-export type Suggestion = {
+type Suggestion = {
   key: string;
   label: string;
   hint?: string;
@@ -20,7 +20,7 @@ export type Suggestion = {
 };
 
 /** Subsequence fuzzy score: higher is better, -1 when `query` doesn't match. */
-export function fuzzy(query: string, text: string): number {
+function fuzzy(query: string, text: string): number {
   const q = query.toLowerCase();
   const s = text.toLowerCase();
   if (!q) return 0;

@@ -9,7 +9,6 @@ export const spring = {
   snappy: { type: "spring", stiffness: 420, damping: 34 },
   gentle: { type: "spring", stiffness: 140, damping: 22 },
 } as const;
-export const stagger = 0.035;
 
 // Reef Map timings (seconds).
 export const mapMotion = {

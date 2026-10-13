@@ -2,7 +2,7 @@
 import { duration } from "../motion/tokens";
 import { backdrop, blur, chips, d1, fontStack, hintOpacity, icon, layout, lensColors, palette, radius, reef, shadow, tones, type as typeScale, weight, type Scheme } from "./tokens";
 
-export type PlatformKey = "macos" | "windows";
+type PlatformKey = "macos" | "windows";
 
 const query = window.matchMedia("(prefers-color-scheme: dark)");
 

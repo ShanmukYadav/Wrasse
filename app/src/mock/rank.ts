@@ -5,7 +5,7 @@ import { attached, type Disk, type DiskNode, type FreeCandidate, type FreePlan, 
 const RECENT_DAYS = 7;
 const HAND_PICK = /^(~|\/Users\/[^/]+)\/(Documents|Desktop|Library\/Mobile Documents|Library\/CloudStorage)\//;
 
-export function unusedFactor(days: number): number {
+function unusedFactor(days: number): number {
   if (days <= 0) return 0.1;
   if (days <= 30) return 0.1 + (0.4 * days) / 30;
   if (days < 180) return 0.5 + (0.5 * (days - 30)) / 150;

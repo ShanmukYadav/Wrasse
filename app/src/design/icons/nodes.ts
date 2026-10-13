@@ -9,8 +9,8 @@ import {
   Settings, ShieldCheck, Sparkles, Trash, TrendingUp, TriangleAlert, Undo2, X,
 } from "lucide";
 
-export type IconElement = [tag: string, attrs: Record<string, string | number>];
-export type IconNode = IconElement[];
+type IconElement = [tag: string, attrs: Record<string, string | number>];
+type IconNode = IconElement[];
 
 const custom: Record<string, IconNode> = {
   // A chip with a spark: AI model.

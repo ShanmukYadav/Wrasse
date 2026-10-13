@@ -4,7 +4,7 @@ export type Cell = { id: number; col: number; row: number; colSpan: number; rowS
 
 /** Tile weights: size^emphasis, the biggest capped at `maxShare` of the total, and every tile
  *  raised to at least `minCells` cells' worth (less when there are too many tiles to allow it). */
-export function tileWeights(sizes: number[], cols: number, rows: number, emphasis = 1, minCells = 2, maxShare = 1): number[] {
+function tileWeights(sizes: number[], cols: number, rows: number, emphasis = 1, minCells = 2, maxShare = 1): number[] {
   const weights = sizes.map((s) => Math.pow(Math.max(0, s), emphasis));
   const n = weights.length;
   // With few tiles the cap must still leave the biggest clearly biggest (2 tiles: up to 75%).

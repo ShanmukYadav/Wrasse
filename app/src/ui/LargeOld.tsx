@@ -27,7 +27,7 @@ const KIND_ICON: Record<FileKind, IconName> = {
   document: "document",
   other: "file",
 };
-export const LARGE_MIN_KEY = "wrasse.largeMin";
+const LARGE_MIN_KEY = "wrasse.largeMin";
 
 function useFmt() {
   const units = useApp((s) => s.info?.units ?? "decimal");
