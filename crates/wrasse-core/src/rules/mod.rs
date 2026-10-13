@@ -24,10 +24,10 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub const SCHEMA_VERSION: u32 = 1;
+pub(crate) const SCHEMA_VERSION: u32 = 1;
 
 /// The bundled pack for this OS.
-pub fn bundled_text() -> &'static str {
+pub(crate) fn bundled_text() -> &'static str {
     #[cfg(target_os = "macos")]
     return include_str!("../../../../rules/macos/junk.toml");
     #[allow(unreachable_code)]
@@ -425,7 +425,7 @@ pub fn find(
 }
 
 /// Bundled rules plus the user's custom rules from `<data>/rules/custom/*.toml`.
-pub fn load_all(
+pub(crate) fn load_all(
     home: &Path,
     data_dir: &Path,
     protected: &[Protected],

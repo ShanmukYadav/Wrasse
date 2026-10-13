@@ -121,7 +121,7 @@ impl Quarantine {
     }
 
     /// A new batch; items are added with [`BatchWriter::store`].
-    pub fn begin(&self) -> io::Result<BatchWriter> {
+    pub(crate) fn begin(&self) -> io::Result<BatchWriter> {
         let created_at = now();
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -152,7 +152,7 @@ impl Quarantine {
     }
 
     /// Every batch, oldest first.
-    pub fn batches(&self) -> Vec<Batch> {
+    pub(crate) fn batches(&self) -> Vec<Batch> {
         self.batch_dirs()
             .iter()
             .filter_map(|d| read_manifest(d))
@@ -294,11 +294,6 @@ impl Quarantine {
         Ok(out)
     }
 
-    /// Bytes currently held in quarantine.
-    pub fn stored_bytes(&self) -> u64 {
-        self.stored().iter().map(|(_, e)| e.bytes).sum()
-    }
-
     /// A batch with nothing left to restore is removed (its manifest goes with it).
     fn drop_if_done(&self, dir: &Path, batch: &Batch) -> io::Result<()> {
         if batch
@@ -347,16 +342,12 @@ fn free_spot(original: &Path) -> PathBuf {
 }
 
 /// Adds items to one batch, crash-safely.
-pub struct BatchWriter {
+pub(crate) struct BatchWriter {
     dir: PathBuf,
     batch: Batch,
 }
 
 impl BatchWriter {
-    pub fn id(&self) -> &str {
-        &self.batch.id
-    }
-
     /// Moves one item into quarantine: manifest `pending` → rename → manifest `stored`.
     /// The item must be on the same volume as the quarantine (the caller checks).
     pub fn store(
@@ -398,7 +389,7 @@ impl BatchWriter {
     }
 
     /// Ends the batch; an empty one leaves nothing behind.
-    pub fn finish(self) -> io::Result<Batch> {
+    pub(crate) fn finish(self) -> io::Result<Batch> {
         if self.batch.entries.is_empty() {
             fs::remove_dir_all(&self.dir)?;
         }

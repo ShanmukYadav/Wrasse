@@ -3,7 +3,7 @@
 use super::super::{Protected, Protection};
 use std::path::{Path, PathBuf};
 
-pub fn protected(home: &Path) -> Vec<Protected> {
+pub(crate) fn protected(home: &Path) -> Vec<Protected> {
     let hard = |p: PathBuf| Protected {
         path: p,
         protection: Protection::Hard,

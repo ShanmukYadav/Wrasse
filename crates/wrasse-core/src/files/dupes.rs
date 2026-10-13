@@ -58,7 +58,7 @@ fn hex(h: &blake3::Hash) -> String {
 }
 
 /// Hash of the size and the first, middle and last [`SAMPLE`] bytes.
-pub fn partial_hash(path: &Path, size: u64) -> io::Result<String> {
+pub(crate) fn partial_hash(path: &Path, size: u64) -> io::Result<String> {
     let mut f = File::open(path)?;
     let mut h = blake3::Hasher::new();
     h.update(&size.to_le_bytes());
@@ -72,7 +72,7 @@ pub fn partial_hash(path: &Path, size: u64) -> io::Result<String> {
 }
 
 /// Hash of the whole file, read in 1 MB chunks; stops early when cancelled.
-pub fn full_hash(path: &Path, control: Option<&Control>) -> io::Result<String> {
+pub(crate) fn full_hash(path: &Path, control: Option<&Control>) -> io::Result<String> {
     let mut f = File::open(path)?;
     let mut h = blake3::Hasher::new();
     let mut buf = vec![0u8; 1 << 20];

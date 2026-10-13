@@ -13,9 +13,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// Items smaller than this fold into "Smaller items".
-pub const MIN_ITEM: u64 = 10_000_000;
+pub(crate) const MIN_ITEM: u64 = 10_000_000;
 /// At most this many items are listed under one folder.
-pub const MAX_CHILDREN: usize = 60;
+pub(crate) const MAX_CHILDREN: usize = 60;
 /// Loose model files at least this large count as models (PLAN.md §6.6).
 const MODEL_FILE: u64 = 500_000_000;
 
@@ -89,12 +89,12 @@ pub struct LeftoverMeta {
 
 /// Lens bits, as `LENS_BIT` in `app/src/api/types.ts`.
 pub mod lens {
-    pub const JUNK: u32 = 1;
-    pub const APPS: u32 = 2;
-    pub const AI_MODELS: u32 = 4;
+    pub(crate) const JUNK: u32 = 1;
+    pub(crate) const APPS: u32 = 2;
+    pub(crate) const AI_MODELS: u32 = 4;
     pub const DEV: u32 = 8;
-    pub const LARGE_OLD: u32 = 16;
-    pub const GREW: u32 = 32;
+    pub(crate) const LARGE_OLD: u32 = 16;
+    pub(crate) const GREW: u32 = 32;
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -1055,7 +1055,7 @@ fn project_place(path: &str) -> bool {
 
 /// A Hugging Face cache that lives in a project (for example `Documents/vyakta/env/hf_cache`),
 /// not the account-wide cache under `~/.cache`. It is project data.
-pub fn project_hf_cache(path: &str) -> bool {
+pub(crate) fn project_hf_cache(path: &str) -> bool {
     if !project_place(path) {
         return false;
     }
@@ -2488,7 +2488,7 @@ fn note_for(flags: u8, clone_shared: u64) -> Option<String> {
 }
 
 /// Folder sizes by path, for "what grew" next time.
-pub fn sizes_by_path(disk: &UiDisk) -> HashMap<String, u64> {
+pub(crate) fn sizes_by_path(disk: &UiDisk) -> HashMap<String, u64> {
     disk.nodes
         .iter()
         .filter(|n| n.kind != NodeKind::File || n.name != "Smaller items")

@@ -40,7 +40,7 @@ pub fn data_dir(identifier: &str) -> Option<PathBuf> {
     }
 }
 
-pub fn save(dir: &Path, disk: &UiDisk, scanned_at: u64) -> io::Result<()> {
+pub(crate) fn save(dir: &Path, disk: &UiDisk, scanned_at: u64) -> io::Result<()> {
     let json = serde_json::to_vec(&CacheFile {
         version: VERSION,
         scanned_at,
@@ -89,7 +89,7 @@ fn put_u64(b: &mut Vec<u8>, v: u64) {
     b.extend_from_slice(&v.to_le_bytes());
 }
 
-pub fn save_tree(
+pub(crate) fn save_tree(
     dir: &Path,
     tree: &Tree,
     event_id: u64,

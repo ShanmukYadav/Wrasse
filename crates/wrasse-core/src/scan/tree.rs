@@ -5,10 +5,10 @@
 //! number of folders and large files, not to every file on disk.
 
 /// Files below this size on disk are aggregated into their folder.
-pub const SMALL_FILE: u64 = 1_000_000;
+pub(crate) const SMALL_FILE: u64 = 1_000_000;
 
 /// No node: the root's parent, a leaf's first child, the last sibling.
-pub const NONE: u32 = u32::MAX;
+pub(crate) const NONE: u32 = u32::MAX;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -20,15 +20,15 @@ pub enum Kind {
 /// Node flags (bitmask).
 pub mod flag {
     /// The folder could not be read (permission denied); its size is unknown, not zero.
-    pub const UNREADABLE: u8 = 1;
+    pub(crate) const UNREADABLE: u8 = 1;
     /// iCloud "dataless" placeholder: 0 bytes stored locally, contents only in the cloud.
-    pub const DATALESS: u8 = 2;
+    pub(crate) const DATALESS: u8 = 2;
     /// APFS clone: some of its blocks may be shared with other files.
-    pub const CLONE: u8 = 4;
+    pub(crate) const CLONE: u8 = 4;
     /// Another volume is mounted here; it is not part of this scan.
-    pub const MOUNT: u8 = 8;
+    pub(crate) const MOUNT: u8 = 8;
     /// A hard link already counted elsewhere (adds 0 bytes here).
-    pub const HARDLINK_SEEN: u8 = 16;
+    pub(crate) const HARDLINK_SEEN: u8 = 16;
 }
 
 #[derive(Debug, Clone)]

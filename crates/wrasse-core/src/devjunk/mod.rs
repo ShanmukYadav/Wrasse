@@ -7,11 +7,11 @@ use crate::scan::breakdown::{Category, NodeKind, Safety, UiDisk, UiNode};
 use serde::{Deserialize, Serialize};
 
 /// A project folder unused this long is offered. Younger ones stay visible, unticked.
-pub const STALE_DAYS: u32 = 90;
+pub(crate) const STALE_DAYS: u32 = 90;
 
 /// Something inside a project worth lifting into the Developer category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProjectItem {
+pub(crate) enum ProjectItem {
     /// `node_modules` last touched at least [`STALE_DAYS`] ago.
     Modules,
     /// A Cargo `target/` next to `Cargo.toml`, stale.
@@ -24,7 +24,7 @@ pub enum ProjectItem {
 
 /// How a developer node should be shown and whether Free Up Space may offer it.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Policy {
+pub(crate) struct Policy {
     pub safety: Safety,
     pub rebuildable: bool,
     pub read_only: bool,
@@ -45,12 +45,12 @@ pub struct LiveExtra {
 }
 
 /// True when `names` are the children of the Wrasse checkout (it holds `.toolchain`).
-pub fn is_wrasse_root(child_names: &[&str]) -> bool {
+pub(crate) fn is_wrasse_root(child_names: &[&str]) -> bool {
     child_names.contains(&".toolchain")
 }
 
 /// The checkout, its `.toolchain`, and everything inside either.
-pub fn wrasse_path(path: &str) -> bool {
+pub(crate) fn wrasse_path(path: &str) -> bool {
     let p = path.replace('\\', "/");
     let toolchain = p.split('/').any(|c| c == ".toolchain");
     let wrasse = p.split('/').any(|c| c == "Wrasse")
@@ -63,7 +63,7 @@ pub fn wrasse_path(path: &str) -> bool {
 
 /// Where a folder sits in a project, for [`project_item`].
 #[derive(Copy, Clone)]
-pub struct ProjectSpot<'a> {
+pub(crate) struct ProjectSpot<'a> {
     pub name: &'a str,
     pub children: &'a [&'a str],
     pub parent_children: &'a [&'a str],
@@ -77,7 +77,7 @@ pub struct ProjectSpot<'a> {
 }
 
 /// A project item to carve out, or nothing.
-pub fn project_item(spot: &ProjectSpot<'_>) -> Option<ProjectItem> {
+pub(crate) fn project_item(spot: &ProjectSpot<'_>) -> Option<ProjectItem> {
     let ProjectSpot {
         name,
         children,
@@ -119,7 +119,7 @@ fn is_conda_root(name: &str) -> bool {
     )
 }
 
-pub fn project_label(kind: ProjectItem, project: &str) -> String {
+pub(crate) fn project_label(kind: ProjectItem, project: &str) -> String {
     match kind {
         ProjectItem::Modules => format!("{project} · node_modules"),
         ProjectItem::Target => format!("{project} · target"),
@@ -128,7 +128,7 @@ pub fn project_label(kind: ProjectItem, project: &str) -> String {
     }
 }
 
-pub fn project_kind(kind: ProjectItem) -> &'static str {
+pub(crate) fn project_kind(kind: ProjectItem) -> &'static str {
     match kind {
         ProjectItem::Modules => "modules",
         ProjectItem::Target => "target",
@@ -138,7 +138,7 @@ pub fn project_kind(kind: ProjectItem) -> &'static str {
 }
 
 /// Documents, Desktop and iCloud Drive stay Your call (never pre-selected).
-pub fn hand_pick(path: &str) -> bool {
+pub(crate) fn hand_pick(path: &str) -> bool {
     let p = path.replace('\\', "/");
     p.contains("/Documents/")
         || p.contains("/Desktop/")
@@ -151,7 +151,7 @@ pub fn hand_pick(path: &str) -> bool {
 /// Policy for a path already in the Developer tree. `None` leaves the node as the
 /// scan built it. Age decides whether a project folder is offered; that happens
 /// in the ranker via [`offer_rebuildable`].
-pub fn policy_for(path: &str, age_days: u32) -> Option<Policy> {
+pub(crate) fn policy_for(path: &str, age_days: u32) -> Option<Policy> {
     let p = path.replace('\\', "/");
     if wrasse_path(&p) {
         return Some(kept(
@@ -347,7 +347,11 @@ fn archive_item(path: &str) -> bool {
 /// Whether Free Up Space offers this developer node, and as what.
 /// Rebuildable caches are offered even when recent. Project envs and archives
 /// wait until they are stale. `None` means look inside the folder.
-pub fn rank_why(rebuildable: bool, dev_kind: Option<&str>, age_days: u32) -> Option<RankWhy> {
+pub(crate) fn rank_why(
+    rebuildable: bool,
+    dev_kind: Option<&str>,
+    age_days: u32,
+) -> Option<RankWhy> {
     if rebuildable {
         return Some(RankWhy::Rebuilds);
     }
@@ -358,7 +362,7 @@ pub fn rank_why(rebuildable: bool, dev_kind: Option<&str>, age_days: u32) -> Opt
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RankWhy {
+pub(crate) enum RankWhy {
     Rebuilds,
     Unused,
 }
@@ -411,7 +415,7 @@ pub fn live_extras(home: &std::path::Path) -> Vec<LiveExtra> {
 
 /// Adds the live previews under Developer. Their bytes are already on disk inside
 /// another folder, so the volume total is left as it is. They show in the drill-in.
-pub fn attach_live(disk: &mut UiDisk, extras: &[LiveExtra]) {
+pub(crate) fn attach_live(disk: &mut UiDisk, extras: &[LiveExtra]) {
     if extras.is_empty() {
         return;
     }

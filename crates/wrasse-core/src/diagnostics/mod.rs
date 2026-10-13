@@ -6,9 +6,6 @@
 use crate::scan::breakdown::{Category, NodeKind, Safety, UiDisk, UiNode};
 use serde::{Deserialize, Serialize};
 
-/// `tmutil thinlocalsnapshots` urgency. 4 is the highest.
-pub const THIN_URGENCY: u8 = 4;
-
 /// One local Time Machine snapshot name, as `tmutil listlocalsnapshots` prints it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,7 +34,7 @@ pub struct Report {
 }
 
 /// Names from `tmutil listlocalsnapshots` output. The header line is skipped.
-pub fn parse_snapshots(text: &str) -> Vec<String> {
+pub(crate) fn parse_snapshots(text: &str) -> Vec<String> {
     let mut names = Vec::new();
     for line in text.lines() {
         let line = line.trim();
@@ -56,13 +53,13 @@ pub fn parse_snapshots(text: &str) -> Vec<String> {
 }
 
 /// Purgeable space: what an important allocation can use, beyond what looks free.
-pub fn purgeable_bytes(important: u64, available: u64) -> u64 {
+pub(crate) fn purgeable_bytes(important: u64, available: u64) -> u64 {
     important.saturating_sub(available)
 }
 
 /// While local snapshots exist, the only size macOS gives us without thinning is the
 /// purgeable space. With no snapshots, that space has another cause, so the estimate is 0.
-pub fn snapshot_bytes(snapshots: usize, purgeable: u64) -> u64 {
+pub(crate) fn snapshot_bytes(snapshots: usize, purgeable: u64) -> u64 {
     if snapshots == 0 {
         0
     } else {
@@ -110,14 +107,14 @@ pub fn measure(home: &std::path::Path, tray_bytes: u64) -> Report {
 }
 
 /// How many bytes the current snapshots are estimated to hold. 0 on any read failure.
-pub fn held_now() -> u64 {
+pub(crate) fn held_now() -> u64 {
     let snapshots = parse_snapshots(&crate::platform::snapshot_list_text());
     let purgeable = crate::platform::volume_capacities().map_or(0, |(a, i)| purgeable_bytes(i, a));
     snapshot_bytes(snapshots.len(), purgeable)
 }
 
 /// The user's Trash and other volumes' `.Trashes/<uid>`. Symlinks are not followed.
-pub fn trash_bytes(home: &std::path::Path) -> u64 {
+pub(crate) fn trash_bytes(home: &std::path::Path) -> u64 {
     crate::quarantine::size_on_disk(&home.join(".Trash")) + volume_trashes()
 }
 
@@ -141,7 +138,7 @@ fn volume_trashes() -> u64 {
 
 /// Shows held snapshot space as the dashed tile. The bytes move out of "System data"
 /// so the volume total does not grow. A held size of 0 removes the tile.
-pub fn attach_ghost(disk: &mut UiDisk, held: u64) {
+pub(crate) fn attach_ghost(disk: &mut UiDisk, held: u64) {
     detach_ghost(disk);
     if held == 0 {
         return;

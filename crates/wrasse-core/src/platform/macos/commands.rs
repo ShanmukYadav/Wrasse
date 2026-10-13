@@ -38,7 +38,7 @@ const READ_ONLY: [&str; 3] = ["/usr/bin/pmset", "/usr/sbin/lsof", "/usr/bin/tmut
 
 /// Runs an allowlisted, read-only program. `tmutil` is allowed only for `isexcluded`
 /// and for `listlocalsnapshots` of `/` or `/System/Volumes/Data`.
-pub fn run_readonly(program: &str, args: &[&str]) -> io::Result<Output> {
+pub(crate) fn run_readonly(program: &str, args: &[&str]) -> io::Result<Output> {
     let tmutil_ok = matches!(
         args,
         ["isexcluded", _]
@@ -56,7 +56,7 @@ pub fn run_readonly(program: &str, args: &[&str]) -> io::Result<Output> {
 }
 
 /// Whether any process has the file open (`lsof -t`). Errors count as "can't tell" = not open.
-pub fn is_open(path: &Path) -> bool {
+pub(crate) fn is_open(path: &Path) -> bool {
     let Some(p) = path.to_str() else { return false };
     run_readonly("/usr/sbin/lsof", &["-t", "--", p]).is_ok_and(|o| !o.stdout.is_empty())
 }
@@ -79,18 +79,12 @@ pub fn exclude_from_backups(dir: &Path) -> io::Result<()> {
     }
 }
 
-pub fn is_excluded_from_backups(dir: &Path) -> bool {
-    let Some(p) = dir.to_str() else { return false };
-    run_readonly("/usr/bin/tmutil", &["isexcluded", p])
-        .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("[Excluded]"))
-}
-
 /// Empties the Trash through Finder, so macOS handles items the user's account can't delete
 /// directly. Not undoable. Called only from `safety::delegate`.
 ///
 /// If Finder hasn't finished after 2 minutes, this returns an error
 /// ([`TRASH_PARTLY_DONE`]): the empty may already have started, so it is not success.
-pub fn empty_trash_via_finder() -> io::Result<()> {
+pub(crate) fn empty_trash_via_finder() -> io::Result<()> {
     let out = run_osascript(
         &["-e", "tell application \"Finder\" to empty trash"],
         FINDER_ASK_TIMEOUT,
@@ -111,7 +105,7 @@ pub fn empty_trash_via_finder() -> io::Result<()> {
 ///
 /// If Finder hasn't finished after 2 minutes, this returns an error
 /// ([`FINDER_PARTLY_DONE`]): the move may already have started, so it is not success.
-pub fn finder_move_to_trash(path: &Path) -> io::Result<()> {
+pub(crate) fn finder_move_to_trash(path: &Path) -> io::Result<()> {
     let Some(p) = path.to_str() else {
         return Err(io::Error::from(io::ErrorKind::InvalidInput));
     };
@@ -139,7 +133,7 @@ pub fn finder_move_to_trash(path: &Path) -> io::Result<()> {
 }
 
 /// Local Time Machine snapshot names for the two volumes that can hold them.
-pub fn snapshot_list_text() -> String {
+pub(crate) fn snapshot_list_text() -> String {
     let mut out = String::new();
     for mount in ["/", "/System/Volumes/Data"] {
         if let Ok(got) = run_readonly("/usr/bin/tmutil", &["listlocalsnapshots", mount]) {
@@ -151,7 +145,7 @@ pub fn snapshot_list_text() -> String {
 }
 
 /// Free space, and free space including what macOS can reclaim for an important allocation.
-pub fn volume_capacities() -> Option<(u64, u64)> {
+pub(crate) fn volume_capacities() -> Option<(u64, u64)> {
     unsafe {
         let pool = objc_autoreleasePoolPush();
         let got = volume_capacities_in_pool();
@@ -162,7 +156,7 @@ pub fn volume_capacities() -> Option<(u64, u64)> {
 
 /// AppleScript that asks for an administrator password and thins snapshots.
 /// `bytes` is a number, so the script text cannot be changed by it.
-pub fn thin_admin_source(bytes: u64) -> String {
+pub(crate) fn thin_admin_source(bytes: u64) -> String {
     format!(
         "do shell script \"/usr/bin/tmutil thinlocalsnapshots / {bytes} 4\" with administrator privileges"
     )
@@ -170,7 +164,7 @@ pub fn thin_admin_source(bytes: u64) -> String {
 
 /// Thins local snapshots. Tries without a password first. If that fails, macOS asks
 /// through its own administrator prompt. Called only from `safety::delegate`.
-pub fn thin_local_snapshots(bytes: u64) -> io::Result<()> {
+pub(crate) fn thin_local_snapshots(bytes: u64) -> io::Result<()> {
     if bytes == 0 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
@@ -200,7 +194,7 @@ pub fn thin_local_snapshots(bytes: u64) -> io::Result<()> {
 }
 
 /// `brew cleanup -s --dry-run`. Nothing is removed. `None` when Homebrew isn't installed.
-pub fn brew_cleanup_dry_run() -> Option<String> {
+pub(crate) fn brew_cleanup_dry_run() -> Option<String> {
     let brew = crate::platform::brew_binaries()
         .iter()
         .copied()
@@ -219,7 +213,7 @@ pub fn brew_cleanup_dry_run() -> Option<String> {
 }
 
 /// `brew cleanup -s`. Called only from `safety::delegate`.
-pub fn brew_cleanup(brew: &Path) -> io::Result<()> {
+pub(crate) fn brew_cleanup(brew: &Path) -> io::Result<()> {
     let out = Command::new(brew)
         .args(["cleanup", "-s"])
         .env("HOMEBREW_NO_AUTO_UPDATE", "1")
@@ -236,7 +230,7 @@ pub fn brew_cleanup(brew: &Path) -> io::Result<()> {
 }
 
 /// `docker system df`, after `docker info` succeeds. `None` when Docker isn't running.
-pub fn docker_df_text() -> Option<String> {
+pub(crate) fn docker_df_text() -> Option<String> {
     let bin = crate::platform::docker_bin()?;
     let info = Command::new(&bin).arg("info").output().ok()?;
     if !info.status.success() {
@@ -250,7 +244,7 @@ pub fn docker_df_text() -> Option<String> {
 }
 
 /// `docker system prune -f`. Volumes are not removed. Called only from `safety::delegate`.
-pub fn docker_prune() -> io::Result<()> {
+pub(crate) fn docker_prune() -> io::Result<()> {
     let Some(bin) = crate::platform::docker_bin() else {
         return Err(io::Error::new(
             io::ErrorKind::NotFound,
@@ -277,7 +271,7 @@ pub fn docker_prune() -> io::Result<()> {
 }
 
 /// Unavailable simulator device ids, and how much their device folders hold. Listing only.
-pub fn unavailable_simulators(home: &Path) -> Option<(u64, u32)> {
+pub(crate) fn unavailable_simulators(home: &Path) -> Option<(u64, u32)> {
     let out = Command::new("/usr/bin/xcrun")
         .args(["simctl", "list", "devices", "unavailable"])
         .output()
@@ -309,7 +303,7 @@ fn valid_sim_id(id: &str) -> bool {
 }
 
 /// `xcrun simctl delete unavailable`. Called only from `safety::delegate`.
-pub fn simctl_delete_unavailable() -> io::Result<()> {
+pub(crate) fn simctl_delete_unavailable() -> io::Result<()> {
     let out = Command::new("/usr/bin/xcrun")
         .args(["simctl", "delete", "unavailable"])
         .output()?;
@@ -324,7 +318,7 @@ pub fn simctl_delete_unavailable() -> io::Result<()> {
 
 /// `brew uninstall --cask <token>` with a validated brew binary and token. No `--zap`: Wrasse
 /// sends the leftovers to the tray itself, so they stay restorable (docs/history/phase3-plan.md decision 2).
-pub fn brew_uninstall_cask(brew: &Path, token: &str) -> io::Result<()> {
+pub(crate) fn brew_uninstall_cask(brew: &Path, token: &str) -> io::Result<()> {
     let out = Command::new(brew)
         .args(["uninstall", "--cask", "--", token])
         .env("HOMEBREW_NO_AUTO_UPDATE", "1")

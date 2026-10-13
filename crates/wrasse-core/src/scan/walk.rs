@@ -86,7 +86,7 @@ impl ScanControl {
         self.paused.store(reason != 0, Ordering::Relaxed);
     }
 
-    pub fn pause_reason(&self) -> Option<PauseReason> {
+    pub(crate) fn pause_reason(&self) -> Option<PauseReason> {
         if !self.paused.load(Ordering::Relaxed) {
             return None;
         }
@@ -96,7 +96,7 @@ impl ScanControl {
             _ => Some(PauseReason::User),
         }
     }
-    pub fn is_cancelled(&self) -> bool {
+    pub(crate) fn is_cancelled(&self) -> bool {
         self.cancel.load(Ordering::Relaxed)
     }
     pub fn progress(&self) -> Progress {

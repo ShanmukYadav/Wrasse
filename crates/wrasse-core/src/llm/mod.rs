@@ -17,21 +17,21 @@ use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 /// Shown on an APFS clone. Removing it frees almost nothing.
-pub const CLONE_NOTE: &str = "clone, no space to gain";
+pub(crate) const CLONE_NOTE: &str = "clone, no space to gain";
 
 /// Shown when two models match on size and the sampled edges only.
-pub const SAMPLE_NOTE: &str =
+pub(crate) const SAMPLE_NOTE: &str =
     "Same size and edges as another model. A full check runs before removal.";
 
 /// Shown on an iCloud Drive copy that matches another model. Removing it removes it everywhere.
-pub const ICLOUD_DUPE_NOTE: &str =
+pub(crate) const ICLOUD_DUPE_NOTE: &str =
     "Removing this iCloud copy also removes it from your other devices.";
 
 /// `model.safetensors` and `pytorch_model.bin` in one folder. Headers only, not a tensor load.
-pub const FORMAT_NOTE: &str = "Same weights in two formats.";
+pub(crate) const FORMAT_NOTE: &str = "Same weights in two formats.";
 
 /// True for a path inside iCloud Drive (`~/Library/Mobile Documents`).
-pub fn icloud_synced_path(path: &str) -> bool {
+pub(crate) fn icloud_synced_path(path: &str) -> bool {
     let p = path.replace('\\', "/");
     p.contains("/Library/Mobile Documents/") || p.contains("/com~apple~CloudDocs/")
 }
@@ -114,7 +114,7 @@ pub struct LoadedModel {
 }
 
 /// One weight file considered for duplicate grouping.
-pub struct DupeCand {
+pub(crate) struct DupeCand {
     pub path: PathBuf,
     pub len: u64,
     pub content_hash: Option<String>,
@@ -123,7 +123,7 @@ pub struct DupeCand {
 
 /// The partner and how sure the match is. `clone` is this file, not the partner.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DupeMatch {
+pub(crate) struct DupeMatch {
     pub partner: PathBuf,
     pub level: DupeLevel,
 }
@@ -131,13 +131,14 @@ pub struct DupeMatch {
 /// Groups `items` that are the same length. Dataless files are never opened.
 /// Returns, for each index that has a match, the partner (the first index in the group is
 /// the one the others point at).
-pub fn pair_duplicates(items: &[DupeCand]) -> Vec<Option<DupeMatch>> {
+#[cfg(test)]
+pub(crate) fn pair_duplicates(items: &[DupeCand]) -> Vec<Option<DupeMatch>> {
     pair_duplicates_until(items, None)
 }
 
 /// Like [`pair_duplicates`], but stops sampling once `deadline` has passed. Copies not
 /// reached stay unpaired. A removal still hashes the whole file before it deletes anything.
-pub fn pair_duplicates_until(
+pub(crate) fn pair_duplicates_until(
     items: &[DupeCand],
     deadline: Option<std::time::Instant>,
 ) -> Vec<Option<DupeMatch>> {
@@ -224,7 +225,7 @@ fn full_level(a: &DupeCand, b: &DupeCand) -> DupeLevel {
 
 /// BLAKE3 of the file length and its first and last 16 MB.
 /// A dataless file is refused before it is opened, so an iCloud placeholder is not downloaded.
-pub fn sample_hash(path: &Path) -> io::Result<String> {
+pub(crate) fn sample_hash(path: &Path) -> io::Result<String> {
     let md = std::fs::symlink_metadata(path)?;
     if crate::platform::is_dataless(&md) {
         return Err(io::Error::other("in iCloud only"));
@@ -256,7 +257,7 @@ fn feed(h: &mut blake3::Hasher, f: &mut File, buf: &mut [u8], mut want: u64) -> 
     Ok(())
 }
 
-pub fn full_hash(path: &Path) -> io::Result<String> {
+pub(crate) fn full_hash(path: &Path) -> io::Result<String> {
     let md = std::fs::symlink_metadata(path)?;
     if crate::platform::is_dataless(&md) {
         return Err(io::Error::other("in iCloud only"));
@@ -265,7 +266,7 @@ pub fn full_hash(path: &Path) -> io::Result<String> {
 }
 
 /// True when `path` shares blocks with an APFS clone.
-pub fn is_clone_file(path: &Path) -> bool {
+pub(crate) fn is_clone_file(path: &Path) -> bool {
     let Ok(md) = std::fs::symlink_metadata(path) else {
         return false;
     };
@@ -287,18 +288,8 @@ fn allocated_len(md: &std::fs::Metadata) -> u64 {
     }
 }
 
-pub fn allocated_file(path: &Path) -> u64 {
-    let Ok(md) = std::fs::symlink_metadata(path) else {
-        return 0;
-    };
-    if crate::platform::is_dataless(&md) {
-        return 0;
-    }
-    allocated_len(&md)
-}
-
 /// Newest of access and modification, in days since the Unix epoch.
-pub fn file_day(path: &Path) -> u32 {
+pub(crate) fn file_day(path: &Path) -> u32 {
     let Ok(md) = std::fs::symlink_metadata(path) else {
         return 0;
     };
@@ -315,7 +306,7 @@ pub fn file_day(path: &Path) -> u32 {
 }
 
 /// Quantization written into a name (`Q4_K_M`, `4bit`, …), if one is there.
-pub fn quant_from_name(name: &str) -> Option<String> {
+pub(crate) fn quant_from_name(name: &str) -> Option<String> {
     const TOKENS: &[&str] = &[
         "IQ2_XXS", "IQ2_XS", "IQ3_XXS", "IQ3_XS", "IQ4_NL", "IQ4_XS", "IQ1_S", "IQ1_M", "IQ2_S",
         "IQ3_S", "Q4_K_M", "Q4_K_S", "Q5_K_M", "Q5_K_S", "Q3_K_L", "Q3_K_M", "Q3_K_S", "Q6_K",
@@ -331,7 +322,7 @@ pub fn quant_from_name(name: &str) -> Option<String> {
 }
 
 /// `general.file_type` from a GGUF header, as a quantization name.
-pub fn quant_from_gguf(path: &Path) -> Option<String> {
+pub(crate) fn quant_from_gguf(path: &Path) -> Option<String> {
     file_type_name(gguf_file_type(path)?)
 }
 
@@ -447,7 +438,7 @@ fn skip_value(f: &mut File, typ: u32, budget: &mut u64) -> Option<()> {
 }
 
 /// A sibling or snapshot `config.json` that names a quantization.
-pub fn quant_from_config(dir: &Path) -> Option<String> {
+pub(crate) fn quant_from_config(dir: &Path) -> Option<String> {
     let mut files = vec![dir.join("config.json")];
     if let Ok(snaps) = std::fs::read_dir(dir.join("snapshots")) {
         for e in snaps.flatten() {
@@ -482,7 +473,7 @@ fn config_quant(path: &Path) -> Option<String> {
     None
 }
 
-pub fn quant_of(name: &str, weight: Option<&Path>) -> Option<String> {
+pub(crate) fn quant_of(name: &str, weight: Option<&Path>) -> Option<String> {
     if let Some(q) = quant_from_name(name) {
         return Some(q);
     }
@@ -491,7 +482,7 @@ pub fn quant_of(name: &str, weight: Option<&Path>) -> Option<String> {
 }
 
 /// LM Studio's downloads folder from its settings, when that file names one.
-pub fn lmstudio_download_dir(home: &Path) -> Option<PathBuf> {
+pub(crate) fn lmstudio_download_dir(home: &Path) -> Option<PathBuf> {
     let settings = if cfg!(windows) {
         vec![home.join("AppData/Roaming/LM Studio/settings.json")]
     } else {
@@ -523,7 +514,7 @@ fn downloads_folder(settings: &Path) -> Option<PathBuf> {
 }
 
 /// sha256 digest carried by an Ollama blob filename (`sha256-<64 hex>`).
-pub fn blob_content_hash(path: &Path) -> Option<String> {
+pub(crate) fn blob_content_hash(path: &Path) -> Option<String> {
     let name = path.file_name()?.to_str()?;
     let hex = name.strip_prefix("sha256-")?;
     (hex.len() == 64 && hex.chars().all(|c| c.is_ascii_hexdigit()))
@@ -549,7 +540,7 @@ pub fn loaded_models() -> Vec<LoadedModel> {
     out
 }
 
-pub fn parse_ps(body: &str) -> Vec<LoadedModel> {
+pub(crate) fn parse_ps(body: &str) -> Vec<LoadedModel> {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
         return Vec::new();
     };
@@ -576,7 +567,7 @@ pub fn parse_ps(body: &str) -> Vec<LoadedModel> {
 
 /// Whether `body` (an `/api/ps` document) lists `name`. An unreadable document is treated as
 /// loaded, so a removal is refused when the answer can't be trusted.
-pub fn ps_contains(body: &str, name: &str) -> bool {
+pub(crate) fn ps_contains(body: &str, name: &str) -> bool {
     let Ok(value) = serde_json::from_str::<serde_json::Value>(body) else {
         return true;
     };
@@ -592,7 +583,7 @@ pub fn ps_contains(body: &str, name: &str) -> bool {
     })
 }
 
-pub fn normalize_ollama(name: &str) -> String {
+pub(crate) fn normalize_ollama(name: &str) -> String {
     let mut n = name.trim().trim_start_matches("registry.ollama.ai/");
     if let Some(rest) = n.strip_prefix("library/") {
         n = rest;

@@ -15,10 +15,10 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 /// Things used more recently than this are never offered (docs/history/phase3-plan.md decision 8).
-pub const RECENT_DAYS: u32 = 7;
+pub(crate) const RECENT_DAYS: u32 = 7;
 
 /// 0 days → 0.1, 30 → 0.5, 180 and more → 1.0, linear in between.
-pub fn unused_factor(days: u32) -> f64 {
+pub(crate) fn unused_factor(days: u32) -> f64 {
     let d = f64::from(days);
     if d <= 0.0 {
         0.1
@@ -31,7 +31,7 @@ pub fn unused_factor(days: u32) -> f64 {
     }
 }
 
-pub fn safety_weight(s: Safety) -> f64 {
+pub(crate) fn safety_weight(s: Safety) -> f64 {
     match s {
         Safety::Safe => 1.0,
         Safety::YourCall => 0.7,

@@ -59,7 +59,7 @@ pub enum LeftoverKind {
 
 impl LeftoverKind {
     /// Rebuilt by the app when needed: safe to remove.
-    pub fn regenerates(self) -> bool {
+    pub(crate) fn regenerates(self) -> bool {
         matches!(
             self,
             LeftoverKind::Caches
@@ -70,7 +70,7 @@ impl LeftoverKind {
         )
     }
 
-    pub fn label(self) -> &'static str {
+    pub(crate) fn label(self) -> &'static str {
         match self {
             LeftoverKind::Caches => "Caches",
             LeftoverKind::Support => "Application Support",
@@ -137,12 +137,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn removable(&self) -> bool {
+    #[cfg(test)]
+    pub(crate) fn removable(&self) -> bool {
         self.source != Source::System
     }
 
     /// "Never opened": Spotlight has no last-used date and the app has been here a while.
-    pub fn never_opened(&self) -> bool {
+    pub(crate) fn never_opened(&self) -> bool {
         self.last_used_days.is_none() && self.added_days.is_some_and(|d| d > 30)
     }
 }

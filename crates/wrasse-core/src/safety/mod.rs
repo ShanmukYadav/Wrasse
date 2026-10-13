@@ -649,7 +649,7 @@ pub enum Delegated {
 
 impl Delegated {
     /// The UI's name for this action. Stable across versions.
-    pub fn action_name(&self) -> &'static str {
+    pub(crate) fn action_name(&self) -> &'static str {
         match self {
             Self::EmptyTrash => "emptyTrash",
             Self::BrewUninstallCask { .. } => "brewUninstall",
@@ -726,7 +726,11 @@ fn brew_binary(ctx: &Context) -> Option<PathBuf> {
 
 /// A cask token and app pair is valid when the token is well formed and that cask's metadata
 /// lists this app.
-pub fn cask_matches(token: &str, app: &Path, cask_of: &dyn Fn(&Path) -> Option<String>) -> bool {
+pub(crate) fn cask_matches(
+    token: &str,
+    app: &Path,
+    cask_of: &dyn Fn(&Path) -> Option<String>,
+) -> bool {
     platform::valid_cask_token(token) && cask_of(app).as_deref() == Some(token)
 }
 
@@ -735,7 +739,7 @@ pub fn delegate(ctx: &Context, action: Delegated, dry_run: bool) -> io::Result<u
 }
 
 /// [`delegate`] with the cask lookup injected (tests use a fixture Caskroom).
-pub fn delegate_with(
+pub(crate) fn delegate_with(
     ctx: &Context,
     action: Delegated,
     dry_run: bool,

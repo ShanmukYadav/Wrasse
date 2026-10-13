@@ -20,7 +20,7 @@ pub enum FileKind {
     Other,
 }
 
-pub fn kind_of(name: &str) -> FileKind {
+pub(crate) fn kind_of(name: &str) -> FileKind {
     let ext = name
         .rsplit_once('.')
         .map(|(_, e)| e.to_ascii_lowercase())
@@ -46,7 +46,7 @@ pub fn kind_of(name: &str) -> FileKind {
 }
 
 /// Folder names that are one thing to the user (an app, a library): never looked inside.
-pub fn is_package(name: &str) -> bool {
+pub(crate) fn is_package(name: &str) -> bool {
     const PACKAGES: [&str; 8] = [
         ".app",
         ".framework",
@@ -143,7 +143,7 @@ pub fn files_over(
 
 /// [`kind_of`] for a real path. A name that looks like a model stays [`FileKind::Other`] unless
 /// the file has a model header or a sibling `config.json` with `model_type` or `architectures`.
-pub fn file_kind(path: &Path) -> FileKind {
+pub(crate) fn file_kind(path: &Path) -> FileKind {
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())

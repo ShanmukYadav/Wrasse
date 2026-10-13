@@ -21,7 +21,7 @@ pub struct HfModel {
 }
 
 /// The models in a hub folder, largest first.
-pub fn hf_models(hub: &Path) -> Vec<HfModel> {
+pub(crate) fn hf_models(hub: &Path) -> Vec<HfModel> {
     let Ok(entries) = fs::read_dir(hub) else {
         return Vec::new();
     };

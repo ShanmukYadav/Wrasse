@@ -28,7 +28,7 @@ enum Header {
 ///
 /// The check is the safetensors header, the PyTorch header, and `config.json` keys. Each weight
 /// file contributes at most its first 8 KB. The tensors are not read.
-pub fn same_weights_two_formats(dir: &Path) -> bool {
+pub(crate) fn same_weights_two_formats(dir: &Path) -> bool {
     let safe = dir.join("model.safetensors");
     let bin = dir.join("pytorch_model.bin");
     if !present(&safe) || !present(&bin) || dataless(&safe) || dataless(&bin) {
@@ -51,7 +51,7 @@ fn dataless(path: &Path) -> bool {
 }
 
 /// True when `path` is a model weight file. No size check: callers keep their own size gate.
-pub fn is_model_weights(path: &Path) -> bool {
+pub(crate) fn is_model_weights(path: &Path) -> bool {
     let Some(ext) = extension(path) else {
         return false;
     };

@@ -96,13 +96,13 @@ pub fn last_used(app: &Path) -> Option<i64> {
 }
 
 /// When the item was added to the Mac (Unix seconds), if Spotlight knows.
-pub fn date_added(app: &Path) -> Option<i64> {
+pub(crate) fn date_added(app: &Path) -> Option<i64> {
     // SAFETY: reading an immutable framework constant.
     date_attribute(app, unsafe { kMDItemDateAdded })
 }
 
 /// How many apps with this bundle id LaunchServices has registered, anywhere.
-pub fn apps_with_bundle_id(id: &str) -> usize {
+pub(crate) fn apps_with_bundle_id(id: &str) -> usize {
     let Some(s) = cf_string(id.as_bytes()) else {
         return 0;
     };

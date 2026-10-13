@@ -15,7 +15,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Folders discovery reads.
 #[derive(Debug, Clone)]
-pub struct Places {
+pub(crate) struct Places {
     pub home: PathBuf,
     /// `/Applications` and `~/Applications`.
     pub app_dirs: Vec<PathBuf>,
@@ -26,7 +26,7 @@ pub struct Places {
 }
 
 impl Places {
-    pub fn system(home: &Path) -> Self {
+    pub(crate) fn system(home: &Path) -> Self {
         Places {
             home: home.to_path_buf(),
             app_dirs: vec![PathBuf::from("/Applications"), home.join("Applications")],
@@ -140,7 +140,7 @@ fn bundles(places: &Places) -> Vec<(PathBuf, Option<PathBuf>)> {
 }
 
 /// App bundle names each installed cask put in the Applications folders: name → token.
-pub fn cask_apps(caskrooms: &[PathBuf]) -> HashMap<String, String> {
+pub(crate) fn cask_apps(caskrooms: &[PathBuf]) -> HashMap<String, String> {
     let mut out = HashMap::new();
     for room in caskrooms {
         let Ok(tokens) = fs::read_dir(room) else {
@@ -160,7 +160,7 @@ pub fn cask_apps(caskrooms: &[PathBuf]) -> HashMap<String, String> {
 }
 
 /// Cask tokens are lowercase letters, digits and `-@._+` (Homebrew's own rule).
-pub fn valid_token(token: &str) -> bool {
+pub(crate) fn valid_token(token: &str) -> bool {
     let mut chars = token.chars();
     chars
         .next()
@@ -243,7 +243,7 @@ fn collect_json_apps(v: &serde_json::Value, out: &mut Vec<String>) {
 }
 
 /// Every app in the Applications folders, with its leftovers.
-pub fn discover(places: &Places, probe: &dyn Probe) -> Vec<App> {
+pub(crate) fn discover(places: &Places, probe: &dyn Probe) -> Vec<App> {
     let casks = cask_apps(&places.caskrooms);
     let today = probe.today();
     let uid = probe.uid();
@@ -571,7 +571,7 @@ pub mod fake {
 
     /// Fake answers: two root-owned bundles, fixed usage, one id registered on another disk.
     #[derive(Default)]
-    pub struct Fake {
+    pub(crate) struct Fake {
         pub root_owned: Vec<PathBuf>,
         pub usage: HashMap<String, (Option<u32>, Option<u32>)>,
         pub registered: Vec<String>,

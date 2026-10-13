@@ -20,7 +20,7 @@ const UTF8: u32 = 0x0800_0100;
 const LEVEL_ON: u32 = 255;
 
 /// Released when dropped.
-pub struct Awake(Option<u32>);
+pub(crate) struct Awake(Option<u32>);
 
 impl Drop for Awake {
     fn drop(&mut self) {
@@ -33,7 +33,7 @@ impl Drop for Awake {
     }
 }
 
-pub fn keep_awake(reason: &str) -> Awake {
+pub(crate) fn keep_awake(reason: &str) -> Awake {
     let kind = c"PreventUserIdleSystemSleep";
     let Ok(name) = std::ffi::CString::new(reason) else {
         return Awake(None);

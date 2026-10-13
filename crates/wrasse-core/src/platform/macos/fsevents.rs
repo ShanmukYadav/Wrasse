@@ -87,13 +87,13 @@ extern "C" {
 }
 
 /// The newest event ID on this Mac (store it just before a scan starts).
-pub fn current_event_id() -> u64 {
+pub(crate) fn current_event_id() -> u64 {
     // SAFETY: no arguments, returns a plain integer.
     unsafe { FSEventsGetCurrentEventId() }
 }
 
 /// Identifies a volume's event log; if it differs from the stored one, the log was reset.
-pub fn volume_uuid(dev: u64) -> Option<String> {
+pub(crate) fn volume_uuid(dev: u64) -> Option<String> {
     // SAFETY: CF calls with valid arguments; every created object is released.
     unsafe {
         let uuid = FSEventsCopyUUIDForDevice(dev as i32);
@@ -172,7 +172,11 @@ extern "C" fn on_events(
 
 /// Folders under `watch` that changed since `since`, as (path, recursive). `None` means the log
 /// can't say reliably and a full scan is needed.
-pub fn changes_since(watch: &Path, since: u64, timeout: Duration) -> Option<Vec<(PathBuf, bool)>> {
+pub(crate) fn changes_since(
+    watch: &Path,
+    since: u64,
+    timeout: Duration,
+) -> Option<Vec<(PathBuf, bool)>> {
     if since == 0 || since > current_event_id() {
         return None;
     }

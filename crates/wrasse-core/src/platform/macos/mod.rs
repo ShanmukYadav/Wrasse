@@ -17,7 +17,7 @@ pub use settings::open_full_disk_access_settings;
 use super::Platform;
 use crate::format::UnitSystem;
 
-pub struct MacOs;
+pub(crate) struct MacOs;
 
 impl Platform for MacOs {
     fn name(&self) -> &'static str {

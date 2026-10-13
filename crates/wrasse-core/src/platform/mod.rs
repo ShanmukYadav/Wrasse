@@ -95,7 +95,7 @@ impl Volumes {
     }
 }
 
-pub fn volumes() -> Option<Volumes> {
+pub(crate) fn volumes() -> Option<Volumes> {
     #[cfg(target_os = "macos")]
     {
         let (capacity, available) = macos::container_space(Path::new("/"))?;
@@ -159,7 +159,7 @@ pub fn open_full_disk_access_settings() -> io::Result<()> {
 }
 
 /// The system volume's name as the file manager shows it ("Macintosh HD").
-pub fn volume_name() -> String {
+pub(crate) fn volume_name() -> String {
     let disks = sysinfo::Disks::new_with_refreshed_list();
     let root = if cfg!(windows) {
         std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into()) + "\\"
@@ -199,12 +199,12 @@ pub fn running_executables() -> Vec<PathBuf> {
 /// Whether `exe` is the app at `bundle` itself: its executable sits in `Contents/MacOS`. Helpers
 /// that outlive the app (share and notification extensions in `PlugIns`, XPC services, login
 /// items) don't count, so an app that was quit isn't reported as running.
-pub fn is_app_process(bundle: &Path, exe: &Path) -> bool {
+pub(crate) fn is_app_process(bundle: &Path, exe: &Path) -> bool {
     exe.parent() == Some(bundle.join("Contents/MacOS").as_path())
 }
 
 /// An app bundle's identifier (`CFBundleIdentifier`), e.g. "com.apple.dt.Xcode".
-pub fn bundle_id(app: &Path) -> Option<String> {
+pub(crate) fn bundle_id(app: &Path) -> Option<String> {
     #[cfg(target_os = "macos")]
     {
         let info = plist::Value::from_file(app.join("Contents/Info.plist")).ok()?;
@@ -224,7 +224,7 @@ pub fn bundle_id(app: &Path) -> Option<String> {
 /// Tests only: removes a scratch folder a test created under the OS temp dir. Refuses anything
 /// else, so it can't be pointed at real data.
 #[cfg(test)]
-pub fn remove_test_dir(path: &Path) {
+pub(crate) fn remove_test_dir(path: &Path) {
     let tmp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
     let path = &fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let name = path
@@ -241,7 +241,7 @@ pub fn remove_test_dir(path: &Path) {
 
 /// Tests only: removes one file inside a test scratch folder (same guard as `remove_test_dir`).
 #[cfg(test)]
-pub fn remove_test_file(path: &Path) {
+pub(crate) fn remove_test_file(path: &Path) {
     let tmp = fs::canonicalize(std::env::temp_dir()).unwrap_or_else(|_| std::env::temp_dir());
     let path = &fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     assert!(
@@ -255,7 +255,7 @@ pub fn remove_test_file(path: &Path) {
 /// Folders that changed under `watch` since a stored change-log position, for incremental
 /// rescans: `Some(changes)`, or `None` when only a full scan is reliable (no log, log reset,
 /// events dropped). macOS: FSEvents. Elsewhere: always `None` for now.
-pub fn changes_since(
+pub(crate) fn changes_since(
     watch: &Path,
     since: u64,
     log_id: Option<&str>,
@@ -278,7 +278,7 @@ pub fn changes_since(
 }
 
 /// The change log's current position and identity for the volume holding `path`.
-pub fn change_log_position(path: &Path) -> (u64, Option<String>) {
+pub(crate) fn change_log_position(path: &Path) -> (u64, Option<String>) {
     #[cfg(target_os = "macos")]
     {
         let dev = fs::symlink_metadata(path)
@@ -379,7 +379,7 @@ pub fn hand_pick_only(home: &Path, wrasse_data: &Path) -> Vec<PathBuf> {
 }
 
 /// The hardcoded protected locations for this OS. Rules and settings can't override them.
-pub fn protected_paths(home: &Path, wrasse_data: &Path) -> Vec<Protected> {
+pub(crate) fn protected_paths(home: &Path, wrasse_data: &Path) -> Vec<Protected> {
     #[allow(unused_mut)] // extended per OS below
     let mut out = vec![
         Protected {
@@ -402,7 +402,7 @@ pub fn protected_paths(home: &Path, wrasse_data: &Path) -> Vec<Protected> {
 
 /// Path parts that make everything under them protected wherever they appear (app-managed
 /// libraries: Photos, Music, TV).
-pub fn protected_name_suffixes() -> &'static [&'static str] {
+pub(crate) fn protected_name_suffixes() -> &'static [&'static str] {
     &[
         ".photoslibrary",
         ".musiclibrary",
@@ -412,7 +412,7 @@ pub fn protected_name_suffixes() -> &'static [&'static str] {
 }
 
 /// Folders synced to other devices through iCloud (removing an item there removes it everywhere).
-pub fn synced_folders(home: &Path) -> Vec<PathBuf> {
+pub(crate) fn synced_folders(home: &Path) -> Vec<PathBuf> {
     #[cfg(target_os = "macos")]
     return macos::protect::synced(home);
     #[allow(unreachable_code)]
@@ -423,7 +423,7 @@ pub fn synced_folders(home: &Path) -> Vec<PathBuf> {
 }
 
 /// The current user's id; items owned by anyone else are never removed.
-pub fn current_uid() -> Option<u32> {
+pub(crate) fn current_uid() -> Option<u32> {
     #[cfg(unix)]
     // SAFETY: getuid has no preconditions.
     return Some(unsafe { libc::getuid() });
@@ -431,7 +431,7 @@ pub fn current_uid() -> Option<u32> {
     None
 }
 
-pub fn owner_uid(md: &fs::Metadata) -> Option<u32> {
+pub(crate) fn owner_uid(md: &fs::Metadata) -> Option<u32> {
     #[cfg(unix)]
     return Some(std::os::unix::fs::MetadataExt::uid(md));
     #[allow(unreachable_code)]
@@ -442,7 +442,7 @@ pub fn owner_uid(md: &fs::Metadata) -> Option<u32> {
 }
 
 /// Device and file id, to re-check that an item is still the same thing right before acting.
-pub fn file_identity(md: &fs::Metadata) -> (u64, u64) {
+pub(crate) fn file_identity(md: &fs::Metadata) -> (u64, u64) {
     #[cfg(unix)]
     return (
         std::os::unix::fs::MetadataExt::dev(md),
@@ -456,7 +456,7 @@ pub fn file_identity(md: &fs::Metadata) -> (u64, u64) {
 }
 
 /// Whether a process has the file open.
-pub fn is_open(path: &Path) -> bool {
+pub(crate) fn is_open(path: &Path) -> bool {
     #[cfg(target_os = "macos")]
     return macos::commands::is_open(path);
     #[allow(unreachable_code)]
@@ -467,20 +467,20 @@ pub fn is_open(path: &Path) -> bool {
 }
 
 /// Keeps the machine awake while the returned guard lives.
-pub struct Awake {
+pub(crate) struct Awake {
     #[cfg(target_os = "macos")]
     _inner: macos::awake::Awake,
 }
 
 #[cfg(target_os = "macos")]
-pub fn keep_awake(reason: &str) -> Awake {
+pub(crate) fn keep_awake(reason: &str) -> Awake {
     Awake {
         _inner: macos::awake::keep_awake(reason),
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn keep_awake(_reason: &str) -> Awake {
+pub(crate) fn keep_awake(_reason: &str) -> Awake {
     Awake {}
 }
 
@@ -495,19 +495,12 @@ pub fn exclude_from_backups(dir: &Path) -> io::Result<()> {
     }
 }
 
-pub fn is_excluded_from_backups(dir: &Path) -> bool {
-    #[cfg(target_os = "macos")]
-    return macos::commands::is_excluded_from_backups(dir);
-    #[allow(unreachable_code)]
-    {
-        let _ = dir;
-        false
-    }
-}
-
 /// Delegated OS actions (PLAN.md §4.1). Only `safety::delegate` calls this, after validating the
 /// action (`brew` must be one of [`brew_binaries`] and owned by the user, and so on).
-pub fn run_delegated(action: &crate::safety::Delegated, brew: Option<&Path>) -> io::Result<()> {
+pub(crate) fn run_delegated(
+    action: &crate::safety::Delegated,
+    brew: Option<&Path>,
+) -> io::Result<()> {
     // Tests exercise `safety::delegate` with temporary homes; they must never reach a real OS
     // action (emptying the user's actual Trash, uninstalling a real app).
     #[cfg(test)]
@@ -554,7 +547,7 @@ pub fn run_delegated(action: &crate::safety::Delegated, brew: Option<&Path>) -> 
 }
 
 /// Whether a Homebrew cask token is well formed (lowercase letters, digits, `-@._+`).
-pub fn valid_cask_token(token: &str) -> bool {
+pub(crate) fn valid_cask_token(token: &str) -> bool {
     #[cfg(target_os = "macos")]
     return macos::apps::valid_token(token);
     #[allow(unreachable_code)]
@@ -565,12 +558,12 @@ pub fn valid_cask_token(token: &str) -> bool {
 }
 
 /// Where Homebrew may live; only these are ever run, and only when owned by the current user.
-pub fn brew_binaries() -> &'static [&'static str] {
+pub(crate) fn brew_binaries() -> &'static [&'static str] {
     &["/opt/homebrew/bin/brew", "/usr/local/bin/brew"]
 }
 
 /// Docker's own binary. Wrasse never opens Docker's disk image; it only runs docker.
-pub fn docker_bin() -> Option<PathBuf> {
+pub(crate) fn docker_bin() -> Option<PathBuf> {
     [
         "/usr/local/bin/docker",
         "/opt/homebrew/bin/docker",
@@ -582,7 +575,7 @@ pub fn docker_bin() -> Option<PathBuf> {
 }
 
 /// `tmutil listlocalsnapshots` for `/` and the Data volume. Empty when it can't be read.
-pub fn snapshot_list_text() -> String {
+pub(crate) fn snapshot_list_text() -> String {
     #[cfg(target_os = "macos")]
     {
         return macos::commands::snapshot_list_text();
@@ -592,7 +585,7 @@ pub fn snapshot_list_text() -> String {
 }
 
 /// `(available, important_available)` from NSURL. `None` when the keys can't be read.
-pub fn volume_capacities() -> Option<(u64, u64)> {
+pub(crate) fn volume_capacities() -> Option<(u64, u64)> {
     #[cfg(target_os = "macos")]
     {
         return macos::commands::volume_capacities();
@@ -602,7 +595,7 @@ pub fn volume_capacities() -> Option<(u64, u64)> {
 }
 
 /// Bytes `brew cleanup -s --dry-run` would free. `None` when Homebrew isn't there.
-pub fn brew_cleanup_preview() -> Option<u64> {
+pub(crate) fn brew_cleanup_preview() -> Option<u64> {
     #[cfg(target_os = "macos")]
     {
         let text = macos::commands::brew_cleanup_dry_run()?;
@@ -614,7 +607,7 @@ pub fn brew_cleanup_preview() -> Option<u64> {
 
 /// Reclaimable images, containers and build cache from `docker system df`.
 /// `None` when Docker isn't running. Volumes are not included.
-pub fn docker_reclaimable() -> Option<u64> {
+pub(crate) fn docker_reclaimable() -> Option<u64> {
     #[cfg(target_os = "macos")]
     {
         let text = macos::commands::docker_df_text()?;
@@ -625,7 +618,7 @@ pub fn docker_reclaimable() -> Option<u64> {
 }
 
 /// Unavailable simulators: `(bytes on disk, count)`. Listing only.
-pub fn unavailable_simulators(home: &Path) -> Option<(u64, u32)> {
+pub(crate) fn unavailable_simulators(home: &Path) -> Option<(u64, u32)> {
     #[cfg(target_os = "macos")]
     {
         return macos::commands::unavailable_simulators(home);
@@ -646,7 +639,7 @@ pub fn caskrooms() -> Vec<PathBuf> {
 }
 
 /// Folders apps are installed into: (`/Applications`, `~/Applications`).
-pub fn app_dirs(home: &Path) -> Vec<PathBuf> {
+pub(crate) fn app_dirs(home: &Path) -> Vec<PathBuf> {
     if cfg!(target_os = "macos") {
         vec![PathBuf::from("/Applications"), home.join("Applications")]
     } else {
@@ -697,7 +690,7 @@ pub fn orphaned_leftovers(home: &Path, apps: &[crate::apps::App]) -> Vec<crate::
 }
 
 /// The cask token that installed this app bundle, if any.
-pub fn cask_of(app: &Path) -> Option<String> {
+pub(crate) fn cask_of(app: &Path) -> Option<String> {
     #[cfg(target_os = "macos")]
     {
         let name = app.file_name()?.to_string_lossy().into_owned();
@@ -734,7 +727,7 @@ pub fn quit_app(bundle_id: &str) -> io::Result<()> {
 }
 
 /// Where the Trash is, to show its size before emptying.
-pub fn trash_dir(home: &Path) -> Option<PathBuf> {
+pub(crate) fn trash_dir(home: &Path) -> Option<PathBuf> {
     if cfg!(target_os = "macos") {
         Some(home.join(".Trash"))
     } else {
@@ -743,7 +736,7 @@ pub fn trash_dir(home: &Path) -> Option<PathBuf> {
 }
 
 /// Bundle ids of running apps (macOS), for rules that need their app closed.
-pub fn running_bundle_ids() -> Vec<String> {
+pub(crate) fn running_bundle_ids() -> Vec<String> {
     let mut ids: Vec<String> = running_executables()
         .iter()
         .filter_map(|exe| {
@@ -764,7 +757,7 @@ const OLLAMA_ADDR: SocketAddr = SocketAddr::new(
 
 /// Model names the local Ollama API accepts. Letters, digits, and `: / . _ - @` only.
 /// No `..`, so a name can't be a path.
-pub fn valid_ollama_name(name: &str) -> bool {
+pub(crate) fn valid_ollama_name(name: &str) -> bool {
     if name.is_empty() || name.len() > 256 || name.contains("..") {
         return false;
     }
@@ -773,12 +766,12 @@ pub fn valid_ollama_name(name: &str) -> bool {
 }
 
 /// True when something accepts TCP on 127.0.0.1:11434. The connection is closed immediately.
-pub fn ollama_reachable() -> bool {
+pub(crate) fn ollama_reachable() -> bool {
     TcpStream::connect_timeout(&OLLAMA_ADDR, Duration::from_millis(300)).is_ok()
 }
 
 /// GET one allowlisted path. Read-only.
-pub fn ollama_get(path: &str) -> io::Result<String> {
+pub(crate) fn ollama_get(path: &str) -> io::Result<String> {
     let (status, body) = ollama_http("GET", path, None, 800)?;
     if (200..300).contains(&status) {
         Ok(body)
@@ -885,7 +878,7 @@ fn read_http(stream: &mut TcpStream) -> io::Result<String> {
 }
 
 /// Sum of resident memory for processes whose name contains one of `needles`. Read-only.
-pub fn process_memory(needles: &[&str]) -> u64 {
+pub(crate) fn process_memory(needles: &[&str]) -> u64 {
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
     let mut sys = System::new();
     sys.refresh_processes_specifics(
