@@ -1,0 +1,71 @@
+/* ---- Scan ------------------------------------------------------------------------------ */
+
+/* No overflow clip: the canvas is the size of this box, so nothing overflows. A clip here made
+   the whole scan area a composited layer of its own (another window-sized, triple-buffered
+   surface set, ~49 MB at launch). */
+.sonar {
+  position: absolute;
+  inset: 0 0 var(--d1-grid-pad-bottom) 0;
+  pointer-events: none;
+}
+/* The rings are drawn on one canvas the size of the scan area (SonarRings.tsx). */
+.sonar-rings {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.sonar-mark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: -28px 0 0 -28px;
+  animation: sonar-mark var(--sonar-dur) cubic-bezier(0.65, 0, 0.35, 1) infinite both;
+}
+.sonar-mark.is-fade {
+  animation-name: sonar-fade;
+}
+.sonar.is-paused .sonar-mark {
+  animation-play-state: paused;
+}
+.sonar-resume {
+  margin-top: 6px;
+  pointer-events: auto;
+}
+.sonar-readout {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(50% + 44px);
+  margin-inline: auto;
+  width: min(420px, 80%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  border-radius: var(--d1-row-radius);
+  background: var(--c-glass-strong);
+  border: 1px solid var(--c-glass-border);
+  text-align: center;
+}
+.sonar-count {
+  font-size: var(--t-label);
+  font-weight: var(--w-size);
+  color: var(--c-text);
+}
+.sonar-path {
+  max-width: 100%;
+  font-size: var(--t-caption);
+  color: var(--c-text-muted);
+}
+/* The mark is the one element that moves (the canvas draws the rest). It unmounts when the scan ends. */
+@keyframes sonar-mark {
+  0% { transform: scale(0.9); opacity: 0; }
+  20% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.04); opacity: 0; }
+}
+@keyframes sonar-fade {
+  0%, 100% { opacity: 0; }
+  30%, 70% { opacity: 1; }
+}

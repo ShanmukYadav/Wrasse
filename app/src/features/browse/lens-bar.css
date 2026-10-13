@@ -1,0 +1,219 @@
+/* ---- Lens bar -------------------------------------------------------------------------- */
+
+.lens-bar {
+  position: fixed;
+  left: 50%;
+  bottom: var(--d1-lens-bottom);
+  transform: translateX(-50%);
+  display: flex;
+  gap: var(--d1-lens-gap);
+  padding: var(--d1-lens-pad);
+  border-radius: var(--d1-lens-radius);
+  background: var(--d1-lens-bg);
+  border: 1px solid var(--c-glass-border);
+  box-shadow: var(--d1-lens-shadow);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  z-index: 20;
+}
+/* On narrow windows, center the lens and selection bars in the space left of the always-visible
+   tray (about 280 px) so they never overlap it. */
+@media (max-width: 1120px) {
+  .lens-bar {
+    left: calc((100% - 280px) / 2);
+  }
+}
+.lens-cats {
+  position: relative;
+  display: flex;
+  gap: var(--d1-lens-gap);
+  align-items: center;
+}
+.lens-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 8px 4px;
+  background: var(--c-divider);
+}
+.lens-filter-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.lens-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--d1-lens-pill-height);
+  height: var(--d1-lens-pill-height);
+  border-radius: var(--d1-lens-pill-radius);
+  border: 1px solid var(--c-divider);
+  background: transparent;
+  color: var(--c-inactive);
+  font-size: var(--d1-lens-font-size);
+  font-weight: var(--w-size);
+  cursor: pointer;
+}
+.lens-filter-btn.has-count {
+  width: auto;
+  gap: 6px;
+  padding: 0 var(--d1-lens-pill-pad-x);
+}
+.lens-filter-btn.is-open {
+  color: var(--c-text);
+}
+.lens-filter-btn.is-on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+}
+.lens-filter-pop {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + var(--d1-lens-gap));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--d1-lens-gap);
+  padding: var(--d1-lens-pad);
+  border-radius: var(--d1-lens-radius);
+  background: var(--d1-lens-bg);
+  border: 1px solid var(--c-glass-border);
+  box-shadow: var(--d1-lens-shadow);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  animation: lens-pop-in var(--d-fast) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes lens-pop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lens-filter-pop {
+    animation: none;
+  }
+}
+.lens-filter {
+  height: var(--d1-lens-pill-height);
+  padding: 0 14px;
+  border-radius: var(--d1-lens-pill-radius);
+  border: 1px solid var(--c-divider);
+  background: transparent;
+  font-size: var(--d1-lens-font-size);
+  color: var(--c-inactive);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.lens-filter.is-on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+  font-weight: var(--w-size);
+}
+.lens-go {
+  margin-left: 4px;
+  color: var(--c-accent);
+  border-left: 1px solid var(--c-divider);
+  border-radius: 0 var(--d1-lens-radius) var(--d1-lens-radius) 0;
+}
+.lens-go.is-disabled {
+  color: var(--c-text-muted);
+  cursor: default;
+}
+.lens-go.is-hot {
+  margin-left: 8px;
+  border-left: 0;
+  border-radius: var(--d1-lens-pill-radius);
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  font-weight: var(--w-size);
+}
+/* One soft ring when a filter turns on. Opacity and transform only, and only once. */
+.lens-glow {
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  border: 2px solid var(--c-accent);
+  pointer-events: none;
+  animation: lens-glow 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes lens-glow {
+  from {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lens-glow {
+    animation: none;
+    display: none;
+  }
+}
+.lens-pill {
+  position: relative;
+  height: var(--d1-lens-pill-height);
+  padding: 0 var(--d1-lens-pill-pad-x);
+  border-radius: var(--d1-lens-pill-radius);
+  border: 0;
+  background: transparent;
+  font-size: var(--d1-lens-font-size);
+  color: var(--c-inactive);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.lens-pill.is-active {
+  color: var(--c-on-navy);
+  font-weight: var(--w-size);
+}
+.lens-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: var(--d1-lens-pill-height);
+  border-radius: var(--d1-lens-pill-radius);
+  background: var(--c-navy);
+}
+.scope-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.scope-empty p {
+  margin: 0;
+  font-size: var(--t-label);
+  color: var(--c-text);
+}
+.scope-empty-list {
+  padding: 28px 20px;
+}
+.scope-banner {
+  position: absolute;
+  z-index: 4;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(520px, calc(100% - 48px));
+  padding: 14px 18px;
+  border-radius: var(--d1-tile-radius);
+  background: var(--c-glass-strong);
+  border: 1px solid var(--c-glass-border);
+  box-shadow: var(--d1-lens-shadow);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+.scope-empty-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--c-accent);
+  font: inherit;
+  font-size: var(--t-label);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

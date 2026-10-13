@@ -1,0 +1,106 @@
+/* ---- Detail panel ---------------------------------------------------------------------- */
+
+.detail-panel {
+  position: fixed;
+  top: var(--d1-header-height);
+  background: var(--d1-detail-bg);
+  right: var(--d1-grid-pad-x);
+  bottom: var(--d1-grid-pad-bottom);
+  width: var(--d1-detail-width);
+  padding: 20px;
+  border-radius: var(--d1-tile-radius);
+  overflow-y: auto;
+  z-index: 25;
+}
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 100%;
+}
+.detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.detail-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--d1-tile-name-size);
+  font-weight: var(--w-size);
+  overflow-wrap: anywhere;
+}
+.detail-size {
+  font-size: var(--d1-tile-size-l);
+}
+.detail-why {
+  font-size: var(--t-label);
+  line-height: 1.5;
+  color: var(--c-text-muted);
+  margin: 0;
+}
+.detail-actions {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.btn-wide {
+  width: 100%;
+  height: var(--d1-button-height);
+}
+.detail-link {
+  align-self: center;
+  padding: 4px;
+}
+.item-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--d1-row-radius);
+  background: var(--c-pill);
+  flex-shrink: 0;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 8px 14px;
+  font-size: var(--t-label);
+  margin: 0;
+}
+.detail-grid dt {
+  color: var(--c-text-muted);
+}
+.detail-grid dd {
+  margin: 0;
+}
+.why-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--t-label);
+  font-weight: var(--w-size);
+  color: var(--c-accent);
+  cursor: pointer;
+}
+.why-text {
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.safety {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--t-caption);
+  font-weight: var(--w-size);
+}
+.safety-safe {
+  color: var(--c-safe);
+}
+.safety-yourCall {
+  color: var(--c-your-call);
+}
+.safety-keep {
+  color: var(--c-keep);
+}

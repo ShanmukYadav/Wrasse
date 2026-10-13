@@ -1,0 +1,122 @@
+/* ---- Large & Old, Duplicates ------------------------------------------------------------- */
+
+.largeold-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+.largeold-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.largeold-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip-toggle {
+  cursor: pointer;
+  border: 1px solid var(--c-divider);
+  background: transparent;
+}
+.chip-toggle.is-on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+}
+.select {
+  font: inherit;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--c-divider);
+  background: var(--d1-row-surface);
+  color: var(--c-text);
+}
+.largeold-list,
+.dupe-copies {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  min-height: 0;
+}
+.largeold-row,
+.dupe-copy {
+  display: flex;
+  align-items: center;
+  gap: var(--d1-row-gap);
+  min-height: var(--d1-row-height);
+  padding: 6px var(--d1-row-pad-x);
+  border-radius: var(--d1-row-radius);
+  background: var(--d1-row-surface);
+  border: 1px solid var(--c-divider);
+  cursor: pointer;
+}
+.largeold-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.largeold-name {
+  font-size: var(--d1-row-font-size);
+  font-weight: var(--w-name);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.largeold-age {
+  white-space: nowrap;
+}
+.dupes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.dupe-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--d1-row-radius);
+  background: var(--c-pill);
+}
+.dupe-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dupe-radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--c-kbd-border);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  color: var(--c-on-accent);
+}
+.dupe-radio.is-on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+}
+.dupe-copy.is-going {
+  opacity: 0.75;
+}
+.largeold-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 2px;
+  background: linear-gradient(to bottom, transparent, var(--c-glass-strong) 30%);
+}

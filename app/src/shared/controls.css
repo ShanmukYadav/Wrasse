@@ -1,0 +1,95 @@
+/* ---- Buttons --------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--d1-button-radius);
+  font-size: var(--t-label);
+  font-weight: var(--w-size);
+  color: var(--c-text);
+  background: var(--c-glass-strong);
+  border: 1px solid var(--c-glass-border);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.btn-primary {
+  color: var(--c-on-accent);
+  background: var(--c-accent);
+  border-color: transparent;
+}
+.btn-danger {
+  color: var(--c-your-call);
+  background: transparent;
+  border-color: var(--c-your-call);
+}
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  color: var(--c-text-muted);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.icon-btn:hover {
+  color: var(--c-text);
+  background: var(--c-pill);
+}
+
+/* ---- Glass surfaces (panels, tray, overlays) ------------------------------------------ */
+
+.glass-css {
+  background: var(--c-glass-strong);
+  border: 1px solid var(--c-glass-border);
+  box-shadow: var(--d1-lens-shadow);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+
+/* ---- Type helpers ------------------------------------------------------------------- */
+
+.text-hero {
+  font-size: var(--t-hero);
+  font-weight: var(--w-strong);
+  line-height: 1;
+}
+.text-hero-unit {
+  font-size: 0.4em;
+  font-weight: var(--w-regular);
+  color: var(--c-text-muted);
+}
+.text-title {
+  font-size: var(--t-title);
+  font-weight: var(--w-size);
+}
+.text-label {
+  font-size: var(--t-label);
+}
+.text-caption {
+  font-size: var(--t-caption);
+}
+.text-muted {
+  color: var(--c-text-muted);
+}
+.text-faint {
+  color: var(--c-text-faint);
+}
+.text-strong {
+  color: var(--c-text);
+  font-weight: var(--w-size);
+}
+.text-your-call {
+  color: var(--c-your-call);
+}
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

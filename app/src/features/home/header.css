@@ -1,0 +1,140 @@
+/* ---- Header -------------------------------------------------------------------------- */
+
+.d1-header {
+  height: var(--d1-header-height);
+  padding: 0 var(--d1-header-pad-x);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--d1-header-gap);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+.d1-header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--d1-header-gap);
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.traffic {
+  display: flex;
+  gap: var(--d1-traffic-gap);
+}
+.traffic span {
+  width: var(--d1-traffic-size);
+  height: var(--d1-traffic-size);
+  border-radius: 50%;
+}
+.traffic-space {
+  width: 56px;
+}
+.location {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.crumb-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.crumb-sep {
+  color: var(--c-text-muted);
+  flex-shrink: 0;
+}
+.crumb {
+  font-size: var(--d1-header-title-size);
+  font-weight: var(--w-size);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+  cursor: pointer;
+}
+.crumb.is-current {
+  color: var(--c-text);
+}
+.crumb-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.crumb-dot {
+  color: var(--c-text-muted);
+  font-size: var(--d1-header-title-size);
+}
+.crumb-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--c-accent) 14%, transparent);
+  color: var(--c-accent);
+  font-size: var(--t-caption);
+  font-weight: var(--w-size);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.back-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  color: var(--c-text);
+  background: var(--c-glass);
+  border: 1px solid var(--c-glass-border);
+  cursor: pointer;
+}
+.d1-header-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+.free {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.free-num {
+  font-size: var(--d1-free-size);
+  font-weight: var(--w-strong);
+  font-variant-numeric: tabular-nums;
+}
+.free-unit {
+  font-size: var(--d1-free-unit-size);
+  color: var(--c-text-muted);
+}
+.btn-scan {
+  height: var(--d1-button-height);
+  padding: 0 var(--d1-button-pad-x);
+  border-radius: var(--d1-button-radius);
+  border: 0;
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  font-size: var(--d1-button-font-size);
+  font-weight: var(--w-size);
+  cursor: pointer;
+}
+
+/* Backdrop blur turns on with html.is-glass, after the first paint. The fill is already there. */
+html:not(.is-glass) .command-bar,
+html:not(.is-glass) .command-results,
+html:not(.is-glass) .plan-meter,
+html:not(.is-glass) .lens-bar,
+html:not(.is-glass) .lens-filter-pop,
+html:not(.is-glass) .scope-banner,
+html:not(.is-glass) .glass-css {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}

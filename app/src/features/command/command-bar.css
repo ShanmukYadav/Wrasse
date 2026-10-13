@@ -1,0 +1,241 @@
+/* ---- Command bar ---------------------------------------------------------------------- */
+
+.command-wrap {
+  position: relative;
+  flex: 1;
+  max-width: var(--d1-command-max-width);
+}
+.command-bar {
+  height: var(--d1-command-height);
+  display: flex;
+  align-items: center;
+  gap: var(--d1-command-gap);
+  padding: 0 var(--d1-command-pad-x);
+  border-radius: var(--d1-command-radius);
+  background: var(--c-glass);
+  border: 1px solid var(--c-glass-border);
+  box-shadow: var(--d1-command-shadow);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+}
+.command-icon {
+  color: var(--c-text-muted);
+}
+.command-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  outline: none;
+  font-size: var(--d1-command-font-size);
+  color: var(--c-text);
+  user-select: text;
+}
+.command-input::placeholder {
+  color: var(--c-text-muted);
+}
+.kbd {
+  font-size: var(--d1-command-kbd-size);
+  color: var(--c-text-muted);
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--c-kbd-border);
+  font-family: inherit;
+}
+.command-results,
+.plan-meter {
+  position: absolute;
+  top: calc(var(--d1-command-height) + 8px);
+  left: 0;
+  right: 0;
+  border-radius: var(--d1-tile-radius);
+  background: var(--c-glass-strong);
+  border: 1px solid var(--c-glass-border);
+  box-shadow: var(--d1-lens-shadow);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  z-index: 30;
+}
+.command-results {
+  padding: 6px;
+  list-style: none;
+  margin: 0;
+}
+.command-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-radius: var(--d1-row-radius);
+  font-size: var(--t-label);
+  cursor: pointer;
+}
+.command-active {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--d1-row-radius);
+  background: var(--c-pill);
+}
+.command-label {
+  font-weight: var(--w-name);
+}
+.command-hint {
+  font-size: var(--t-caption);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plan-meter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+.plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 0 -6px;
+}
+.plan-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: opacity var(--d-fast) cubic-bezier(0.22, 1, 0.36, 1);
+}
+.plan-row.is-off .plan-item {
+  opacity: var(--d1-dimmed);
+}
+.plan-tick {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-left: 6px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--c-glass-border);
+  background: var(--c-glass-strong);
+}
+.plan-tick.is-on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: var(--c-on-accent);
+}
+.plan-row.is-on .plan-item {
+  background: color-mix(in srgb, var(--c-accent) 14%, var(--d1-row-surface));
+}
+.plan-row.is-on .plan-item:hover {
+  background: color-mix(in srgb, var(--c-accent) 22%, var(--d1-row-surface));
+}
+.plan-item {
+  display: flex;
+  align-items: center;
+  gap: var(--d1-row-gap);
+  flex: 1;
+  min-width: 0;
+  padding: 8px 6px;
+  border-radius: var(--d1-row-radius);
+  text-align: left;
+  transition: background-color var(--d-base) cubic-bezier(0.65, 0, 0.35, 1);
+}
+.plan-item:hover {
+  background: var(--d1-row-surface);
+}
+.plan-rank {
+  width: 18px;
+  font-size: var(--t-caption);
+  font-weight: var(--w-size);
+  color: var(--c-text-muted);
+  text-align: center;
+  flex: none;
+}
+.plan-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.plan-name {
+  font-size: var(--t-label);
+  font-weight: var(--w-size);
+  color: var(--c-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.plan-where {
+  font-weight: 400;
+  color: var(--c-text-muted);
+}
+.plan-why {
+  font-size: var(--t-caption);
+  color: var(--c-text-muted);
+}
+.plan-size {
+  font-size: var(--t-label);
+  font-weight: var(--w-size);
+  color: var(--c-text);
+  flex: none;
+}
+.meter-track {
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--c-track);
+  overflow: hidden;
+}
+.meter-fill {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  border-radius: var(--r-pill);
+  background: var(--c-accent);
+}
+/* Free Up Space: freed for good (solid), pending in the tray (striped), picked (light). */
+.plan-track {
+  display: flex;
+}
+.plan-seg {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+.plan-seg.is-freed,
+.plan-dot.is-freed {
+  background: var(--c-accent);
+}
+.plan-seg.is-pending,
+.plan-dot.is-pending {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--c-accent) 0 4px,
+    color-mix(in srgb, var(--c-accent) 45%, transparent) 4px 8px
+  );
+}
+.plan-seg.is-picked {
+  background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+}
+.plan-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  color: var(--c-text-muted);
+}
+.plan-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.plan-tick.is-sheet {
+  border-style: dashed;
+}
+.plan-uninstall {
+  white-space: nowrap;
+  padding: 0 6px;
+}

@@ -1,0 +1,402 @@
+/* ---- Home grid and tiles --------------------------------------------------------------- */
+
+.home {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+}
+/* Hidden while the list is open. No resting opacity, so the home screen is not its own layer. */
+.home.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+.level {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+.level-frame {
+  position: absolute;
+  top: 0;
+  left: var(--d1-grid-pad-x);
+  right: var(--d1-grid-pad-x);
+  bottom: var(--d1-grid-pad-bottom);
+  border-radius: var(--d1-tile-radius);
+  background-image: var(--fill-img, linear-gradient(160deg, var(--from) 0%, var(--to) 100%));
+  background-size: 100% 100%;
+  border: 1px solid var(--tint);
+  box-shadow: var(--d1-tile-shadow);
+}
+.home-grid.level-grid {
+  position: absolute;
+  top: 0;
+  left: var(--d1-grid-pad-x);
+  right: var(--d1-grid-pad-x);
+  bottom: var(--d1-grid-pad-bottom);
+  padding: var(--d1-level-pad);
+}
+.tile-more {
+  justify-content: flex-start;
+}
+.home-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(var(--d1-grid-cols), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--d1-grid-rows), minmax(0, 1fr));
+  gap: var(--d1-grid-gap);
+  padding: 0 var(--d1-grid-pad-x) var(--d1-grid-pad-bottom) var(--d1-grid-pad-x);
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--d1-tile-gap);
+  padding: var(--d1-tile-padding);
+  border-radius: var(--d1-tile-radius);
+  /* Painted in place. A transform, a filter, an opacity, or a rounded overflow on this box
+     promotes every tile into its own surface, and the gradient is then stored per tile.
+     The corner glow is the first background, so the border radius clips it. */
+  background-image:
+    var(
+      --glow-img,
+      radial-gradient(
+        circle calc(var(--d1-tile-glow-size) / 2) at
+          calc(100% - (var(--d1-tile-glow-size) / 2 + var(--d1-tile-glow-offset)))
+          calc(var(--d1-tile-glow-size) / 2 + var(--d1-tile-glow-offset)),
+        var(--glow) 100%,
+        transparent 100%
+      )
+    ),
+    var(--fill-img, linear-gradient(160deg, var(--from) 0%, var(--to) 100%));
+  /* With the images (design/tilePaint.ts): the glow circle sits where the radial gradient put it,
+     and the fill stretches over the box and repeats into the border like the gradient did. */
+  background-size:
+    var(--d1-tile-glow-size) var(--d1-tile-glow-size),
+    100% 100%;
+  background-position:
+    right var(--d1-tile-glow-offset) top var(--d1-tile-glow-offset),
+    0 0;
+  background-repeat: no-repeat, repeat;
+  border: 1px solid var(--tint);
+  box-shadow: var(--d1-tile-shadow);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  min-height: 0;
+  transition: box-shadow var(--d-base) cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tile:hover {
+  box-shadow: var(--d1-tile-hover-shadow);
+}
+.tile.is-dimmed {
+  opacity: var(--d1-dimmed);
+}
+.tile.is-deleting {
+  opacity: 0;
+  pointer-events: none;
+}
+.tile.is-selected {
+  outline: var(--d1-tile-selection-width) solid var(--acc);
+  outline-offset: -1px;
+}
+.tile-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.tile-badge {
+  width: var(--d1-tile-badge);
+  height: var(--d1-tile-badge);
+  border-radius: var(--d1-tile-badge-radius);
+  background: var(--acc);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  box-shadow: var(--d1-tile-badge-shadow) var(--badge-shadow);
+}
+.tile-title {
+  /* Name and meta on one line when both fit. When they don't, the meta wraps under the name, and
+     space-between puts a line's only item at the start. Names wrap; they are never cut short. */
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: 8px;
+}
+.tile-name {
+  font-size: var(--d1-tile-name-size);
+  font-weight: var(--w-size);
+  line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.tile-head.is-short {
+  flex: 1;
+}
+.tile-size-inline {
+  margin-left: auto;
+  font-size: var(--d1-tile-inline-size);
+  font-weight: var(--w-strong);
+  color: var(--ink);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.tile-meta {
+  font-size: var(--d1-tile-meta-size);
+  color: var(--c-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.tile-size {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.tile-size-num {
+  font-weight: var(--w-strong);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  line-height: 1.05;
+}
+.tile-size-unit {
+  font-size: var(--d1-tile-unit-size);
+  color: var(--c-text-muted);
+}
+.tile-rows {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--d1-row-stack-gap);
+}
+.tile-row {
+  min-height: var(--d1-row-height);
+  display: flex;
+  align-items: center;
+  gap: var(--d1-row-gap);
+  padding: 7px var(--d1-row-pad-x);
+  border-radius: var(--d1-row-radius);
+  background: var(--d1-row-surface);
+}
+.tile-row.is-dimmed {
+  opacity: var(--d1-dimmed);
+}
+.tile-row-name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--d1-row-font-size);
+  font-weight: var(--w-name);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.tile-row-tag {
+  margin-left: 6px;
+  font-size: var(--t-caption);
+  font-weight: normal;
+  color: var(--c-text-muted);
+  white-space: nowrap;
+}
+.size-bar {
+  width: var(--d1-row-bar-w);
+  height: var(--d1-row-bar-h);
+  border-radius: var(--d1-row-bar-radius);
+  background: var(--c-track);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.size-bar-fill {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--acc);
+}
+.tile-row-size {
+  width: var(--d1-row-size-w);
+  text-align: right;
+  font-size: var(--d1-row-font-size);
+  font-weight: var(--w-size);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.tile-spacer {
+  flex: 1;
+  min-height: 0;
+}
+.tile-foot {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.tile-chips {
+  /* Chips wrap whole onto more lines; the tile drops them if it runs out of room (Tile.tsx). */
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--d1-chip-gap);
+  min-width: 0;
+  flex: 1;
+}
+.chip {
+  max-width: 100%;
+  font-size: var(--d1-chip-font-size);
+  font-weight: var(--w-name);
+  padding: var(--d1-chip-padding);
+  border-radius: var(--r-pill);
+  white-space: normal;
+}
+.chip-amber {
+  background: var(--chip-amber-bg);
+  color: var(--chip-amber-text);
+}
+.chip-green {
+  background: var(--chip-green-bg);
+  color: var(--chip-green-text);
+}
+.chip-violet {
+  background: var(--chip-violet-bg);
+  color: var(--chip-violet-text);
+}
+.chip-protected {
+  background: var(--chip-protected-bg);
+  color: var(--chip-protected-text);
+}
+.tile-open {
+  font-size: var(--d1-tile-meta-size);
+  font-weight: var(--w-size);
+  color: var(--acc);
+  white-space: nowrap;
+  /* visibility, not opacity: an opacity of 0 is still a composited layer on every tile. */
+  visibility: hidden;
+}
+.tile:hover .tile-open,
+.tile:focus-visible .tile-open {
+  visibility: visible;
+}
+.tile-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--acc);
+  display: grid;
+  place-items: center;
+}
+/* Tick for bulk delete: appears on hover, stays on every tile while something is ticked. */
+.tile-tick {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--c-glass-strong);
+  border: 1.5px solid var(--tint);
+  visibility: hidden;
+  cursor: pointer;
+  z-index: 2;
+}
+.tile:hover .tile-tick,
+.tile:focus-visible .tile-tick,
+.tile-tick.is-visible,
+.tile-tick.is-on {
+  visibility: visible;
+}
+/* The tick takes the top-right corner, so the meta line steps aside while it shows. */
+.tile.has-tick:hover .tile-meta,
+.tile.has-tick:focus-visible .tile-meta,
+.tile.is-ticking .tile-meta {
+  visibility: hidden;
+}
+.tile-tick.is-on {
+  background: var(--acc);
+  border-color: var(--acc);
+}
+.tile-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 2px solid var(--acc);
+  pointer-events: none;
+  animation: tile-pulse 1.2s cubic-bezier(0.22, 1, 0.36, 1) 2;
+}
+@keyframes tile-pulse {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+.ghost-tile {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 var(--d1-ghost-pad-x);
+  border-radius: var(--d1-ghost-radius);
+  border: var(--d1-ghost-line);
+  background: var(--d1-ghost-surface);
+  min-width: 0;
+}
+.ghost-text {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.ghost-title {
+  font-size: var(--d1-ghost-title-size);
+  font-weight: var(--w-size);
+  white-space: nowrap;
+}
+.ghost-hint {
+  font-size: var(--d1-ghost-hint-size);
+  color: var(--c-text-muted);
+}
+
+/* Expected versus actual free space. Same dashed surface as the snapshot tile.
+   It sits in the layout. No opacity and no transform, so it is not its own layer. */
+.space-report {
+  flex: none;
+  margin: 8px var(--d1-grid-pad-x) 0;
+  padding: 8px var(--d1-ghost-pad-x);
+  border-radius: var(--d1-ghost-radius);
+  border: var(--d1-ghost-line);
+  background: var(--d1-ghost-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.space-line {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0;
+  font-size: var(--d1-ghost-hint-size);
+  min-width: 0;
+}
+.space-strong {
+  font-size: var(--d1-ghost-title-size);
+  font-weight: var(--w-size);
+}
+.space-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
