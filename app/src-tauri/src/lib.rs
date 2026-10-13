@@ -58,7 +58,7 @@ fn dev_log(message: String) {
 pub fn run() {
     // Every audit-log line from this process says it came from the app (a click).
     wrasse_core::safety::audit::set_origin(wrasse_core::safety::audit::Origin::Ui);
-    tauri::Builder::default()
+    let result = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // A second launch focuses the existing window instead of starting another instance.
             if let Some(window) = app.get_webview_window("main") {
@@ -110,6 +110,9 @@ pub fn run() {
             files::cancel_duplicates,
             files::remove_duplicates
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Wrasse");
+        .run(tauri::generate_context!());
+    if let Err(e) = result {
+        eprintln!("Wrasse couldn't start: {e}");
+        std::process::exit(1);
+    }
 }

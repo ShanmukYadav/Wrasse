@@ -23,3 +23,6 @@ plist = "1"
 
 [dev-dependencies]
 wrasse-fixtures.workspace = true
+
+[lints]
+workspace = true

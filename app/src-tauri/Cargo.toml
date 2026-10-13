@@ -20,3 +20,6 @@ serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2", features = ["macos-private-api"] }
 tauri-plugin-single-instance = "2"
+
+[lints]
+workspace = true

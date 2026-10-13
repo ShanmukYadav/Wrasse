@@ -10,8 +10,13 @@ fn main() {
         std::process::exit(2);
     };
     let started = std::time::Instant::now();
-    let dirs = wrasse_fixtures::many_files(std::path::Path::new(root), files)
-        .expect("couldn't write the fixture");
+    let dirs = match wrasse_fixtures::many_files(std::path::Path::new(root), files) {
+        Ok(dirs) => dirs,
+        Err(e) => {
+            eprintln!("couldn't write the fixture: {e}");
+            std::process::exit(1);
+        }
+    };
     println!(
         "{files} files in {dirs} folders, {:.1}s",
         started.elapsed().as_secs_f64()

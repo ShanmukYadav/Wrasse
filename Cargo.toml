@@ -33,3 +33,9 @@ strip = true
 # The scanner runs optimized even in `tauri dev`, so dev scans take seconds, not minutes.
 [profile.dev.package.wrasse-core]
 opt-level = 3
+
+# No panics on bad input in shipped code: errors are handled, never unwrapped. Tests may unwrap
+# (clippy.toml allows it in #[test] functions and #[cfg(test)] modules).
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"

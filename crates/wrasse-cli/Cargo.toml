@@ -9,8 +9,12 @@ rust-version.workspace = true
 
 [dependencies]
 wrasse-core.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 
 [[bin]]
 name = "wrasse"
 path = "src/main.rs"
+
+[lints]
+workspace = true

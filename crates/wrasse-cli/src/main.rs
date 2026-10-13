@@ -24,10 +24,21 @@
 //!                          with --orphans, data folders whose app is gone. Read-only.
 
 use std::path::PathBuf;
+use std::process::ExitCode;
 use std::time::{Duration, Instant};
 use wrasse_core::scan::{scan, ScanControl};
 
-fn main() {
+fn main() -> ExitCode {
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run() -> Result<(), String> {
     // Audit-log lines say who acted: the CLI, or a script driving it (WRASSE_ORIGIN=script).
     use wrasse_core::safety::audit::{set_origin, Origin};
     set_origin(
@@ -40,13 +51,13 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("scan") if args.get(1).map(String::as_str) == Some("--dump") => {
-            run_scan(None, args.get(2).map(PathBuf::from), None)
+            run_scan(None, args.get(2).map(PathBuf::from), None)?
         }
         Some("scan") if args.get(1).map(String::as_str) == Some("--cache") => {
-            run_scan(None, None, args.get(2).map(PathBuf::from))
+            run_scan(None, None, args.get(2).map(PathBuf::from))?
         }
-        Some("scan") => run_scan(args.get(1).map(PathBuf::from), None, None),
-        Some("clean") => clean(&args[1..]),
+        Some("scan") => run_scan(args.get(1).map(PathBuf::from), None, None)?,
+        Some("clean") => clean(&args[1..])?,
         Some("restore") => with_ctx(|ctx| {
             let restored = wrasse_core::safety::restore(ctx, &args[1..])?;
             if restored.len() < args.len() - 1 {
@@ -57,7 +68,7 @@ fn main() {
                 );
             }
             Ok(serde_json::json!(restored))
-        }),
+        })?,
         Some("tray") => with_ctx(|ctx| {
             Ok(serde_json::json!(ctx
                 .quarantine
@@ -65,15 +76,16 @@ fn main() {
                 .into_iter()
                 .map(|(_, e)| e)
                 .collect::<Vec<_>>()))
-        }),
+        })?,
         Some("large") | Some("dupes") => {
-            let dir = wrasse_core::scan::cache::data_dir(APP_ID).expect("no data folder");
-            let saved = wrasse_core::scan::cache::load_tree(&dir).expect("scan in the app first");
-            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let dir = wrasse_core::scan::cache::data_dir(APP_ID).or_fail("no data folder")?;
+            let saved =
+                wrasse_core::scan::cache::load_tree(&dir).or_fail("scan in the app first")?;
+            let home = wrasse_core::platform::home_dir().or_fail("no home folder")?;
             let (_, prefix) = wrasse_core::platform::scan_root();
             let today = (std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
+                .or_fail("the clock is before 1970")?
                 .as_secs()
                 / 86_400) as u32;
             let started = Instant::now();
@@ -106,7 +118,7 @@ fn main() {
                 );
                 serde_json::json!(groups)
             };
-            println!("{}", serde_json::to_string_pretty(&v).unwrap());
+            println!("{}", json(&v)?);
             eprintln!("{:.2}s", started.elapsed().as_secs_f64());
         }
         Some("uninstall") => {
@@ -116,10 +128,10 @@ fn main() {
                 .iter()
                 .find(|a| !a.starts_with("--"))
                 .map(PathBuf::from)
-                .expect("usage: wrasse uninstall [--dry-run] [--all-leftovers] <app bundle>");
-            let home = wrasse_core::platform::home_dir().expect("no home folder");
-            let app =
-                wrasse_core::platform::app_at(&home, &bundle).expect("that app isn't installed");
+                .or_fail("usage: wrasse uninstall [--dry-run] [--all-leftovers] <app bundle>")?;
+            let home = wrasse_core::platform::home_dir().or_fail("no home folder")?;
+            let app = wrasse_core::platform::app_at(&home, &bundle)
+                .or_fail("that app isn't installed")?;
             let leftovers: Vec<PathBuf> = app
                 .leftovers
                 .iter()
@@ -133,26 +145,27 @@ fn main() {
             with_ctx(|ctx| {
                 wrasse_core::apps::uninstall::uninstall(ctx, &app, &leftovers, running, dry_run)
                     .map(|o| serde_json::json!(o))
-            });
+            })?;
         }
         Some("quit") => {
-            let bundle = PathBuf::from(args.get(1).expect("usage: wrasse quit <app bundle>"));
-            let home = wrasse_core::platform::home_dir().expect("no home folder");
-            let app =
-                wrasse_core::platform::app_at(&home, &bundle).expect("that app isn't installed");
+            let bundle = PathBuf::from(args.get(1).or_fail("usage: wrasse quit <app bundle>")?);
+            let home = wrasse_core::platform::home_dir().or_fail("no home folder")?;
+            let app = wrasse_core::platform::app_at(&home, &bundle)
+                .or_fail("that app isn't installed")?;
             match wrasse_core::apps::uninstall::quit_and_wait(&app, Duration::from_secs(10)) {
                 Ok(closed) => println!("{}", if closed { "closed" } else { "still open" }),
-                Err(e) => eprintln!("error: {e}"),
+                Err(e) => return Err(e.to_string()),
             }
         }
         Some("free") => {
             let gb: f64 = args
                 .get(1)
                 .and_then(|a| a.parse().ok())
-                .expect("usage: wrasse free <GB>");
-            let dir = wrasse_core::scan::cache::data_dir(APP_ID).expect("no data folder");
-            let (disk, _) = wrasse_core::scan::cache::load(&dir).expect("scan in the app first");
-            let home = wrasse_core::platform::home_dir().expect("no home folder");
+                .or_fail("usage: wrasse free <GB>")?;
+            let dir = wrasse_core::scan::cache::data_dir(APP_ID).or_fail("no data folder")?;
+            let (disk, _) =
+                wrasse_core::scan::cache::load(&dir).or_fail("scan in the app first")?;
+            let home = wrasse_core::platform::home_dir().or_fail("no home folder")?;
             let limits = wrasse_core::rank::Limits {
                 hand_pick_only: wrasse_core::platform::hand_pick_only(&home, &dir),
                 ..Default::default()
@@ -177,41 +190,46 @@ fn main() {
             );
         }
         Some("diagnostics") => {
-            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let home = wrasse_core::platform::home_dir().or_fail("no home folder")?;
             let tray = wrasse_core::scan::cache::data_dir(APP_ID)
                 .map(|d| wrasse_core::quarantine::size_on_disk(&d.join("Quarantine")))
                 .unwrap_or(0);
             let report = wrasse_core::diagnostics::measure(&home, tray);
-            println!("{}", serde_json::to_string_pretty(&report).unwrap());
+            println!("{}", json(&report)?);
         }
         Some("devjunk") => {
-            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let home = wrasse_core::platform::home_dir().or_fail("no home folder")?;
             let extras = wrasse_core::devjunk::live_extras(&home);
-            println!("{}", serde_json::to_string_pretty(&extras).unwrap());
+            println!("{}", json(&extras)?);
         }
         Some("apps") => {
-            let home = wrasse_core::platform::home_dir().expect("no home folder");
+            let home = wrasse_core::platform::home_dir().or_fail("no home folder")?;
             let apps = wrasse_core::platform::installed_apps(&home);
             let v = if args.get(1).map(String::as_str) == Some("--orphans") {
                 serde_json::json!(wrasse_core::platform::orphaned_leftovers(&home, &apps))
             } else {
                 serde_json::json!(apps)
             };
-            println!("{}", serde_json::to_string_pretty(&v).unwrap());
+            println!("{}", json(&v)?);
         }
         _ => println!(
             "wrasse {}\nusage: wrasse scan [folder] | diagnostics | devjunk",
             wrasse_core::VERSION
         ),
     }
+    Ok(())
 }
 
-fn run_scan(folder: Option<PathBuf>, dump: Option<PathBuf>, cache: Option<PathBuf>) {
+fn run_scan(
+    folder: Option<PathBuf>,
+    dump: Option<PathBuf>,
+    cache: Option<PathBuf>,
+) -> Result<(), String> {
     let started = Instant::now();
     let control = ScanControl::default();
     match folder {
         Some(path) => {
-            let tree = scan(&path, &control).expect("scan failed");
+            let tree = scan(&path, &control).or_fail("scan failed")?;
             let s = tree.stats;
             println!(
                 "{}",
@@ -225,14 +243,18 @@ fn run_scan(folder: Option<PathBuf>, dump: Option<PathBuf>, cache: Option<PathBu
             );
         }
         None => {
-            let disk =
-                wrasse_core::session::scan_volume(&control, cache.as_deref()).expect("scan failed");
+            let disk = wrasse_core::session::scan_volume(&control, cache.as_deref())
+                .or_fail("scan failed")?;
             if let Some(path) = dump {
-                std::fs::write(&path, serde_json::to_vec(&disk).unwrap())
-                    .expect("couldn't write the dump");
+                std::fs::write(
+                    &path,
+                    serde_json::to_vec(&disk).or_fail("couldn't encode the dump")?,
+                )
+                .or_fail("couldn't write the dump")?;
             }
             let ui_nodes = disk.nodes.len();
-            let mut out = serde_json::to_value(&disk.summary).unwrap();
+            let mut out =
+                serde_json::to_value(&disk.summary).or_fail("couldn't encode the summary")?;
             out["uiNodes"] = ui_nodes.into();
             out["seconds"] = started.elapsed().as_secs_f64().into();
             out["categories"] = disk.nodes[0]
@@ -243,30 +265,29 @@ fn run_scan(folder: Option<PathBuf>, dump: Option<PathBuf>, cache: Option<PathBu
                     serde_json::json!({ "name": n.name, "bytes": n.size })
                 })
                 .collect();
-            println!("{}", serde_json::to_string_pretty(&out).unwrap());
+            println!("{}", json(&out)?);
         }
     }
+    Ok(())
 }
 
 const APP_ID: &str = "com.shanmukyadav.wrasse";
 
 /// Runs `f` with the app's safety context (same data folder and tray as the app) and prints JSON.
-fn with_ctx(f: impl FnOnce(&wrasse_core::safety::Context) -> std::io::Result<serde_json::Value>) {
-    let home = wrasse_core::platform::home_dir().expect("no home folder");
-    let data = wrasse_core::scan::cache::data_dir(APP_ID).expect("no data folder");
-    let ctx =
-        wrasse_core::safety::Context::new(home, data).expect("couldn't open the safety context");
+fn with_ctx(
+    f: impl FnOnce(&wrasse_core::safety::Context) -> std::io::Result<serde_json::Value>,
+) -> Result<(), String> {
+    let home = wrasse_core::platform::home_dir().or_fail("no home folder")?;
+    let data = wrasse_core::scan::cache::data_dir(APP_ID).or_fail("no data folder")?;
+    let ctx = wrasse_core::safety::Context::new(home, data)
+        .or_fail("couldn't open the safety context")?;
     let _ = ctx.quarantine.reconcile();
-    match f(&ctx) {
-        Ok(v) => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
-        Err(e) => {
-            eprintln!("error: {e}");
-            std::process::exit(1);
-        }
-    }
+    let v = f(&ctx).map_err(|e| e.to_string())?;
+    println!("{}", json(&v)?);
+    Ok(())
 }
 
-fn clean(args: &[String]) {
+fn clean(args: &[String]) -> Result<(), String> {
     use wrasse_core::safety::{self, Mode, Request, Safety};
     let flag = |f: &str| args.iter().any(|a| a == f);
     let (dry_run, delete_now, hand_picked, safe) = (
@@ -303,5 +324,26 @@ fn clean(args: &[String]) {
         );
         let report = safety::remove(ctx, &plan, dry_run)?;
         Ok(serde_json::json!({ "plan": plan, "report": report }))
-    });
+    })
+}
+
+fn json(v: &impl serde::Serialize) -> Result<String, String> {
+    serde_json::to_string_pretty(v).map_err(|e| format!("couldn't encode the output: {e}"))
+}
+
+/// Turns a missing value or a failure into the CLI's error message.
+trait OrFail<T> {
+    fn or_fail(self, msg: &str) -> Result<T, String>;
+}
+
+impl<T> OrFail<T> for Option<T> {
+    fn or_fail(self, msg: &str) -> Result<T, String> {
+        self.ok_or_else(|| msg.to_string())
+    }
+}
+
+impl<T, E: std::fmt::Display> OrFail<T> for Result<T, E> {
+    fn or_fail(self, msg: &str) -> Result<T, String> {
+        self.map_err(|e| format!("{msg}: {e}"))
+    }
 }
