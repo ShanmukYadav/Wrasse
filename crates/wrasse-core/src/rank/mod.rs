@@ -1,4 +1,4 @@
-//! Free Up Space (PLAN.md §6.5, docs/phase3-plan.md §4): ranks what could go to reach a target,
+//! Free Up Space (PLAN.md §6.5, docs/history/phase3-plan.md §4): ranks what could go to reach a target,
 //! by `reclaimable bytes × unused factor × safety weight`. It works on the scan's items, taking
 //! each source as a whole where the parts only make sense together:
 //! - Library: only what a junk rule covers (the rule's match, whole);
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-/// Things used more recently than this are never offered (docs/phase3-plan.md decision 8).
+/// Things used more recently than this are never offered (docs/history/phase3-plan.md decision 8).
 pub const RECENT_DAYS: u32 = 7;
 
 /// 0 days → 0.1, 30 → 0.5, 180 and more → 1.0, linear in between.

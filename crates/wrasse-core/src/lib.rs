@@ -13,6 +13,5 @@ pub mod rules;
 pub mod safety;
 pub mod scan;
 pub mod session;
-pub mod startup;
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

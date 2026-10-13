@@ -2,7 +2,7 @@
 //! (bundle plus the data it left in the user's Library), when it was last opened, and how it can be
 //! removed. Platform-neutral: discovery itself lives in `platform` (macOS: `platform/macos/apps.rs`).
 //!
-//! Removal routes (docs/phase3-plan.md §3):
+//! Removal routes (docs/history/phase3-plan.md §3):
 //! - a Homebrew cask is removed by Homebrew (`safety::delegate`), not undoable;
 //! - an app the user owns (dragged in) goes to the tray (`safety::remove`), restorable;
 //! - a root-owned app (App Store, `.pkg`) goes to the user's Trash through Finder, which asks
@@ -111,7 +111,7 @@ pub struct Leftover {
 }
 
 impl Leftover {
-    /// Ticked by default in the uninstall sheet (docs/phase3-plan.md decision 4).
+    /// Ticked by default in the uninstall sheet (docs/history/phase3-plan.md decision 4).
     pub fn ticked_by_default(&self) -> bool {
         self.matched_by == MatchedBy::BundleId && self.shared_with.is_empty() && !self.needs_admin
     }
@@ -147,7 +147,7 @@ impl App {
     }
 }
 
-/// Data folders whose app is gone (docs/phase3-plan.md §3, decision 5), grouped by the bundle id
+/// Data folders whose app is gone (docs/history/phase3-plan.md §3, decision 5), grouped by the bundle id
 /// they're named after.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -671,7 +671,7 @@ pub fn app_at(home: &Path, bundle: &Path) -> Option<crate::apps::App> {
     }
 }
 
-/// Data folders whose app is gone (docs/phase3-plan.md decision 5).
+/// Data folders whose app is gone (docs/history/phase3-plan.md decision 5).
 pub fn orphaned_leftovers(home: &Path, apps: &[crate::apps::App]) -> Vec<crate::apps::Orphan> {
     #[cfg(target_os = "macos")]
     return macos::apps::orphans(

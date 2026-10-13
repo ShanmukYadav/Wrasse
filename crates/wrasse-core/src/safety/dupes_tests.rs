@@ -1,4 +1,4 @@
-//! Duplicate tests (docs/phase3-plan.md §7). Under `safety/` because they make an APFS clone with
+//! Duplicate tests (docs/history/phase3-plan.md §7). Under `safety/` because they make an APFS clone with
 //! `cp -c` and remove copies through the tray.
 
 use crate::files::dupes::{self, Control, MIN_BYTES};

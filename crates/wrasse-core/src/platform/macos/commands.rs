@@ -323,7 +323,7 @@ pub fn simctl_delete_unavailable() -> io::Result<()> {
 }
 
 /// `brew uninstall --cask <token>` with a validated brew binary and token. No `--zap`: Wrasse
-/// sends the leftovers to the tray itself, so they stay restorable (docs/phase3-plan.md decision 2).
+/// sends the leftovers to the tray itself, so they stay restorable (docs/history/phase3-plan.md decision 2).
 pub fn brew_uninstall_cask(brew: &Path, token: &str) -> io::Result<()> {
     let out = Command::new(brew)
         .args(["uninstall", "--cask", "--", token])

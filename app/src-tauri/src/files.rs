@@ -1,4 +1,4 @@
-//! Large & Old and Duplicates (docs/phase3-plan.md §5) for the UI. Both read the last saved scan
+//! Large & Old and Duplicates (docs/history/phase3-plan.md §5) for the UI. Both read the last saved scan
 //! tree on demand (nothing stays in memory); duplicate removal goes through the core's checks.
 
 use crate::cleanup::CleanupState;

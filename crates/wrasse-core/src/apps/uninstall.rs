@@ -1,4 +1,4 @@
-//! Uninstalling an app (docs/phase3-plan.md §3). The app is looked up again on disk right before
+//! Uninstalling an app (docs/history/phase3-plan.md §3). The app is looked up again on disk right before
 //! acting (never trusted from the UI), every step goes through `safety`, and nothing runs while
 //! the app is open.
 

@@ -53,7 +53,7 @@ pub enum Safety {
 /// What kind of app leftover a node is (Caches, Containers, …).
 pub use crate::apps::LeftoverKind as Leftover;
 
-/// For an app node: where it came from and how it can be removed (docs/phase3-plan.md §2–3).
+/// For an app node: where it came from and how it can be removed (docs/history/phase3-plan.md §2–3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppMeta {

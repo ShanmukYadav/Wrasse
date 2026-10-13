@@ -1,4 +1,4 @@
-//! Uninstall tests (docs/phase3-plan.md §7), on dummy apps from `wrasse_fixtures::mac_apps`,
+//! Uninstall tests (docs/history/phase3-plan.md §7), on dummy apps from `wrasse_fixtures::mac_apps`,
 //! never real apps. They live under `safety/` because they spawn a process and move fixture files.
 
 use crate::apps::uninstall::*;

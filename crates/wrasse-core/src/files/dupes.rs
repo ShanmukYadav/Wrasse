@@ -1,4 +1,4 @@
-//! Duplicate files: size → partial hash → full hash (PLAN.md §6.9, docs/phase3-plan.md §5).
+//! Duplicate files: size → partial hash → full hash (PLAN.md §6.9, docs/history/phase3-plan.md §5).
 //! Hard links (same file) and iCloud-only files are never duplicates; APFS clones are shown but
 //! free nothing. The user picks which copy to keep; before anything is removed the kept copy and
 //! every other copy are hashed again, and the group is left alone if anything changed.
@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 /// Files of one size, with the hash of their sampled bytes.
 type Sampled = Vec<(PathBuf, fs::Metadata, String)>;
 
-/// Files smaller than this aren't checked (docs/phase3-plan.md decision 6).
+/// Files smaller than this aren't checked (docs/history/phase3-plan.md decision 6).
 pub const MIN_BYTES: u64 = 10_000_000;
 /// Bytes read at the start, middle and end for the partial hash.
 const SAMPLE: u64 = 64 * 1024;

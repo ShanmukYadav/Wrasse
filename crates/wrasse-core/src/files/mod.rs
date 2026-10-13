@@ -1,4 +1,4 @@
-//! Large, old and duplicate files (PLAN.md §6.9, docs/phase3-plan.md §5). Read-only: lists and
+//! Large, old and duplicate files (PLAN.md §6.9, docs/history/phase3-plan.md §5). Read-only: lists and
 //! groups; removal of duplicates goes through `safety` after the kept copy is checked again.
 
 pub mod dupes;

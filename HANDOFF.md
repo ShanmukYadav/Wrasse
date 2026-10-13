@@ -9,7 +9,7 @@ read the files under "Read first".
 1. `PLAN.md`: the source of truth for what to build (phases, safety rules, budgets). It's
    **untracked on purpose** (listed in `.git/info/exclude`). Never commit or delete it.
 2. `AGENTS.md`: repo rules and the checks to run before finishing.
-3. `docs/phase3-plan.md`: the current phase's plan and the 11 decisions (all accepted with the
+3. `docs/history/phase3-plan.md`: the current phase's plan and the 11 decisions (all accepted with the
    recommended option).
 4. `SECURITY_AUDIT.md`: what Wrasse may delete and how. It's kept in sync with the code by a check.
 5. `docs/frontend.md`: every screen and flow in the UI.
@@ -145,7 +145,7 @@ Follow-up fixes accepted with the checkpoint:
   an explicit tick.
 - Before release, live-test the Homebrew cask uninstall route and the root-owned Finder Move to
   Trash route. Both are unit-tested only. Homebrew is not installed on this Mac; the Finder route
-  needs an administrator password. The same note is in `docs/phase3-plan.md` §9 and PLAN.md Phase 6.
+  needs an administrator password. The same note is in `docs/history/phase3-plan.md` §9 and PLAN.md Phase 6.
 - **Correction (2026-10-13):** an earlier version of this line said `~/WrasseTest/big-file.bin` was
   restored and back at its path. That was true only for about 50 minutes. The audit log
   (`~/Library/Application Support/com.shanmukyadav.wrasse/logs/actions.log`) shows:

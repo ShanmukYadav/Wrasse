@@ -1,4 +1,4 @@
-//! Free Up Space on a synthetic tree (docs/phase3-plan.md §7: reaches a 10 GB target, never offers
+//! Free Up Space on a synthetic tree (docs/history/phase3-plan.md §7: reaches a 10 GB target, never offers
 //! hand-pick-only, running, keep, protected or aggregate items, orders by score, reports the
 //! shortfall).
 

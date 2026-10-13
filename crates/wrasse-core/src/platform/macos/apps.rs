@@ -1,4 +1,4 @@
-//! App discovery on macOS (PLAN.md §6.4, docs/phase3-plan.md §2). Read-only: lists bundles in the
+//! App discovery on macOS (PLAN.md §6.4, docs/history/phase3-plan.md §2). Read-only: lists bundles in the
 //! Applications folders, tells where each came from (Homebrew cask, App Store, the OS, or copied
 //! in), who owns it, when it was last opened (Spotlight), and which Library folders it left behind.
 //!
@@ -467,7 +467,7 @@ fn leftovers(places: &Places, id: Option<&str>, name: &str) -> Vec<Leftover> {
     out
 }
 
-/// Data folders named after a bundle id that no app has any more (docs/phase3-plan.md decision 5):
+/// Data folders named after a bundle id that no app has any more (docs/history/phase3-plan.md decision 5):
 /// - named like a bundle id, not `com.apple.*`;
 /// - no discovered app, running app or app LaunchServices knows (anywhere) shares its vendor;
 /// - nothing in it changed for 30 days.

@@ -9,7 +9,7 @@ import { pressable } from "../motion/variants";
 import { useApp } from "../store/app";
 import { MiddleEllipsis } from "./home/MiddleEllipsis";
 
-// Large & Old (docs/phase3-plan.md §5): the biggest files in the home folder with last use, and
+// Large & Old (docs/history/phase3-plan.md §5): the biggest files in the home folder with last use, and
 // Duplicates, where the user picks the copy to keep. Nothing is ticked until the user ticks it,
 // including rows whose date says "approx". Copies in Documents, Desktop or iCloud Drive are
 // never suggested. Documents and Desktop open the full caution sheet; iCloud Drive keeps the
