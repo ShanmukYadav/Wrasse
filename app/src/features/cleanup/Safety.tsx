@@ -1,6 +1,6 @@
-import { Icon } from "../design/icons/Icon";
-import type { Safety } from "../design/tokens";
-import { t } from "../i18n";
+import { Icon } from "../../design/icons/Icon";
+import type { Safety } from "../../design/tokens";
+import { t } from "../../i18n";
 
 // Always icon + text, never color alone.
 export function SafetyLabel({ safety }: { safety: Safety }) {

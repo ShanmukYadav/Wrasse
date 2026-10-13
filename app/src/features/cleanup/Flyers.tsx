@@ -1,8 +1,8 @@
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { d1 } from "../design/tokens";
-import { ease, mapMotion } from "../motion/tokens";
-import { useApp, type Flight } from "../store/app";
+import { d1 } from "../../design/tokens";
+import { ease, mapMotion } from "../../motion/tokens";
+import { useApp, type Flight } from "../../store/app";
 
 // Quarantined blocks lift, shrink and fly into the tray icon.
 export function Flyers() {

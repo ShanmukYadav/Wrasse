@@ -7,7 +7,7 @@ import { formatBytes } from "../../lib/format";
 import { useScheme } from "../../lib/prefs";
 import { duration, ease } from "../../motion/tokens";
 import { useApp } from "../../store/app";
-import { SafetyLabel } from "../../ui/Safety";
+import { SafetyLabel } from "../cleanup/Safety";
 import { Icon } from "../../design/icons/Icon";
 import { iconFor, toneFor } from "../../design/icons/semantic";
 import { usedLabel } from "../../ui/modelLine";

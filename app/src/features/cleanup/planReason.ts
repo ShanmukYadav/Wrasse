@@ -1,5 +1,5 @@
-import type { Disk, DiskNode, FreeWhy } from "../api";
-import { t } from "../i18n";
+import type { Disk, DiskNode, FreeWhy } from "../../api";
+import { t } from "../../i18n";
 
 /** Why the planner picked an item, in one short line. */
 export function planReason(disk: Disk, n: DiskNode, why?: FreeWhy): string {

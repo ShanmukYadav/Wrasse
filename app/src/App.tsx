@@ -4,20 +4,20 @@ import { DevBadge } from "./shared/DevBadge";
 import { applyTokens, onSystemSchemeChange } from "./design/apply";
 import { useReducedMotion, useScheme } from "./lib/prefs";
 import { boot, useApp } from "./store/app";
-import { Flyers } from "./ui/Flyers";
+import { Flyers } from "./features/cleanup/Flyers";
 import { Header } from "./features/home/Header";
 import { Home } from "./features/home/Home";
 import { LensBar } from "./features/browse/LensBar";
 import { ListView } from "./features/browse/ListView";
-import { SelectionBar } from "./ui/SelectionBar";
-import { QuarantineTray } from "./ui/QuarantineTray";
+import { SelectionBar } from "./features/cleanup/SelectionBar";
+import { QuarantineTray } from "./features/cleanup/QuarantineTray";
 import { Toast } from "./shared/Toast";
 import { deferred } from "./shared/Deferred";
 
 // Closed at launch: loaded on first use (see ui/Deferred.tsx).
 const DesignPage = deferred(() => import("./ui/DesignPage").then((m) => m.DesignPage), (s) => s.overlay === "design");
 const DetailPanel = deferred(() => import("./features/browse/DetailPanel").then((m) => m.DetailPanel), (s) => s.detailOpen || s.selected !== null);
-const CautionSheet = deferred(() => import("./ui/CautionSheet").then((m) => m.CautionSheet), (s) => s.confirmDelete !== null || s.fileCaution !== null);
+const CautionSheet = deferred(() => import("./features/cleanup/CautionSheet").then((m) => m.CautionSheet), (s) => s.confirmDelete !== null || s.fileCaution !== null);
 const Onboarding = deferred(() => import("./ui/Onboarding").then((m) => m.Onboarding), (s) => s.overlay === "onboarding");
 const Overlays = deferred(() => import("./ui/Overlays").then((m) => m.Overlays), (s) => s.overlay !== null && s.overlay !== "design" && s.overlay !== "onboarding");
 const UninstallSheet = deferred(() => import("./ui/UninstallSheet").then((m) => m.UninstallSheet), (s) => s.uninstall !== null);

@@ -8,7 +8,7 @@ import { useApp, type Plan } from "../store/app";
 import { Bytes } from "../shared/Bytes";
 import { iconFor } from "../design/icons/semantic";
 import { bytesText } from "../lib/format";
-import { planReason } from "./planReason";
+import { planReason } from "../features/cleanup/planReason";
 
 export function CommandBar() {
   const inputRef = useRef<HTMLInputElement>(null);

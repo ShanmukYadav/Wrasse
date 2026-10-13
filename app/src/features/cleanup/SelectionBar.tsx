@@ -1,10 +1,10 @@
 import { AnimatePresence, motion } from "motion/react";
-import { Bytes } from "../shared/Bytes";
-import { Icon } from "../design/icons/Icon";
-import { t } from "../i18n";
-import { duration, ease, spring } from "../motion/tokens";
-import { pressable } from "../motion/variants";
-import { useApp } from "../store/app";
+import { Bytes } from "../../shared/Bytes";
+import { Icon } from "../../design/icons/Icon";
+import { t } from "../../i18n";
+import { duration, ease, spring } from "../../motion/tokens";
+import { pressable } from "../../motion/variants";
+import { useApp } from "../../store/app";
 
 // Replaces the lens bar while blocks are ticked: how many, how big, Delete (to the tray) or Clear.
 export function SelectionBar() {

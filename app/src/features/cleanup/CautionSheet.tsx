@@ -1,13 +1,13 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
-import { api, cautionFor, docsOrDesktop, strongest, type PathPreview, type RemovePreview, type ScannedFile } from "../api";
-import { Icon } from "../design/icons/Icon";
-import { iconFor, toneFor } from "../design/icons/semantic";
-import { t } from "../i18n";
-import { bytesText } from "../lib/format";
-import { duration, ease, spring } from "../motion/tokens";
-import { pressable } from "../motion/variants";
-import { useApp, type ConfirmKind } from "../store/app";
+import { api, cautionFor, docsOrDesktop, strongest, type PathPreview, type RemovePreview, type ScannedFile } from "../../api";
+import { Icon } from "../../design/icons/Icon";
+import { iconFor, toneFor } from "../../design/icons/semantic";
+import { t } from "../../i18n";
+import { bytesText } from "../../lib/format";
+import { duration, ease, spring } from "../../motion/tokens";
+import { pressable } from "../../motion/variants";
+import { useApp, type ConfirmKind } from "../../store/app";
 
 // Confirms a removal before it happens:
 // - "caution": OS folders (Documents, Desktop, …) and data marked Keep; needs "I understand".
