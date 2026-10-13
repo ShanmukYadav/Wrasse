@@ -34,7 +34,7 @@ code_protected=$(awk '/AUDIT-BEGIN macos-protected/{on=1;next} /AUDIT-END macos-
          if (path !~ /^\//) path = "~/" path; print kind " " path }')
 compare macos-protected "$code_protected"
 
-code_programs=$(sed -nE 's/^const READ_ONLY: \[&str; [0-9]+\] = \[(.*)\];$/\1/p' crates/wrasse-core/src/platform/macos/commands.rs |
+code_programs=$(sed -nE 's/^const READ_ONLY: \[&str; [0-9]+\] = \[(.*)\];$/\1/p' crates/wrasse-core/src/platform/macos/commands/mod.rs |
   tr ',' '\n' | sed -E 's/[[:space:]"]//g' | grep -v '^$')
 compare read-only-programs "$code_programs"
 
