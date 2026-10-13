@@ -2,7 +2,7 @@
 import type { IconName } from "../design/icons/nodes";
 import { iconFor, toneFor } from "../design/icons/semantic";
 import type { CategoryId, FilterId, Tone } from "../design/tokens";
-import { LENSES } from "../ui/lenses";
+import { LENSES } from "../features/browse/lenses";
 import { t } from "../i18n";
 import { formatBytes } from "../lib/format";
 import { api, MOCK_KEY, mockMode } from "../api";

@@ -6,7 +6,7 @@ import { t } from "../i18n";
 import type { AppInfo } from "../api/env";
 import { bytesText } from "../lib/format";
 import { mapMotion } from "../motion/tokens";
-import { showAllScope } from "../ui/scope";
+import { showAllScope } from "../features/browse/scope";
 
 export type Overlay = "onboarding" | "junk" | "startup" | "settings" | "audit" | "history" | "design" | "largeOld" | null;
 type ThemePref = "system" | "dark" | "light";

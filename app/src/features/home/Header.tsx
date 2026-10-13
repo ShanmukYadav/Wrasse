@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ancestors } from "../../api";
-import { activeFilters } from "../../ui/scope";
+import { activeFilters } from "../browse/scope";
 import { Bytes } from "../../shared/Bytes";
 import { Icon } from "../../design/icons/Icon";
 import { trafficLights } from "../../design/tokens";

@@ -2,7 +2,7 @@
 // Run: ./dev.sh node --experimental-strip-types app/tests/scope.test.ts (or npm test)
 import { LENS_BIT, type Disk, type DiskNode } from "../src/api/types.ts";
 import type { CategoryId, DiskFilters } from "../src/design/tokens";
-import { buttonBytes, buttonCount, scopeSummary, showAllScope, visibleRows } from "../src/ui/scope.ts";
+import { buttonBytes, buttonCount, scopeSummary, showAllScope, visibleRows } from "../src/features/browse/scope.ts";
 
 const AI = LENS_BIT.aiModels;
 const GREW = LENS_BIT.grew;

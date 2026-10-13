@@ -1,5 +1,5 @@
-import type { IconName } from "../design/icons/nodes";
-import type { CategoryId, FilterId, LensId } from "../design/tokens";
+import type { IconName } from "../../design/icons/nodes";
+import type { CategoryId, FilterId, LensId } from "../../design/tokens";
 
 export const CATEGORIES: { id: CategoryId; icon: IconName }[] = [
   { id: "all", icon: "all" },

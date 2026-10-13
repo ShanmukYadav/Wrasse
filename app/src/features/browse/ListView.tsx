@@ -1,16 +1,16 @@
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo, useRef, useState } from "react";
-import { lensColors } from "../design/tokens";
-import { t } from "../i18n";
-import { formatBytes } from "../lib/format";
-import { useScheme } from "../lib/prefs";
-import { duration, ease } from "../motion/tokens";
-import { useApp } from "../store/app";
-import { SafetyLabel } from "./Safety";
-import { Icon } from "../design/icons/Icon";
-import { iconFor, toneFor } from "../design/icons/semantic";
-import { usedLabel } from "./modelLine";
+import { lensColors } from "../../design/tokens";
+import { t } from "../../i18n";
+import { formatBytes } from "../../lib/format";
+import { useScheme } from "../../lib/prefs";
+import { duration, ease } from "../../motion/tokens";
+import { useApp } from "../../store/app";
+import { SafetyLabel } from "../../ui/Safety";
+import { Icon } from "../../design/icons/Icon";
+import { iconFor, toneFor } from "../../design/icons/semantic";
+import { usedLabel } from "../../ui/modelLine";
 import { ScopeEmpty } from "./ScopeEmpty";
 import { scopeBits, visibleRows } from "./scope";
 

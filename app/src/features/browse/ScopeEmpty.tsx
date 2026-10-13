@@ -1,5 +1,5 @@
-import { t } from "../i18n";
-import { useApp } from "../store/app";
+import { t } from "../../i18n";
+import { useApp } from "../../store/app";
 import { emptyMessageKey, scopeWhere } from "./scope";
 
 /** Shown when the current folder has no row for the active category and filters. */

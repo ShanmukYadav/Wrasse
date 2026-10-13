@@ -1,8 +1,8 @@
 // The rows a folder shows for the current category and filters, and the count on the See button.
 // Both come from here so they stay the same number. Parent `deep` bits are OR'd across children,
 // so two filters match only when one leaf carries every required bit.
-import { LENS_BIT, type Disk } from "../api/types.ts";
-import type { CategoryId, DiskFilters, FilterId } from "../design/tokens";
+import { LENS_BIT, type Disk } from "../../api/types.ts";
+import type { CategoryId, DiskFilters, FilterId } from "../../design/tokens";
 
 const EMPTY_KEY = {
   both: "scope.empty.both",

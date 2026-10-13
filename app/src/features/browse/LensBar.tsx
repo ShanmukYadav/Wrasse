@@ -1,12 +1,12 @@
 import { motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Icon } from "../design/icons/Icon";
-import type { CategoryId } from "../design/tokens";
-import { t } from "../i18n";
-import { bytesText } from "../lib/format";
-import { useReducedMotion } from "../lib/prefs";
-import { spring } from "../motion/tokens";
-import { useApp } from "../store/app";
+import { Icon } from "../../design/icons/Icon";
+import type { CategoryId } from "../../design/tokens";
+import { t } from "../../i18n";
+import { bytesText } from "../../lib/format";
+import { useReducedMotion } from "../../lib/prefs";
+import { spring } from "../../motion/tokens";
+import { useApp } from "../../store/app";
 import { CATEGORIES, FILTERS } from "./lenses";
 import { buttonBytes, buttonCount, filtersOn } from "./scope";
 

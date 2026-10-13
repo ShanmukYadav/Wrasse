@@ -1,17 +1,17 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, type CSSProperties } from "react";
-import { deletable, type DiskNode } from "../api";
-import { Icon } from "../design/icons/Icon";
-import { iconFor } from "../design/icons/semantic";
-import { categories } from "../design/tokens";
-import { t } from "../i18n";
-import { formatBytes } from "../lib/format";
-import { useScheme } from "../lib/prefs";
-import { duration, ease, spring } from "../motion/tokens";
-import { pressable } from "../motion/variants";
-import { useApp } from "../store/app";
-import { isDrillable } from "../features/home/nodes";
-import { loadedFor, toolName, usedLabel } from "./modelLine";
+import { deletable, type DiskNode } from "../../api";
+import { Icon } from "../../design/icons/Icon";
+import { iconFor } from "../../design/icons/semantic";
+import { categories } from "../../design/tokens";
+import { t } from "../../i18n";
+import { formatBytes } from "../../lib/format";
+import { useScheme } from "../../lib/prefs";
+import { duration, ease, spring } from "../../motion/tokens";
+import { pressable } from "../../motion/variants";
+import { useApp } from "../../store/app";
+import { isDrillable } from "../home/nodes";
+import { loadedFor, toolName, usedLabel } from "../../ui/modelLine";
 
 // Detail panel (D1): white glass, 330px, slides in from the right.
 export function DetailPanel() {
