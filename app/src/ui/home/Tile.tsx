@@ -6,7 +6,7 @@ import { iconFor } from "../../design/icons/semantic";
 import { categories, d1, type Scheme } from "../../design/tokens";
 import { useTilePaint } from "../../design/tilePaint";
 import { t } from "../../i18n";
-import { formatBytes, type UnitSystem } from "../../lib/format";
+import { bytesText, formatBytes, type UnitSystem } from "../../lib/format";
 import type { Cell } from "./gridLayout";
 import { modelCaption } from "../modelLine";
 import { matchesScope } from "../scope";
@@ -173,7 +173,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
                 {node.category === "files" ? t("home.moreFolders", { count: more.count }) : t("home.more", { count: more.count })}
               </span>
               {widthPx >= d1.tile.rowBarMinWidth && <SizeBar fraction={more.size / maxKid} />}
-              <span className="tile-row-size">{fmt(more.size, units)}</span>
+              <span className="tile-row-size">{bytesText(more.size, units)}</span>
             </span>
           )}
         </span>
@@ -232,7 +232,7 @@ function Row({ node, max, units, bar, dimmed }: { node: DiskNode; max: number; u
         {tag && <span className="tile-row-tag">{tag}</span>}
       </span>
       {bar && <SizeBar fraction={node.size / max} />}
-      <span className="tile-row-size">{fmt(node.size, units)}</span>
+      <span className="tile-row-size">{bytesText(node.size, units)}</span>
     </span>
   );
 }
@@ -272,9 +272,4 @@ function countKind(disk: Disk, id: number, kind: DiskNode["kind"]): number {
     else stack.push(...k.children);
   }
   return n;
-}
-
-function fmt(bytes: number, units: UnitSystem) {
-  const f = formatBytes(bytes, units);
-  return `${f.value} ${f.unit}`;
 }

@@ -24,3 +24,9 @@ export function formatBytes(bytes: number, system: UnitSystem): { value: string;
   const text = value < 100 ? value.toFixed(1).replace(/\.0$/, "") : value.toFixed(0);
   return { value: text, unit: UNITS[unit] };
 }
+
+/** "19.8 GB": the value and unit as one string. */
+export function bytesText(bytes: number, system: UnitSystem): string {
+  const f = formatBytes(bytes, system);
+  return `${f.value} ${f.unit}`;
+}

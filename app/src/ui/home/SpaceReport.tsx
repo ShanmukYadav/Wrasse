@@ -1,11 +1,6 @@
 import { t } from "../../i18n";
-import { formatBytes } from "../../lib/format";
+import { bytesText } from "../../lib/format";
 import { useApp } from "../../store/app";
-
-function sizeText(bytes: number, units: "decimal" | "binary") {
-  const f = formatBytes(bytes, units);
-  return `${f.value} ${f.unit}`;
-}
 
 /** Expected versus actual free space. Dashed, like the snapshot tile. No animation. */
 export function SpaceReportCard() {
@@ -14,7 +9,7 @@ export function SpaceReportCard() {
   const units = useApp((s) => s.info?.units ?? "decimal");
   const { requestDelete, requestEmptyTray, freeGhost } = useApp.getState();
   if (!report) return null;
-  const fmt = (n: number) => sizeText(n, units);
+  const fmt = (n: number) => bytesText(n, units);
   const trash = disk.nodes.find((n) => n.delegateAction === "emptyTrash" && n.size > 0);
   return (
     <section className="space-report" aria-label={t("space.title")}>

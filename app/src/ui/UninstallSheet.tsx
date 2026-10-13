@@ -5,7 +5,7 @@ import { attached } from "../api";
 import { iconFor } from "../design/icons/semantic";
 import { categories } from "../design/tokens";
 import { t } from "../i18n";
-import { formatBytes } from "../lib/format";
+import { bytesText } from "../lib/format";
 import { useScheme } from "../lib/prefs";
 import { duration, ease, spring } from "../motion/tokens";
 import { pressable } from "../motion/variants";
@@ -72,10 +72,7 @@ function Sheet({ appId }: { appId: number }) {
   const admin = app.app?.adminLeftovers ?? [];
   const ticked = leftovers.filter((l) => checked.has(l.id)).map((l) => l.id);
   const total = (bundle?.size ?? 0) + ticked.reduce((s, id) => s + disk.nodes[id].size, 0);
-  const fmt = (b: number) => {
-    const f = formatBytes(b, units);
-    return `${f.value} ${f.unit}`;
-  };
+  const fmt = (b: number) => bytesText(b, units);
   const c = categories[scheme][app.category];
   const removable = route.kind !== "notRemovable";
   const confirmLabel =

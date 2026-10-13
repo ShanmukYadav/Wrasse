@@ -4,7 +4,7 @@ import { systemScheme } from "../design/apply";
 import { categories, type CategoryId, type DiskFilters, type FilterId, type Scheme } from "../design/tokens";
 import { t } from "../i18n";
 import type { AppInfo } from "../api/env";
-import { formatBytes } from "../lib/format";
+import { bytesText } from "../lib/format";
 import { mapMotion } from "../motion/tokens";
 import { showAllScope } from "../ui/scope";
 
@@ -247,10 +247,7 @@ export const useApp = create<State & Actions>((set, get) => {
     get().notify(raw.match(PARTLY_DONE)?.[0] ?? raw);
     return null;
   };
-  const fmtBytes = (b: number) => {
-    const f = formatBytes(b, get().info?.units ?? "decimal");
-    return `${f.value} ${f.unit}`;
-  };
+  const fmtBytes = (b: number) => bytesText(b, get().info?.units ?? "decimal");
   function reportSkipped(skipped: number | { reason: string }[]) {
     const count = typeof skipped === "number" ? skipped : skipped.length;
     if (!count) return;

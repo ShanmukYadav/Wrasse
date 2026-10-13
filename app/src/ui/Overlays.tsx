@@ -2,7 +2,7 @@ import { Icon } from "../design/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Bytes } from "../components/Bytes";
-import { formatBytes } from "../lib/format";
+import { bytesText } from "../lib/format";
 import { t, type MessageKey } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
 import { api, type DiskNode, type JunkMatch, type JunkReport } from "../api";
@@ -291,10 +291,7 @@ function Junk() {
     });
   }, []);
   if (!report) return <p className="text-label text-muted">{t("junk.loading")}</p>;
-  const fmt = (b: number) => {
-    const f = formatBytes(b, units);
-    return `${f.value} ${f.unit}`;
-  };
+  const fmt = (b: number) => bytesText(b, units);
   const items = report.matches.filter((m) => !m.delegate);
   const groups = [...new Set(items.map((m) => m.ruleId))].map((id) => items.filter((m) => m.ruleId === id));
   const picked = items.filter((m) => !off.has(m.path));

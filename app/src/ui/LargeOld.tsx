@@ -4,7 +4,7 @@ import { api, docsOrDesktop, handPickPath, type BigFile, type DuplicateGroup, ty
 import { Icon } from "../design/icons/Icon";
 import type { IconName } from "../design/icons/nodes";
 import { t } from "../i18n";
-import { formatBytes } from "../lib/format";
+import { useFormatBytes } from "./useFormatBytes";
 import { pressable } from "../motion/variants";
 import { useApp } from "../store/app";
 import { MiddleEllipsis } from "./home/MiddleEllipsis";
@@ -29,14 +29,6 @@ const KIND_ICON: Record<FileKind, IconName> = {
 };
 const LARGE_MIN_KEY = "wrasse.largeMin";
 
-function useFmt() {
-  const units = useApp((s) => s.info?.units ?? "decimal");
-  return (b: number) => {
-    const f = formatBytes(b, units);
-    return `${f.value} ${f.unit}`;
-  };
-}
-
 export function LargeOld() {
   const [tab, setTab] = useState<"large" | "dupes">("large");
   return (
@@ -55,7 +47,7 @@ export function LargeOld() {
 }
 
 function Large() {
-  const fmt = useFmt();
+  const fmt = useFormatBytes();
   const moveFilesToTray = useApp((s) => s.moveFilesToTray);
   const openFileCaution = useApp((s) => s.openFileCaution);
   const [min, setMin] = useState<number>(() => {
@@ -212,7 +204,7 @@ function Large() {
 }
 
 function Dupes() {
-  const fmt = useFmt();
+  const fmt = useFormatBytes();
   const moveFilesToTray = useApp((s) => s.moveFilesToTray);
   const [groups, setGroups] = useState<DuplicateGroup[] | null>(null);
   const [running, setRunning] = useState(false);

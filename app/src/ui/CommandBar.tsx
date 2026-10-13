@@ -7,7 +7,7 @@ import { duration, ease, spring } from "../motion/tokens";
 import { useApp, type Plan } from "../store/app";
 import { Bytes } from "../components/Bytes";
 import { iconFor } from "../design/icons/semantic";
-import { formatBytes } from "../lib/format";
+import { bytesText } from "../lib/format";
 import { planReason } from "./planReason";
 
 export function CommandBar() {
@@ -150,10 +150,7 @@ function PlanMeter({ plan }: { plan: Plan }) {
   const disk = useApp((s) => s.disk);
   const tray = useApp((s) => s.tray);
   const units = useApp((s) => s.info?.units ?? "decimal");
-  const fmt = (b: number) => {
-    const f = formatBytes(b, units);
-    return `${f.value} ${f.unit}`;
-  };
+  const fmt = (b: number) => bytesText(b, units);
   // Apps that Homebrew or Finder remove open their uninstall sheet instead of going in bulk.
   // A tool's own cleanup (brew, Docker, simulators) confirms on its own and never goes to the tray.
   const routeOf = (id: number) => disk.nodes[id]?.app?.route.kind ?? "tray";

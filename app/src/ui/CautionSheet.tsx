@@ -4,7 +4,7 @@ import { api, cautionFor, docsOrDesktop, strongest, type PathPreview, type Remov
 import { Icon } from "../design/icons/Icon";
 import { iconFor, toneFor } from "../design/icons/semantic";
 import { t } from "../i18n";
-import { formatBytes } from "../lib/format";
+import { bytesText } from "../lib/format";
 import { duration, ease, spring } from "../motion/tokens";
 import { pressable } from "../motion/variants";
 import { useApp, type ConfirmKind } from "../store/app";
@@ -35,10 +35,7 @@ function Sheet({ ids, kind, handPicked }: { ids: number[]; kind: ConfirmKind; ha
   const [understood, setUnderstood] = useState(false);
   const [preview, setPreview] = useState<RemovePreview | null>(null);
   const items = ids.map((id) => disk.nodes[id]).filter(Boolean);
-  const fmt = (b: number) => {
-    const f = formatBytes(b, units);
-    return `${f.value} ${f.unit}`;
-  };
+  const fmt = (b: number) => bytesText(b, units);
 
   useEffect(() => {
     if (kind !== "caution" && kind !== "deleteNow") return;
@@ -187,10 +184,7 @@ function FileSheet({ files }: { files: ScannedFile[] }) {
   const { confirmFileCaution, cancelFileCaution } = useApp.getState();
   const [understood, setUnderstood] = useState(false);
   const [preview, setPreview] = useState<PathPreview | null>(null);
-  const fmt = (b: number) => {
-    const f = formatBytes(b, units);
-    return `${f.value} ${f.unit}`;
-  };
+  const fmt = (b: number) => bytesText(b, units);
   const allPersonal = files.every((f) => docsOrDesktop(f.path));
   const title = files.length === 1 ? t("caution.titleOne", { name: files[0].path.split("/").pop() ?? files[0].path }) : t("caution.titleMany", { count: files.length });
   const body = allPersonal ? t("caution.personal") : t("caution.personalSome");

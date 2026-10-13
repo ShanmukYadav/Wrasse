@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../design/icons/Icon";
 import type { CategoryId } from "../design/tokens";
 import { t } from "../i18n";
-import { formatBytes, type UnitSystem } from "../lib/format";
+import { bytesText } from "../lib/format";
 import { useReducedMotion } from "../lib/prefs";
 import { spring } from "../motion/tokens";
 import { useApp } from "../store/app";
@@ -56,7 +56,7 @@ export function LensBar() {
 
   if (selecting) return null;
 
-  const label = !filtering ? t("largeOld.showList") : empty ? t("scope.nothing") : t("lens.seeItems", { count, size: fmt(bytes, units) });
+  const label = !filtering ? t("largeOld.showList") : empty ? t("scope.nothing") : t("lens.seeItems", { count, size: bytesText(bytes, units) });
 
   const open = () => {
     if (empty) return;
@@ -178,7 +178,3 @@ function FilterMenu({
   );
 }
 
-function fmt(bytes: number, units: UnitSystem) {
-  const f = formatBytes(bytes, units);
-  return `${f.value} ${f.unit}`;
-}
