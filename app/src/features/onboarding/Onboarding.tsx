@@ -1,13 +1,13 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, type ReactNode } from "react";
-import { api } from "../api";
-import { BrandMark } from "../design/brand/BrandMark";
-import { Icon } from "../design/icons/Icon";
-import type { IconName } from "../design/icons/nodes";
-import { t } from "../i18n";
-import { duration, ease, spring } from "../motion/tokens";
-import { pressable } from "../motion/variants";
-import { useApp } from "../store/app";
+import { api } from "../../api";
+import { BrandMark } from "../../design/brand/BrandMark";
+import { Icon } from "../../design/icons/Icon";
+import type { IconName } from "../../design/icons/nodes";
+import { t } from "../../i18n";
+import { duration, ease, spring } from "../../motion/tokens";
+import { pressable } from "../../motion/variants";
+import { useApp } from "../../store/app";
 
 // First run (PLAN.md §6.17): what Wrasse does, no telemetry, Full Disk Access, then the scan.
 // The access status is the real check from the core; it re-checks when the window regains focus,
