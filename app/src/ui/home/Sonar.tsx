@@ -4,7 +4,7 @@ import { api } from "../../api";
 import { t } from "../../i18n";
 import { formatBytes } from "../../lib/format";
 import { useApp } from "../../store/app";
-import { MiddleEllipsis } from "./MiddleEllipsis";
+import { MiddleEllipsis } from "../../shared/MiddleEllipsis";
 import { SonarRings, type Bubble } from "./SonarRings";
 import { reef } from "../../design/tokens";
 import { useReducedMotion, useScheme } from "../../lib/prefs";

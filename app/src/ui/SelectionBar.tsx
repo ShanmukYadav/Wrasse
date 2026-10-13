@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "motion/react";
-import { Bytes } from "../components/Bytes";
+import { Bytes } from "../shared/Bytes";
 import { Icon } from "../design/icons/Icon";
 import { t } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";

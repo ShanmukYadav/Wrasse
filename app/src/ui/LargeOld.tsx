@@ -4,10 +4,10 @@ import { api, docsOrDesktop, handPickPath, type BigFile, type DuplicateGroup, ty
 import { Icon } from "../design/icons/Icon";
 import type { IconName } from "../design/icons/nodes";
 import { t } from "../i18n";
-import { useFormatBytes } from "./useFormatBytes";
+import { useFormatBytes } from "../shared/useFormatBytes";
 import { pressable } from "../motion/variants";
 import { useApp } from "../store/app";
-import { MiddleEllipsis } from "./home/MiddleEllipsis";
+import { MiddleEllipsis } from "../shared/MiddleEllipsis";
 
 // Large & Old (docs/history/phase3-plan.md §5): the biggest files in the home folder with last use, and
 // Duplicates, where the user picks the copy to keep. Nothing is ticked until the user ticks it,

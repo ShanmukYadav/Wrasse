@@ -1,7 +1,7 @@
 import { Icon } from "../design/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { Bytes } from "../components/Bytes";
+import { Bytes } from "../shared/Bytes";
 import { bytesText } from "../lib/format";
 import { t, type MessageKey } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
@@ -11,7 +11,7 @@ import { iconFor } from "../design/icons/semantic";
 import { LargeOld } from "./LargeOld";
 import { categories } from "../design/tokens";
 import { useScheme } from "../lib/prefs";
-import { MiddleEllipsis } from "./home/MiddleEllipsis";
+import { MiddleEllipsis } from "../shared/MiddleEllipsis";
 
 export function Overlays() {
   const overlay = useApp((s) => s.overlay);

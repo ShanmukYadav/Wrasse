@@ -1,6 +1,6 @@
 import { MotionConfig } from "motion/react";
 import { useEffect } from "react";
-import { DevBadge } from "./components/DevBadge";
+import { DevBadge } from "./shared/DevBadge";
 import { applyTokens, onSystemSchemeChange } from "./design/apply";
 import { useReducedMotion, useScheme } from "./lib/prefs";
 import { boot, useApp } from "./store/app";
@@ -11,8 +11,8 @@ import { LensBar } from "./ui/LensBar";
 import { ListView } from "./ui/ListView";
 import { SelectionBar } from "./ui/SelectionBar";
 import { QuarantineTray } from "./ui/QuarantineTray";
-import { Toast } from "./ui/Toast";
-import { deferred } from "./ui/Deferred";
+import { Toast } from "./shared/Toast";
+import { deferred } from "./shared/Deferred";
 
 // Closed at launch: loaded on first use (see ui/Deferred.tsx).
 const DesignPage = deferred(() => import("./ui/DesignPage").then((m) => m.DesignPage), (s) => s.overlay === "design");

@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { ancestors } from "../../api";
 import { activeFilters } from "../scope";
-import { Bytes } from "../../components/Bytes";
+import { Bytes } from "../../shared/Bytes";
 import { Icon } from "../../design/icons/Icon";
 import { trafficLights } from "../../design/tokens";
 import { t } from "../../i18n";

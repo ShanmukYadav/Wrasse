@@ -2,13 +2,13 @@ import { Icon } from "../design/icons/Icon";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { useEffect, useRef } from "react";
 import type { TrayItem } from "../api";
-import { Bytes } from "../components/Bytes";
+import { Bytes } from "../shared/Bytes";
 import { t } from "../i18n";
 import { formatBytes } from "../lib/format";
 import { duration, ease, spring } from "../motion/tokens";
 import { pressable } from "../motion/variants";
 import { trayBytes, useApp } from "../store/app";
-import { MiddleEllipsis } from "./home/MiddleEllipsis";
+import { MiddleEllipsis } from "../shared/MiddleEllipsis";
 
 const DAY = 86_400_000;
 

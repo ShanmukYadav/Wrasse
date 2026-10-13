@@ -5,7 +5,7 @@ import { suggest } from "../command/commands";
 import { t } from "../i18n";
 import { duration, ease, spring } from "../motion/tokens";
 import { useApp, type Plan } from "../store/app";
-import { Bytes } from "../components/Bytes";
+import { Bytes } from "../shared/Bytes";
 import { iconFor } from "../design/icons/semantic";
 import { bytesText } from "../lib/format";
 import { planReason } from "./planReason";
