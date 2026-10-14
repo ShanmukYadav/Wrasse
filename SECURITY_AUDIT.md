@@ -20,10 +20,15 @@ pre-commit hook), so this file can't drift from what Wrasse actually does.
 - **The tray first.** By default items go to the quarantine tray
   (`~/Library/Application Support/com.shanmukyadav.wrasse/Quarantine`, same disk, so a move is a
   rename). Each move is written to the batch's manifest before it happens and marked done after;
-  a half-finished batch is repaired at the next launch. Items stay restorable for 7 days or until
-  "Empty now".
+  a half-finished batch is repaired at the next launch. Items stay restorable for 7 days (1–30,
+  set in Settings) or until "Empty now".
 - **Not undoable, said up front.** "Delete now" (only for items labeled Safe), "Empty tray" and
   "Empty Trash" always ask first and say "Not undoable".
+- **Remove all Wrasse data** (Settings) deletes only Wrasse's own data folder
+  (`safety::remove_own_data`): the tray, scan cache and tree, logs, settings, the Never touch list
+  and custom rules. It first shows the folder, its size and what's in the tray, says "Not
+  undoable", and refuses any folder that doesn't hold Wrasse's tray or that contains the home
+  folder.
 - **Dry run.** Development builds start every launch in dry run: actions report what they'd do
   and change nothing. With dry run off the DEV badge turns into a red LIVE badge.
 - **Audit log.** Every action, skip and failure is appended to

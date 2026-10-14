@@ -29,7 +29,7 @@ pub use check::prepare;
 use check::*;
 pub use delegate::*;
 use remove::*;
-pub use remove::{purge, remove, restore};
+pub use remove::{purge, remove, remove_own_data, restore, OwnData};
 
 use crate::platform::{self, Protected, Protection};
 use crate::quarantine::Quarantine;

@@ -331,3 +331,14 @@
   background: var(--c-glass-strong);
   box-shadow: var(--shadow-pill);
 }
+.settings-path {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.settings-danger {
+  padding-top: 8px;
+}
+.switch:disabled {
+  opacity: var(--d1-dimmed);
+  cursor: default;
+}

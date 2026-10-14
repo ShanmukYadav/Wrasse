@@ -5,6 +5,7 @@
 //! - `quarantine`: the tray
 //! - `rules`: junk rule packs
 //! - `features`: apps, developer junk, diagnostics, files, AI models, Free Up Space
+//! - `settings`: what the owner sets in the app (tray keep days)
 //! - `platform`: everything OS-specific
 
 pub mod features;
@@ -15,6 +16,7 @@ pub mod rules;
 pub mod safety;
 pub mod scan;
 pub mod session;
+pub mod settings;
 
 pub use features::{apps, devjunk, diagnostics, files, llm, rank};
 

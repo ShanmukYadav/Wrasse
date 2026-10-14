@@ -11,8 +11,8 @@
 //! AppleScript: it sends the Dock's polite quit and never signals the app.
 
 mod appkit;
-pub use appkit::quit_app;
 use appkit::*;
+pub use appkit::{login_item_enabled, quit_app, reveal, set_login_item};
 
 use std::ffi::{c_char, c_void, CStr, CString};
 use std::io::{self, Read};

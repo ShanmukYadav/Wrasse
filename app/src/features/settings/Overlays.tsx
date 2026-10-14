@@ -3,12 +3,13 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Bytes } from "../../shared/Bytes";
 import { bytesText } from "../../lib/format";
-import { t, type MessageKey } from "../../i18n";
+import { t } from "../../i18n";
 import { duration, ease, spring } from "../../motion/tokens";
 import { api, type DiskNode, type JunkMatch, type JunkReport } from "../../api";
 import { useApp, type DeletedEntry, type Overlay } from "../../store/app";
 import { iconFor } from "../../design/icons/semantic";
 import { LargeOld } from "../large-old/LargeOld";
+import { Segmented, Settings, Switch } from "./Settings";
 import { categories } from "../../design/tokens";
 import { useScheme } from "../../lib/prefs";
 import { MiddleEllipsis } from "../../shared/MiddleEllipsis";
@@ -113,56 +114,6 @@ function Startup() {
       ))}
       <p className="text-caption text-muted">{t("startup.mock")}</p>
     </ul>
-  );
-}
-
-function Switch({ checked, label, onChange }: { checked: boolean; label: string; onChange: (v: boolean) => void }) {
-  return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`switch focus-ring ${checked ? "is-on" : ""}`} onClick={() => onChange(!checked)}>
-      <motion.span className="switch-knob" animate={{ x: checked ? 16 : 0 }} transition={spring.snappy} />
-    </button>
-  );
-}
-
-function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: [T, MessageKey][]; onChange: (v: T) => void; label: string }) {
-  return (
-    <div className="segmented" role="radiogroup" aria-label={label}>
-      {options.map(([v, key]) => (
-        <button key={v} type="button" role="radio" aria-checked={value === v} className="segment focus-ring" onClick={() => onChange(v)}>
-          {value === v && <motion.span layoutId={`seg-${label}`} className="segment-indicator" transition={spring.soft} aria-hidden />}
-          <span className="relative">{t(key)}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function Settings() {
-  const s = useApp();
-  return (
-    <div className="flex flex-col gap-4">
-      <Setting title={t("settings.theme")}>
-        <Segmented label="theme" value={s.theme} onChange={(theme) => s.setPrefs({ theme })} options={[["system", "settings.system"], ["dark", "settings.night"], ["light", "settings.day"]]} />
-      </Setting>
-      <Setting title={t("settings.motion")}>
-        <Segmented label="motion" value={s.motion} onChange={(motion) => s.setPrefs({ motion })} options={[["system", "settings.system"], ["reduce", "settings.reduce"], ["full", "settings.full"]]} />
-      </Setting>
-      <Setting title={t("settings.dryRun")} note={t("settings.dryRunNote")}>
-        <Switch checked={s.dryRun} label={t("settings.dryRun")} onChange={(on) => s.setDryRun(on)} />
-      </Setting>
-    </div>
-  );
-}
-
-function Setting({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
-  return (
-    <div className="row">
-      <div className="flex flex-col">
-        <span className="text-label text-strong">{title}</span>
-        {note && <span className="text-caption text-muted">{note}</span>}
-      </div>
-      {children}
-    </div>
   );
 }
 

@@ -47,7 +47,7 @@ pub fn init(app: &AppHandle) {
             let _ = ctx.quarantine.reconcile();
             let _ = ctx
                 .quarantine
-                .purge_older_than(quarantine::DEFAULT_KEEP_DAYS);
+                .purge_older_than(wrasse_core::settings::load(&data).keep_days);
             let _ = platform::exclude_from_backups(&data);
             if let Ok(mut slot) = app.state::<CleanupState>().ctx.lock() {
                 *slot = Some(ctx);
@@ -177,7 +177,7 @@ pub fn cleanup_status(state: State<'_, CleanupState>) -> Result<Status, String> 
             dry_run: state.dry_run.load(Ordering::Relaxed),
             dev: cfg!(debug_assertions),
             tray: tray(ctx),
-            keep_days: quarantine::DEFAULT_KEEP_DAYS,
+            keep_days: wrasse_core::settings::load(&ctx.data_dir).keep_days,
             log_path: Some(ctx.audit.path().to_path_buf()),
         })
     })

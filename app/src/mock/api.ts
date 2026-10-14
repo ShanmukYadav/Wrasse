@@ -10,6 +10,8 @@ import { detach, reattach, zeroOut } from "../api/tree";
 const progressListeners = new Set<(p: ScanProgress) => void>();
 const emit = (p: ScanProgress) => progressListeners.forEach((l) => l(p));
 
+let mockKeepDays = 7;
+let mockLoginItem: boolean | null = false;
 let mockNeverTouch: string[] = [];
 
 /** The mock's stand-in for the core's checks: blocked items stay; Delete now only for Safe. */
@@ -121,6 +123,28 @@ export const mockApi: WrasseApi = {
   async neverTouch(path, on) {
     mockNeverTouch = on ? [...new Set([...mockNeverTouch, path])] : mockNeverTouch.filter((p) => p !== path);
     return mockNeverTouch;
+  },
+  async neverTouchList() {
+    return mockNeverTouch;
+  },
+  async settings() {
+    return { keepDays: mockKeepDays, loginItem: mockLoginItem, rulesFolder: "~/Library/Application Support/Wrasse/rules/custom", dataFolder: "~/Library/Application Support/Wrasse" };
+  },
+  async setKeepDays(days) {
+    mockKeepDays = Math.min(30, Math.max(1, Math.round(days)));
+    return mockKeepDays;
+  },
+  async setLoginItem(on) {
+    mockLoginItem = on;
+    return mockLoginItem;
+  },
+  async reveal() {},
+  async openRulesFolder() {},
+  async ownDataPreview() {
+    return { folder: "~/Library/Application Support/Wrasse", bytes: 9.4e6, trayBytes: 0, trayItems: 0, dryRun: true };
+  },
+  async removeOwnData() {
+    return { folder: "~/Library/Application Support/Wrasse", bytes: 9.4e6, trayBytes: 0, trayItems: 0, dryRun: false };
   },
   async thinSnapshots(disk) {
     zeroOut(disk, disk.ghostId);

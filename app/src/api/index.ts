@@ -3,7 +3,7 @@
 // outside src/api and src/mock may import from src/mock.
 import { inTauri, type AppInfo } from "./env";
 import { tauriApi } from "./tauri";
-import type { CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, SpaceReport } from "./types";
+import type { OwnData, SettingsView, CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, SpaceReport } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -48,6 +48,22 @@ export interface WrasseApi {
   junk(): Promise<JunkReport>;
   /** Adds or removes a "Never touch" path; resolves to the whole list. */
   neverTouch(path: string, on: boolean): Promise<string[]>;
+  /** The whole "Never touch" list. */
+  neverTouchList(): Promise<string[]>;
+  /** Settings the core keeps, the login item, the custom rules and data folders. */
+  settings(): Promise<SettingsView>;
+  /** How many days batches stay in the tray (1–30); resolves to the saved value. */
+  setKeepDays(days: number): Promise<number>;
+  /** Turns Wrasse's login item on or off; resolves to what macOS now reports. */
+  setLoginItem(on: boolean): Promise<boolean | null>;
+  /** Shows a file or folder selected in the file manager. Read-only. */
+  reveal(path: string): Promise<void>;
+  /** Creates the custom rules folder if needed and shows it. */
+  openRulesFolder(): Promise<void>;
+  /** What "Remove all Wrasse data" would remove. Read-only. */
+  ownDataPreview(): Promise<OwnData>;
+  /** Removes Wrasse's own data, the tray included. Not undoable. */
+  removeOwnData(): Promise<OwnData>;
   /** Thins local Time Machine snapshots, freeing the "held by snapshots" space. */
   thinSnapshots(disk: Disk): Promise<Disk>;
   /** Free space, purgeable space, snapshots, Trash and the tray. Read-only. */

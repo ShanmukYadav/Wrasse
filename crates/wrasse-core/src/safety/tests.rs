@@ -560,3 +560,47 @@ fn fixture_home_clean_and_restore_is_byte_identical() {
     assert_eq!(snapshot(&h), before);
     crate::platform::remove_test_dir(&base);
 }
+
+#[test]
+fn remove_own_data_empties_the_data_folder_only() {
+    let (base, ctx) = setup("owndata");
+    // Something in the tray, a saved scan, settings and a Never touch entry.
+    let plan = prepare(
+        &ctx,
+        &[req(ctx.home.join("Downloads/old.dmg"), Safety::YourCall)],
+        Mode::Quarantine,
+    );
+    remove(&ctx, &plan, false).unwrap();
+    fs::write(ctx.data_dir.join("scan-cache.json"), b"{}").unwrap();
+    crate::settings::save(&ctx.data_dir, crate::settings::Settings { keep_days: 3 }).unwrap();
+
+    let preview = remove_own_data(&ctx, true).unwrap();
+    assert_eq!(preview.tray_items, 1);
+    assert!(preview.tray_bytes >= 3000 && preview.bytes >= preview.tray_bytes);
+    assert!(
+        ctx.data_dir.join("scan-cache.json").exists(),
+        "dry run removes nothing"
+    );
+
+    let done = remove_own_data(&ctx, false).unwrap();
+    assert!(done.bytes > 0);
+    assert_eq!(
+        fs::read_dir(&ctx.data_dir).unwrap().count(),
+        0,
+        "data folder empty"
+    );
+    // The home folder is untouched (the tray item is gone for good, as the sheet says).
+    assert!(ctx.home.join("Documents/report.pdf").exists());
+    assert!(!ctx.home.join("Downloads/old.dmg").exists());
+    crate::platform::remove_test_dir(&base);
+}
+
+#[test]
+fn remove_own_data_refuses_a_folder_that_isnt_wrasses() {
+    let (base, mut ctx) = setup("notours");
+    ctx.data_dir = ctx.home.join("Downloads");
+    let err = remove_own_data(&ctx, false).unwrap_err();
+    assert_eq!(err.kind(), io::ErrorKind::PermissionDenied);
+    assert!(ctx.home.join("Downloads/old.dmg").exists());
+    crate::platform::remove_test_dir(&base);
+}

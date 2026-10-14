@@ -36,9 +36,9 @@ The plan is to measure each step and keep only the ones that help:
 
 1. **Measure the heap.** Take a heap snapshot in a dev build, and record what the scan tree, the
    store, React and the libraries hold.
-2. **Smaller JavaScript.** The icon chunk is 185 kB for about 45 icons, so most of the lucide
-   set seems to ship (to confirm). Bundle only the shapes used. Check what `motion` and React DOM
-   cost at idle.
+2. **Smaller JavaScript.** Check what `motion`, React DOM and the app's own code cost at idle.
+   (Checked 2026-10-14: the 185 kB "Icon" chunk is mostly React DOM, which the bundler put in
+   that chunk; the icons are only the ~45 used.)
 3. **Less data in the page.** The UI keeps the whole pruned tree in JavaScript. Keep only the
    levels on screen and fetch the rest on demand from the core, which already holds the tree.
 4. **The 252 MB launch.** That launch's app process reached 46 MB at the scan (usually 21–30 MB).

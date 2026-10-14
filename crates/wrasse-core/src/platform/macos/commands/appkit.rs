@@ -1,5 +1,6 @@
-//! AppKit through the Objective-C runtime: asking an app to quit (never forcing it) and reading
-//! the volume's capacities. No other Objective-C calls.
+//! AppKit through the Objective-C runtime: asking an app to quit (never forcing it), reading the
+//! volume's capacities, revealing a file in Finder, and Wrasse's own login item. No other
+//! Objective-C calls.
 
 use super::*;
 
@@ -96,6 +97,9 @@ pub(super) unsafe fn request_quit_in_pool(bundle_id: *const c_char) -> io::Resul
 #[link(name = "AppKit", kind = "framework")]
 extern "C" {}
 
+#[link(name = "ServiceManagement", kind = "framework")]
+extern "C" {}
+
 #[link(name = "objc")]
 extern "C" {
     fn objc_getClass(name: *const c_char) -> *mut c_void;
@@ -166,6 +170,119 @@ pub(super) unsafe fn msg_id_err(
     ) -> *mut c_void;
     let f: F = std::mem::transmute(objc_msgSend as *const ());
     f(recv, sel, arg, err)
+}
+
+unsafe fn msg_id_id_bool(
+    recv: *mut c_void,
+    sel: *mut c_void,
+    a: *mut c_void,
+    b: *mut c_void,
+) -> bool {
+    type F = unsafe extern "C" fn(*mut c_void, *mut c_void, *mut c_void, *mut c_void) -> u8;
+    let f: F = std::mem::transmute(objc_msgSend as *const ());
+    f(recv, sel, a, b) != 0
+}
+
+unsafe fn msg_err_bool(recv: *mut c_void, sel: *mut c_void, err: *mut *mut c_void) -> bool {
+    type F = unsafe extern "C" fn(*mut c_void, *mut c_void, *mut *mut c_void) -> u8;
+    let f: F = std::mem::transmute(objc_msgSend as *const ());
+    f(recv, sel, err) != 0
+}
+
+unsafe fn ns_string(nsstring: *mut c_void, text: &CStr) -> *mut c_void {
+    msg_cstr(nsstring, sel(c"stringWithUTF8String:"), text.as_ptr())
+}
+
+/// Shows `path` selected in a Finder window (`NSWorkspace selectFile:inFileViewerRootedAtPath:`).
+/// Read-only: Finder opens a window; nothing is moved or opened.
+pub fn reveal(path: &Path) -> io::Result<()> {
+    let c = CString::new(path.as_os_str().as_encoded_bytes())
+        .map_err(|_| io::Error::from(io::ErrorKind::InvalidInput))?;
+    // SAFETY: called with live C strings inside an autorelease pool.
+    let shown = unsafe {
+        let pool = objc_autoreleasePoolPush();
+        let workspace_class = objc_getClass(c"NSWorkspace".as_ptr());
+        let nsstring = objc_getClass(c"NSString".as_ptr());
+        let shown = if workspace_class.is_null() || nsstring.is_null() {
+            false
+        } else {
+            let workspace = msg0(workspace_class, sel(c"sharedWorkspace"));
+            let file = ns_string(nsstring, &c);
+            let root = ns_string(nsstring, c"");
+            !workspace.is_null()
+                && !file.is_null()
+                && msg_id_id_bool(
+                    workspace,
+                    sel(c"selectFile:inFileViewerRootedAtPath:"),
+                    file,
+                    root,
+                )
+        };
+        objc_autoreleasePoolPop(pool);
+        shown
+    };
+    if shown {
+        Ok(())
+    } else {
+        Err(io::Error::other("Finder couldn't show it"))
+    }
+}
+
+unsafe fn msg0(recv: *mut c_void, sel: *mut c_void) -> *mut c_void {
+    type F = unsafe extern "C" fn(*mut c_void, *mut c_void) -> *mut c_void;
+    let f: F = std::mem::transmute(objc_msgSend as *const ());
+    f(recv, sel)
+}
+
+/// Whether Wrasse opens at login (`SMAppService.mainAppService`, macOS 13+). `None` when the
+/// service isn't available (older macOS, or a build that isn't an app bundle).
+pub fn login_item_enabled() -> Option<bool> {
+    // SAFETY: class lookups and a status read inside an autorelease pool.
+    unsafe {
+        let pool = objc_autoreleasePoolPush();
+        let class = objc_getClass(c"SMAppService".as_ptr());
+        let out = if class.is_null() {
+            None
+        } else {
+            let service = msg0(class, sel(c"mainAppService"));
+            // SMAppServiceStatusEnabled = 1.
+            (!service.is_null()).then(|| msg_u64(service, sel(c"status")) == 1)
+        };
+        objc_autoreleasePoolPop(pool);
+        out
+    }
+}
+
+/// Turns Wrasse's own login item on or off. Only ever called from the Settings switch.
+pub fn set_login_item(on: bool) -> io::Result<()> {
+    // SAFETY: as above; the error out-pointer is only read as "set or not".
+    let ok = unsafe {
+        let pool = objc_autoreleasePoolPush();
+        let class = objc_getClass(c"SMAppService".as_ptr());
+        let ok = if class.is_null() {
+            false
+        } else {
+            let service = msg0(class, sel(c"mainAppService"));
+            let mut err: *mut c_void = std::ptr::null_mut();
+            let s = if on {
+                sel(c"registerAndReturnError:")
+            } else {
+                sel(c"unregisterAndReturnError:")
+            };
+            !service.is_null() && msg_err_bool(service, s, &mut err)
+        };
+        objc_autoreleasePoolPop(pool);
+        ok
+    };
+    if ok {
+        Ok(())
+    } else {
+        Err(io::Error::other(if on {
+            "macOS didn't add Wrasse to your login items"
+        } else {
+            "macOS didn't remove Wrasse from your login items"
+        }))
+    }
 }
 
 /// NSURL volume capacity keys. The Data volume is where the user's files live; `/` is

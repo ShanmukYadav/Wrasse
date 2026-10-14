@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, type CSSProperties } from "react";
-import { deletable, type DiskNode } from "../../api";
+import { api, deletable, type DiskNode } from "../../api";
 import { Icon } from "../../design/icons/Icon";
 import { iconFor } from "../../design/icons/semantic";
 import { categories } from "../../design/tokens";
@@ -178,9 +178,23 @@ function Detail({ id }: { id: number }) {
                 {t("detail.zoomIn")}
               </motion.button>
             )}
-            <button type="button" className="link detail-link focus-ring" onClick={() => notify(t("detail.revealToast", { app: fileManager }))}>
+            <button type="button" className="link detail-link focus-ring" onClick={() => void api.reveal(n.path).catch((e) => notify(String(e)))}>
               {t("detail.reveal", { app: fileManager })}
             </button>
+            {!blocked && (
+              <button
+                type="button"
+                className="link detail-link focus-ring"
+                onClick={() =>
+                  void api
+                    .neverTouch(n.path, true)
+                    .then(() => notify(t("detail.neverTouchToast")))
+                    .catch((e) => notify(String(e)))
+                }
+              >
+                {t("detail.neverTouch")}
+              </button>
+            )}
             {blocked && <p className="text-caption text-muted">{t("detail.keepNote")}</p>}
           </>
         )}

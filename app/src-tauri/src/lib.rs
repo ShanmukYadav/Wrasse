@@ -3,6 +3,7 @@
 mod cleanup;
 mod files;
 mod scanning;
+mod settings;
 
 use serde::Serialize;
 use tauri::Manager;
@@ -108,7 +109,14 @@ pub fn run() {
             files::large_files,
             files::find_duplicates,
             files::cancel_duplicates,
-            files::remove_duplicates
+            files::remove_duplicates,
+            settings::settings_get,
+            settings::set_keep_days,
+            settings::set_login_item,
+            settings::reveal,
+            settings::open_rules_folder,
+            settings::own_data_preview,
+            settings::remove_own_data
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

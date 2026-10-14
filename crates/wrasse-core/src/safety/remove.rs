@@ -207,3 +207,55 @@ pub fn purge(ctx: &Context, ids: &[String], dry_run: bool) -> io::Result<u64> {
     );
     Ok(bytes)
 }
+
+/// What "Remove all Wrasse data" removes (Settings): everything in Wrasse's own data folder.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnData {
+    /// The data folder.
+    pub folder: PathBuf,
+    /// Everything in it, the tray included.
+    pub bytes: u64,
+    /// The tray's share: items there can't be restored afterwards.
+    pub tray_bytes: u64,
+    pub tray_items: usize,
+    pub dry_run: bool,
+}
+
+/// Removes Wrasse's own data: empties the tray, then deletes everything in the data folder (scan
+/// cache, scan tree, logs, settings, Never touch list, custom rules). Not undoable. Refuses a
+/// folder that isn't Wrasse's (it must hold the tray folder) or that holds the home folder.
+pub fn remove_own_data(ctx: &Context, dry_run: bool) -> io::Result<OwnData> {
+    let _one = OPERATION
+        .lock()
+        .map_err(|_| io::Error::other("another cleanup is running"))?;
+    let dir = &ctx.data_dir;
+    if !dir.join("Quarantine").is_dir() || ctx.home.starts_with(dir) || dir == Path::new("/") {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("{} isn't Wrasse's data folder", dir.display()),
+        ));
+    }
+    let stored = ctx.quarantine.stored();
+    let mut out = OwnData {
+        folder: dir.clone(),
+        bytes: crate::quarantine::size_on_disk(dir),
+        tray_bytes: stored.iter().map(|(_, e)| e.bytes).sum(),
+        tray_items: stored.len(),
+        dry_run,
+    };
+    if dry_run {
+        return Ok(out);
+    }
+    let ids: Vec<String> = stored.iter().map(|(_, e)| e.id.clone()).collect();
+    ctx.quarantine.purge(&ids)?;
+    for entry in fs::read_dir(dir)?.flatten() {
+        let path = entry.path();
+        let is_dir = entry.file_type().is_ok_and(|t| t.is_dir());
+        delete(&path, is_dir)?;
+    }
+    out.bytes = out
+        .bytes
+        .saturating_sub(crate::quarantine::size_on_disk(dir));
+    Ok(out)
+}

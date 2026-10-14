@@ -6,7 +6,7 @@ import type { WrasseApi } from ".";
 import type { AppInfo } from "./env";
 import { insights } from "./insights";
 import { detach, detachedRoots, reattach } from "./tree";
-import type { Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, ModelMeta } from "./types";
+import type { OwnData, SettingsView, Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, ModelMeta } from "./types";
 
 type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean; scanned?: { bytes: number; mtime: number } };
 type CoreReport = { done: { path: string; bytes: number; entry: string | null }[]; skipped: { path: string; reason: SkipReason }[]; bytes: number; dryRun: boolean };
@@ -174,6 +174,14 @@ export const tauriApi: WrasseApi = {
   setDryRun: (on) => invoke("set_dry_run", { on }),
   junk: () => invoke<JunkReport>("junk_report"),
   neverTouch: (path, on) => invoke<string[]>("never_touch", { path, on }),
+  neverTouchList: () => invoke<string[]>("never_touch_list"),
+  settings: () => invoke<SettingsView>("settings_get"),
+  setKeepDays: (days) => invoke<number>("set_keep_days", { days }),
+  setLoginItem: (on) => invoke<boolean | null>("set_login_item", { on }),
+  reveal: (path) => invoke("reveal", { path }),
+  openRulesFolder: () => invoke("open_rules_folder"),
+  ownDataPreview: () => invoke<OwnData>("own_data_preview"),
+  removeOwnData: () => invoke<OwnData>("remove_own_data"),
 
   async thinSnapshots(disk) {
     const status = await invoke<{ dryRun: boolean }>("cleanup_status");

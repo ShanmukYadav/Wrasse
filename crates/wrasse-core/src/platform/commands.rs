@@ -156,3 +156,33 @@ pub(crate) fn trash_dir(home: &Path) -> Option<PathBuf> {
         None
     }
 }
+
+/// Shows `path` selected in the file manager. Read-only.
+pub fn reveal(path: &Path) -> io::Result<()> {
+    #[cfg(target_os = "macos")]
+    return macos::commands::reveal(path);
+    #[allow(unreachable_code)]
+    {
+        let _ = path;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
+}
+
+/// Whether Wrasse opens at login; `None` when the OS can't say (or doesn't support it).
+pub fn login_item_enabled() -> Option<bool> {
+    #[cfg(target_os = "macos")]
+    return macos::commands::login_item_enabled();
+    #[allow(unreachable_code)]
+    None
+}
+
+/// Turns Wrasse's own login item on or off (Settings switch only; off by default).
+pub fn set_login_item(on: bool) -> io::Result<()> {
+    #[cfg(target_os = "macos")]
+    return macos::commands::set_login_item(on);
+    #[allow(unreachable_code)]
+    {
+        let _ = on;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
+}

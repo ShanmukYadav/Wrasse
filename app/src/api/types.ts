@@ -424,3 +424,15 @@ export function emptyDisk(): Disk {
 
 /** An insight chip on a tile: amber = attention, green = safe, violet = AI, protected = slate. */
 export type Insight = { tone: "amber" | "green" | "violet" | "protected"; text: string };
+
+/** Settings kept by the core (tray keep days), plus the login item and the folders. */
+export type SettingsView = {
+  keepDays: number;
+  /** null when macOS can't say (a build that isn't an app bundle). */
+  loginItem: boolean | null;
+  rulesFolder: string;
+  dataFolder: string;
+};
+
+/** What "Remove all Wrasse data" removes, or removed. */
+export type OwnData = { folder: string; bytes: number; trayBytes: number; trayItems: number; dryRun: boolean };
