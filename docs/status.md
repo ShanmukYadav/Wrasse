@@ -35,6 +35,12 @@ Earlier detail is in `git log` and in this file's history (it was `HANDOFF.md` u
   conditions, the build before export/states/accessibility idled at 99–102 MB and the one after
   at 94–97 MB; which change saved it isn't measured separately (likely the free-space live region
   that VoiceOver tracked; inferred).
+- **Idle after use is over budget** (2026-10-14, `check-idle-memory.sh --after-use`, 3 untouched
+  launches: 140, 115, 114 MB; peaks 273, 254, 240 MB). Each step alone leaves memory in WebKit's
+  page process (drill-ins +15–18 MB, tray and Settings a few MB). Tried: a forced JavaScript
+  garbage collection (117–118 MB), a page reload (119–140 MB: WebKit keeps the memory in the same
+  process), no drill-in crossfade (114–140 MB; peaks 232–239 MB). None reaches 100 MB. To fix
+  before release; options are in the Phase 6 plan (decision D7).
 - **Error type (plan step R5):** dropped by the owner (2026-10-13). Instead, `unwrap` and
   `expect` are denied outside tests in every crate (clippy).
 - **Store slices (plan step F8):** types, boot and helpers are split out; the actions are still in
@@ -51,6 +57,7 @@ Earlier detail is in `git log` and in this file's history (it was `HANDOFF.md` u
 | Budget | Measured | Limit |
 |---|---|---|
 | Idle, window open | 95.0–96.1 MB (5 untouched launches) | 100 MB |
+| Idle after use (two drill-ins, tray, Settings, a setting changed, 60 s untouched) | **114, 115, 140 MB (over)**; peaks 240–273 MB | 100 MB |
 | First-minute peak | 176–207 MB | 250 MB |
 | Full scan | 185 MB | 300 MB |
 | Menu bar only | 10.0 MB | 40 MB |
