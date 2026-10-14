@@ -75,6 +75,7 @@ app/src (React)                      crates/wrasse-cli
 |---|---|
 | .dmg ≤ 15 MB, app ≤ 40 MB | `scripts/check-bundle-size.sh` |
 | Wrasse's own data ≤ 200 MB | `scripts/check-data-size.sh` |
-| First-minute peak ≤ 250 MB, idle ≤ 100 MB | `scripts/check-idle-memory.sh` |
+| First-minute peak ≤ 250 MB, idle ≤ 110 MB (untouched launches) | `scripts/check-idle-memory.sh` |
+| No more than 5 MB above the previous release (median of 5 launches each, side by side) | `scripts/check-memory-regression.sh` |
 | Full scan ≤ 300 MB | `scripts/check-idle-memory.sh --full-scan` |
 | Menu bar ≤ 40 MB | Phase 5 |

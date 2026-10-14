@@ -29,13 +29,17 @@ update; ship a new key the same way.
 
 ## Each release
 
-1. Update `CHANGELOG.md` (move "unreleased" to the version and date) and commit.
-2. Tag and push: `git tag v0.1.0-beta.1 && git push origin v0.1.0-beta.1`.
-3. The **Release** workflow runs the checks, builds the universal `.dmg` and the signed updater
+1. Memory regression check against the previous release, on an untouched Mac: mount the previous
+   release's `.dmg`, copy `Wrasse.app/Contents/MacOS/wrasse-app` somewhere, then run
+   `scripts/check-memory-regression.sh <that copy>`. It must pass (within 5 MB). Also run
+   `scripts/check-idle-memory.sh --launches 5` (idle 110 MB, peak 250 MB).
+2. Update `CHANGELOG.md` (move "unreleased" to the version and date) and commit.
+3. Tag and push: `git tag v0.1.0-beta.1 && git push origin v0.1.0-beta.1`.
+4. The **Release** workflow runs the checks, builds the universal `.dmg` and the signed updater
    archive, and creates a **draft** release with them and `latest.json`.
-4. Run the live tests ([live-tests.md](live-tests.md)) and the fresh-account test
+5. Run the live tests ([live-tests.md](live-tests.md)) and the fresh-account test
    ([fresh-account-test.md](fresh-account-test.md)) on the draft's `.dmg`.
-5. Edit the draft: check the notes, tick **Set as a pre-release** for betas, and **Publish**.
-6. The **Update channel** workflow copies the release's `latest.json` to the `updates` release
+6. Edit the draft: check the notes, tick **Set as a pre-release** for betas, and **Publish**.
+7. The **Update channel** workflow copies the release's `latest.json` to the `updates` release
    (`beta.json`, and `stable.json` for stable releases): installed copies with the update check on
    see it at their next launch.

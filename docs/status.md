@@ -35,7 +35,15 @@ Earlier detail is in `git log` and in this file's history (it was `HANDOFF.md` u
   conditions, the build before export/states/accessibility idled at 99–102 MB and the one after
   at 94–97 MB; which change saved it isn't measured separately (likely the free-space live region
   that VoiceOver tracked; inferred).
-- **Memory is over budget again (2026-10-14 evening), for every build.** Plain launches, untouched:
+- **Budgets changed (owner, 2026-10-14, option B):** idle ≤ 110 MB and first-minute peak ≤ 250 MB
+  on untouched launches; the peak during use is report-only; and before each release
+  `scripts/check-memory-regression.sh` must show the new build within 5 MB of the previous release
+  (median of 5 launches each, side by side). The animation library stays.
+- **Regression check, 2026-10-14 evening** (`check-memory-regression.sh`; baseline: the Phase 5
+  checkpoint build, app code as of 51edb74, since there's no earlier release): previous median peak
+  233.0 MB, idle 106 MB; new median peak 234.2 MB, idle 106.1 MB. Passed. The new build's 5 launches:
+  idle 104–107.1 MB (budget 110), peak 227–236 MB (budget 250).
+- **Evening measurements, 2026-10-14:** Plain launches, untouched:
   104–108 MB idle, for today's build and for the Phase 5 build alike (side by side), while the
   same Phase 5 build measured 94–97 MB in the morning. What moves it is the Mac's state, not the
   code (inferred from the side-by-side runs; not pinned down further). WebKit's smaller "document
@@ -59,7 +67,7 @@ Earlier detail is in `git log` and in this file's history (it was `HANDOFF.md` u
 
 | Budget | Measured | Limit |
 |---|---|---|
-| Idle, window open | 95.0–96.1 MB (5 untouched launches) | 100 MB |
+| Idle, window open | 95.0–96.1 MB (5 untouched launches, morning); 104–108 MB (evening) | 110 MB |
 | Idle after use (two drill-ins, tray, Settings, a setting changed, 60 s untouched) | **114, 115, 140 MB (over)**; peaks 240–273 MB | 100 MB |
 | First-minute peak | 176–207 MB | 250 MB |
 | Full scan | 185 MB | 300 MB |

@@ -58,7 +58,8 @@ scripts/check-windows-compile.sh  # core crates still compile for Windows (only 
 ./dev.sh cargo clippy --workspace --all-targets -- -D warnings
 ./dev.sh cargo test --workspace
 (cd app && ../dev.sh npm run build)
-scripts/check-idle-memory.sh             # macOS, Wrasse quit: first-minute peak ≤ 250 MB, idle ≤ 100 MB
+scripts/check-idle-memory.sh             # macOS, Wrasse quit: first-minute peak ≤ 250 MB, idle ≤ 110 MB (untouched launches)
+scripts/check-memory-regression.sh       # macOS, before a release: no more than 5 MB above the previous release
 scripts/check-idle-memory.sh --full-scan # peak during a full scan ≤ 300 MB (throwaway data folder)
 scripts/check-data-size.sh               # Wrasse's own data ≤ 200 MB
 (cd app && ../dev.sh npm run tauri build) && scripts/check-bundle-size.sh   # .dmg ≤ 15 MB, app ≤ 40 MB
