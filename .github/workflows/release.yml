@@ -57,6 +57,7 @@ jobs:
         run: scripts/ci-signing-keychain.sh --required
 
       - name: Build and create the draft release
+        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,16 +73,33 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: Wrasse ${{ github.ref_name }}
           releaseBody: |
-            Unsigned beta for macOS (Apple Silicon and Intel). The first time you open it, macOS
-            blocks it: open System Settings › Privacy & Security and choose Open Anyway. See the
-            README for the steps and what's new in CHANGELOG.md.
+            Beta for macOS (Apple Silicon and Intel), not notarized by Apple. The first time you
+            open Wrasse, macOS blocks it: open System Settings › Privacy & Security and choose
+            Open Anyway. See the README for the steps and what's new in CHANGELOG.md.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
-          args: --target universal-apple-darwin --config src-tauri/tauri.release.conf.json
+          # The app and its update archive only: the .dmg is made below, unsigned. A disk image
+          # signed with a certificate macOS doesn't know is blocked before it even opens; an
+          # unsigned one opens, and Gatekeeper then asks about the app once.
+          args: --target universal-apple-darwin --bundles app --config src-tauri/tauri.release.conf.json
 
       - name: Signature check
         run: scripts/check-signature.sh target/universal-apple-darwin/release/bundle/macos/Wrasse.app
+
+      - name: Disk image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.tauri.outputs.appVersion }}
+        run: |
+          bundle=target/universal-apple-darwin/release/bundle
+          dmg="$bundle/dmg/Wrasse_${VERSION}_universal.dmg"
+          stage="$RUNNER_TEMP/dmg"
+          mkdir -p "$stage" "$bundle/dmg"
+          ditto "$bundle/macos/Wrasse.app" "$stage/Wrasse.app"
+          ln -s /Applications "$stage/Applications"
+          hdiutil create -volname Wrasse -srcfolder "$stage" -fs HFS+ -format UDZO -ov "$dmg"
+          gh release upload "$GITHUB_REF_NAME" "$dmg" --clobber
 
       - name: Bundle size check
         env:
