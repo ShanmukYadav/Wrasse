@@ -161,7 +161,7 @@ function RemoveAll({ units, onError }: { units: "decimal" | "binary"; onError: (
   );
 }
 
-export function Switch({ checked, label, onChange, disabled = false }: { checked: boolean; label: string; onChange: (v: boolean) => void; disabled?: boolean }) {
+function Switch({ checked, label, onChange, disabled = false }: { checked: boolean; label: string; onChange: (v: boolean) => void; disabled?: boolean }) {
   return (
     <button type="button" role="switch" aria-checked={checked} aria-label={label} className={`switch focus-ring ${checked ? "is-on" : ""}`} disabled={disabled} onClick={() => onChange(!checked)}>
       <motion.span className="switch-knob" animate={{ x: checked ? 16 : 0 }} transition={spring.snappy} />
