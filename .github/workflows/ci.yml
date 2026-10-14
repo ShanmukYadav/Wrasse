@@ -55,9 +55,21 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
+      # Signed with the Wrasse certificate when the secret is available (not on forks' pull
+      # requests), so the signing setup is tested on every push.
+      - name: Signing certificate
+        env:
+          WRASSE_SIGNING_P12: ${{ secrets.WRASSE_SIGNING_P12 }}
+          WRASSE_SIGNING_P12_PASSWORD: ${{ secrets.WRASSE_SIGNING_P12_PASSWORD }}
+        run: scripts/ci-signing-keychain.sh
+
       - name: Build installer
         working-directory: app
         run: npx tauri build --bundles app,dmg
+
+      - name: Signature check
+        if: env.APPLE_SIGNING_IDENTITY != ''
+        run: scripts/check-signature.sh target/release/bundle/macos/Wrasse.app
 
       - name: Bundle size check
         run: scripts/check-bundle-size.sh

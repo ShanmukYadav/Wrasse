@@ -27,6 +27,23 @@ If the private key leaks, anyone could sign an update: make a new key, put the n
 the variable, and ship a release people install by hand. If it's lost, installed copies can't
 update; ship a new key the same way.
 
+## Once: the code-signing certificate
+
+macOS remembers privacy permissions (Full Disk Access, controlling Finder) per code signature.
+An ad-hoc signature changes with every build, so each update lost them and macOS asked again. A
+fixed, self-made certificate keeps the same identity across builds. It isn't Apple's, so the
+first-launch "Open Anyway" step stays.
+
+1. Make it and store it on GitHub (secrets `WRASSE_SIGNING_P12` and
+   `WRASSE_SIGNING_P12_PASSWORD`): `openssl` makes a "Wrasse Code Signing" certificate valid for
+   20 years, and `gh secret set` stores the `.p12` (base64) and its password. A copy stays in
+   `~/.wrasse-signing`.
+2. Back up `~/.wrasse-signing` like the update key. If it's lost, make a new certificate: people
+   who update then grant Full Disk Access once more.
+
+Release builds fail without it (`scripts/ci-signing-keychain.sh --required`), and every build
+checks the result with `scripts/check-signature.sh`.
+
 ## Each release
 
 1. Memory regression check against the previous release, on an untouched Mac: mount the previous

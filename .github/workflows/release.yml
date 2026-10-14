@@ -50,6 +50,12 @@ jobs:
           jq -n --arg k "$key" '{bundle: {createUpdaterArtifacts: true}, plugins: {updater: {pubkey: $k}}}' \
             > app/src-tauri/tauri.release.conf.json
 
+      - name: Signing certificate
+        env:
+          WRASSE_SIGNING_P12: ${{ secrets.WRASSE_SIGNING_P12 }}
+          WRASSE_SIGNING_P12_PASSWORD: ${{ secrets.WRASSE_SIGNING_P12_PASSWORD }}
+        run: scripts/ci-signing-keychain.sh --required
+
       - name: Build and create the draft release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -73,6 +79,9 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
           args: --target universal-apple-darwin --config src-tauri/tauri.release.conf.json
+
+      - name: Signature check
+        run: scripts/check-signature.sh target/universal-apple-darwin/release/bundle/macos/Wrasse.app
 
       - name: Bundle size check
         env:
