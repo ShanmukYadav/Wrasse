@@ -7,7 +7,7 @@ app="${1:?usage: check-signature.sh <Wrasse.app>}"
 
 codesign --verify --strict --deep "$app"
 requirement=$(codesign -d -r- "$app" 2>&1)
-if ! grep -q 'identifier "com.shanmukyadav.wrasse" and certificate leaf' <<<"$requirement"; then
+if ! grep -q -E 'identifier "com.shanmukyadav.wrasse" and certificate (leaf|root) = H"' <<<"$requirement"; then
   echo "Wrasse.app isn't signed with the Wrasse certificate:" >&2
   echo "$requirement" >&2
   exit 1
