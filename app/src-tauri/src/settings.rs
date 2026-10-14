@@ -13,6 +13,10 @@ use wrasse_core::settings::{self, Settings};
 #[serde(rename_all = "camelCase")]
 pub struct SettingsView {
     keep_days: u64,
+    /// The update check is on (off by default).
+    check_updates: bool,
+    /// This build can check for updates (it was built with the update key's public half).
+    updates_available: bool,
     /// `None` when macOS can't say (a build that isn't an app bundle).
     login_item: Option<bool>,
     /// Where custom junk rules go (`*.toml`).
@@ -25,6 +29,8 @@ pub fn settings_get(state: State<'_, CleanupState>) -> Result<SettingsView, Stri
     state.with(|ctx| {
         Ok(SettingsView {
             keep_days: settings::load(&ctx.data_dir).keep_days,
+            check_updates: settings::load(&ctx.data_dir).check_updates,
+            updates_available: crate::updater::available(),
             login_item: platform::login_item_enabled(),
             rules_folder: ctx.data_dir.join("rules").join("custom"),
             data_folder: ctx.data_dir.clone(),
@@ -37,9 +43,33 @@ pub fn settings_get(state: State<'_, CleanupState>) -> Result<SettingsView, Stri
 #[tauri::command]
 pub fn set_keep_days(state: State<'_, CleanupState>, days: u64) -> Result<u64, String> {
     state.with(|ctx| {
-        settings::save(&ctx.data_dir, Settings { keep_days: days })
-            .map(|s| s.keep_days)
-            .map_err(|e| e.to_string())
+        let current = settings::load(&ctx.data_dir);
+        settings::save(
+            &ctx.data_dir,
+            Settings {
+                keep_days: days,
+                ..current
+            },
+        )
+        .map(|s| s.keep_days)
+        .map_err(|e| e.to_string())
+    })
+}
+
+/// Turns the update check on or off; it runs at the next launch.
+#[tauri::command]
+pub fn set_check_updates(state: State<'_, CleanupState>, on: bool) -> Result<bool, String> {
+    state.with(|ctx| {
+        let current = settings::load(&ctx.data_dir);
+        settings::save(
+            &ctx.data_dir,
+            Settings {
+                check_updates: on,
+                ..current
+            },
+        )
+        .map(|s| s.check_updates)
+        .map_err(|e| e.to_string())
     })
 }
 

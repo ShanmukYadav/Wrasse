@@ -428,6 +428,10 @@ export type Insight = { tone: "amber" | "green" | "violet" | "protected"; text: 
 /** Settings kept by the core (tray keep days), plus the login item and the folders. */
 export type SettingsView = {
   keepDays: number;
+  /** The update check is on (off by default). */
+  checkUpdates: boolean;
+  /** This build can check for updates. */
+  updatesAvailable: boolean;
   /** null when macOS can't say (a build that isn't an app bundle). */
   loginItem: boolean | null;
   rulesFolder: string;

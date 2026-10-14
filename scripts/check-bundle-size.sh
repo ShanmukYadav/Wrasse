@@ -5,7 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-bundle_dir=target/release/bundle
+# BUNDLE_DIR for other targets, e.g. target/universal-apple-darwin/release/bundle.
+bundle_dir=${BUNDLE_DIR:-target/release/bundle}
 case "$(uname -s)" in
   Darwin) file=$(ls "$bundle_dir"/dmg/*.dmg | head -1); limit_mb=15 ;;
   MINGW*|MSYS*|CYGWIN*) file=$(ls "$bundle_dir"/nsis/*.exe | head -1); limit_mb=15 ;;

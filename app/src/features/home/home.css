@@ -203,9 +203,8 @@
   font-size: var(--d1-row-font-size);
   font-weight: var(--w-name);
   line-height: 1.3;
+  /* Names wrap at spaces; a single word only breaks when it can't fit on a line at all. */
   overflow-wrap: break-word;
-  hyphens: auto;
-  -webkit-hyphens: auto;
 }
 .tile-row-tag {
   margin-left: 6px;

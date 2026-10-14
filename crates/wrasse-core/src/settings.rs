@@ -14,12 +14,16 @@ pub const KEEP_DAYS_MAX: u64 = 30;
 pub struct Settings {
     /// Days a batch stays in the tray (1–30).
     pub keep_days: u64,
+    /// Check GitHub Releases for an update when Wrasse starts. Off until the owner turns it on:
+    /// Wrasse makes no network request while it's off.
+    pub check_updates: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Settings {
             keep_days: crate::quarantine::DEFAULT_KEEP_DAYS,
+            check_updates: false,
         }
     }
 }
@@ -73,10 +77,43 @@ mod tests {
     #[test]
     fn keep_days_round_trip_and_clamp() {
         let d = dir("clamp");
-        assert_eq!(save(&d, Settings { keep_days: 14 }).unwrap().keep_days, 14);
+        assert_eq!(
+            save(
+                &d,
+                Settings {
+                    keep_days: 14,
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .keep_days,
+            14
+        );
         assert_eq!(load(&d).keep_days, 14);
-        assert_eq!(save(&d, Settings { keep_days: 0 }).unwrap().keep_days, 1);
-        assert_eq!(save(&d, Settings { keep_days: 99 }).unwrap().keep_days, 30);
+        assert_eq!(
+            save(
+                &d,
+                Settings {
+                    keep_days: 0,
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .keep_days,
+            1
+        );
+        assert_eq!(
+            save(
+                &d,
+                Settings {
+                    keep_days: 99,
+                    ..Default::default()
+                }
+            )
+            .unwrap()
+            .keep_days,
+            30
+        );
         assert_eq!(load(&d).keep_days, 30);
         crate::platform::remove_test_dir(&d);
     }

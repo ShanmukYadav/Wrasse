@@ -197,6 +197,11 @@ pub fn start_self(args: &[&str]) -> io::Result<()> {
     let exe = std::env::current_exe()?;
     std::process::Command::new(exe)
         .args(args)
+        // Measurement hooks belong to the copy a check started, not to the next one.
+        .env_remove("WRASSE_AUTOSCAN")
+        .env_remove("WRASSE_SCRIPTED_USE")
+        .env_remove("WRASSE_RESTART_AFTER_SECS")
+        .env_remove("WRASSE_BENCH")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -231,4 +236,18 @@ pub fn stop_own_copy(pid: u32) -> bool {
     }
     let _ = ours;
     false
+}
+
+/// Waits until process `pid` has exited, at most `timeout`. Used when Wrasse restarts itself.
+pub fn wait_for_exit(pid: u32, timeout: std::time::Duration) {
+    let started = std::time::Instant::now();
+    while started.elapsed() < timeout {
+        let mut sys = sysinfo::System::new();
+        let target = sysinfo::Pid::from_u32(pid);
+        sys.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[target]), true);
+        if sys.process(target).is_none() {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
 }

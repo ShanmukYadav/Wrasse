@@ -12,6 +12,10 @@
 #                                                two tiles, opens the tray and Settings, changes a
 #                                                setting and closes them (WRASSE_SCRIPTED_USE); idle
 #                                                is sampled 60-80 s after that (100 MB budget)
+#   scripts/check-idle-memory.sh --after-use --away
+#                                                the same, then Finder comes to the front: Wrasse,
+#                                                in the background, restarts quietly (after 20 s
+#                                                here instead of 5 min); idle is sampled 60 s after
 #
 # Every launch waits until the Mac has had no keyboard or mouse input for 30 s, and a launch
 # that sees input before it ends is thrown away and repeated: typing or clicking changes what
@@ -42,6 +46,7 @@ MENU_MB=$(lower "${WRASSE_MENU_LIMIT_MB:-}" 40)
 FULL_SCAN=0
 MENU_BAR=0
 AFTER_USE=0
+AWAY=0
 APP="target/release/wrasse-app"
 LAUNCHES=1
 BUILD=1
@@ -52,6 +57,7 @@ while [[ $# -gt 0 ]]; do
     --full-scan) FULL_SCAN=1; shift ;;
     --menu-bar) MENU_BAR=1; shift ;;
     --after-use) AFTER_USE=1; shift ;;
+    --away) AWAY=1; shift ;;
     --launches)
       [[ $# -ge 2 ]] || { echo "check-idle-memory: --launches needs a number"; exit 2; }
       LAUNCHES="$2"
@@ -154,6 +160,10 @@ if [[ "$AFTER_USE" -eq 1 ]]; then
   # from 60 s after that.
   LAUNCH_ENV=(WRASSE_AUTOSCAN=1 WRASSE_SCRIPTED_USE=1)
   WINDOW=100
+  if [[ "$AWAY" -eq 1 ]]; then
+    LAUNCH_ENV+=(WRASSE_RESTART_AFTER_SECS=20)
+    WINDOW=150
+  fi
 fi
 
 launch=0
@@ -167,6 +177,7 @@ while [[ "$launch" -lt "$LAUNCHES" ]]; do
   echo "app pid $app_pid"
 
   app_peak=0; web_peak=0; gpu_peak=0; net_peak=0
+  sent_away=0
   launch_peak=0
   peak_at=0
   peak_line=""
@@ -177,9 +188,21 @@ while [[ "$launch" -lt "$LAUNCHES" ]]; do
     if [[ "$elapsed" -gt "$WINDOW" ]]; then
       break
     fi
+    # --away: at 45 s Finder comes to the front, so Wrasse is in the background.
+    if [[ "$AWAY" -eq 1 && "$elapsed" -ge 45 && "$sent_away" -eq 0 ]]; then
+      open -a Finder
+      sent_away=1
+    fi
     if ! kill -0 "$app_pid" 2>/dev/null; then
-      echo "app exited before the minute was up"
-      exit 1
+      # A quiet restart: follow the new copy.
+      next=$(pgrep -n -f "$APP --restarted" || true)
+      if [[ "$AWAY" -eq 1 && -n "$next" ]]; then
+        echo "t=${elapsed}s restarted quietly: pid $app_pid -> $next"
+        app_pid=$next
+      else
+        echo "app exited before the minute was up"
+        exit 1
+      fi
     fi
     measure
     if awk -v t="$total_mb" -v p="$launch_peak" 'BEGIN { exit !(t > p) }'; then

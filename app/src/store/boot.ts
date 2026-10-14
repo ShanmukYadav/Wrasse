@@ -1,4 +1,5 @@
 import { api } from "../api";
+import { t } from "../i18n";
 import { LAUNCH_SCAN_DELAY_MS, ONBOARDED_KEY, useApp } from "./app";
 
 /** Loads app info, shows the last scan, then onboards (first run) or scans: exactly once per page
@@ -26,13 +27,58 @@ export function boot() {
     // The launch scan starts once the first paint has settled. WebKit keeps spare buffers for every
     // repaint in the first seconds, and a scan (sweep, then the new map) on top of them was what
     // pushed launch memory over its budget. The saved map is on screen meanwhile; Scan is instant.
-    if (onboarded || info.autoScan) window.setTimeout(() => void scanDisk().then(() => info.scriptedUse && void scriptedUse(info.scriptedUse)), LAUNCH_SCAN_DELAY_MS);
+    const demo = (window as { __WRASSE_DEMO__?: string }).__WRASSE_DEMO__;
+    if (onboarded || info.autoScan)
+      window.setTimeout(
+        () =>
+          void scanDisk().then(() => {
+            if (info.scriptedUse) void scriptedUse(info.scriptedUse);
+            if (demo === "plan") window.setTimeout(() => useApp.getState().planFree(30e9), 2000);
+          }),
+        LAUNCH_SCAN_DELAY_MS,
+      );
     else useApp.setState({ overlay: "onboarding" });
     watchRunningApps();
+    reportResting();
+    api.onUpdateAvailable((u) =>
+      useApp.getState().notify(t("update.available", { version: u.version }), {
+        label: t("update.install"),
+        run: () => void api.installUpdate().catch((e) => useApp.getState().notify(t("update.failed", { reason: String(e) }))),
+      }),
+    );
     api.onMenuScan(() => {
       if (useApp.getState().scan !== "scanning") useApp.getState().startScan();
     });
   })();
+}
+
+/** "At rest": on the home map with nothing open, ticked, planned or running. Only then may the
+ *  app restart quietly after a while in the background (app/src-tauri/src/restart.rs). */
+function reportResting() {
+  let last: boolean | null = null;
+  const check = () => {
+    const s = useApp.getState();
+    const resting =
+      s.focus === s.disk.root &&
+      s.viewMode === "map" &&
+      s.overlay === null &&
+      !s.detailOpen &&
+      !s.commandOpen &&
+      !s.trayOpen &&
+      s.uninstall === null &&
+      s.quitting === null &&
+      s.confirmDelete === null &&
+      s.fileCaution === null &&
+      s.checked.length === 0 &&
+      s.plan === null &&
+      s.scan !== "scanning";
+    if (resting !== last) {
+      last = resting;
+      void api.setResting(resting).catch(() => undefined);
+    }
+  };
+  useApp.subscribe(check);
+  check();
 }
 
 /** How often the running state of apps is re-read while the window is on screen. */

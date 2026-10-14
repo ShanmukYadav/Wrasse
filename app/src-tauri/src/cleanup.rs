@@ -129,6 +129,11 @@ impl CleanupState {
         self.dry_run.load(Ordering::Relaxed)
     }
 
+    /// Sets dry run (a quiet restart keeps the setting the previous copy had).
+    pub fn set_dry_run(&self, on: bool) {
+        self.dry_run.store(on, Ordering::Relaxed);
+    }
+
     /// Runs `f` with the safety context (for other modules' commands).
     pub fn with<T>(&self, f: impl FnOnce(&mut Context) -> Result<T, String>) -> Result<T, String> {
         let mut guard = self.ctx.lock().map_err(|e| e.to_string())?;

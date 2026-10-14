@@ -8,7 +8,8 @@ export function DevBadge() {
   const dev = useApp((s) => s.info?.dev);
   // Mock data is never real, whatever the switch says.
   const live = useApp((s) => !s.dryRun) && !mockMode();
-  if (!dev) return null;
+  // Not in the demo the README screenshots are taken from.
+  if (!dev || (window as { __WRASSE_DEMO__?: unknown }).__WRASSE_DEMO__) return null;
   return (
     <span title={t(live ? "app.liveTooltip" : "app.devTooltip")} className={`dev-badge ${live ? "is-live" : ""}`}>
       {t(live ? "app.live" : "app.dev")}

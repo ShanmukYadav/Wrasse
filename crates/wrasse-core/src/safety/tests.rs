@@ -572,7 +572,14 @@ fn remove_own_data_empties_the_data_folder_only() {
     );
     remove(&ctx, &plan, false).unwrap();
     fs::write(ctx.data_dir.join("scan-cache.json"), b"{}").unwrap();
-    crate::settings::save(&ctx.data_dir, crate::settings::Settings { keep_days: 3 }).unwrap();
+    crate::settings::save(
+        &ctx.data_dir,
+        crate::settings::Settings {
+            keep_days: 3,
+            ..Default::default()
+        },
+    )
+    .unwrap();
 
     let preview = remove_own_data(&ctx, true).unwrap();
     assert_eq!(preview.tray_items, 1);

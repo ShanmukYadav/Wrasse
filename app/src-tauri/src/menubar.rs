@@ -216,8 +216,23 @@ pub fn open_window(app: &AppHandle) {
     let Some(config) = app.config().app.windows.first() else {
         return;
     };
-    if let Ok(window) = WebviewWindowBuilder::from_config(app, config).and_then(|b| b.build()) {
+    if let Ok(window) = WebviewWindowBuilder::from_config(app, config).and_then(|b| demo(b).build())
+    {
         let _ = window.set_focus();
+    }
+}
+
+/// A quiet restart (restart.rs): the window comes back where it was, without taking focus.
+pub fn reopen_window(app: &AppHandle, (x, y, w, h): (f64, f64, f64, f64)) {
+    #[cfg(target_os = "macos")]
+    let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+    let Some(config) = app.config().app.windows.first() else {
+        return;
+    };
+    let built = WebviewWindowBuilder::from_config(app, config)
+        .and_then(|b| b.position(x, y).inner_size(w, h).focused(false).build());
+    if built.is_err() {
+        open_window(app);
     }
 }
 
@@ -291,4 +306,17 @@ fn quit(app: &AppHandle) {
         }
     }
     app.exit(0);
+}
+
+/// `WRASSE_DEMO=1` (README screenshots only): the window shows the built-in sample disk instead
+/// of this Mac's.
+fn demo<'a>(
+    b: WebviewWindowBuilder<'a, Wry, AppHandle>,
+) -> WebviewWindowBuilder<'a, Wry, AppHandle> {
+    // "1" is the map; "plan" also opens a Free Up Space plan for 30 GB.
+    match std::env::var("WRASSE_DEMO").as_deref() {
+        Ok("1") => b.initialization_script("window.__WRASSE_DEMO__ = '1';"),
+        Ok("plan") => b.initialization_script("window.__WRASSE_DEMO__ = 'plan';"),
+        _ => b,
+    }
 }

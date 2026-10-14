@@ -65,6 +65,19 @@ export function Settings() {
           }
         />
       </Setting>
+      <Setting title={t("settings.updates")} note={view && !view.updatesAvailable ? t("settings.updatesUnavailable") : t("settings.updatesNote")}>
+        <Switch
+          checked={!!view?.checkUpdates}
+          label={t("settings.updates")}
+          disabled={!view || !view.updatesAvailable}
+          onChange={(on) =>
+            void api
+              .setCheckUpdates(on)
+              .then((checkUpdates) => setView((v) => (v ? { ...v, checkUpdates } : v)))
+              .catch(fail)
+          }
+        />
+      </Setting>
       <div className="flex flex-col gap-1">
         <span className="text-label text-strong">{t("settings.neverTouch")}</span>
         {never.length === 0 ? (

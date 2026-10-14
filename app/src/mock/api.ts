@@ -11,6 +11,7 @@ const progressListeners = new Set<(p: ScanProgress) => void>();
 const emit = (p: ScanProgress) => progressListeners.forEach((l) => l(p));
 
 let mockKeepDays = 7;
+let mockCheckUpdates = false;
 const agent = (label: string, scope: StartupItem["scope"], app: string | null, enabled: boolean, signed: boolean | null): StartupItem => ({
   label,
   plist: `${scope === "user" ? "~/Library" : "/Library"}/${scope === "system" ? "LaunchDaemons" : "LaunchAgents"}/${label}.plist`,
@@ -144,8 +145,16 @@ export const mockApi: WrasseApi = {
   async neverTouchList() {
     return mockNeverTouch;
   },
+  async setCheckUpdates(on) {
+    mockCheckUpdates = on;
+    return on;
+  },
+  onUpdateAvailable() {
+    return () => {};
+  },
+  async installUpdate() {},
   async settings() {
-    return { keepDays: mockKeepDays, loginItem: mockLoginItem, rulesFolder: "~/Library/Application Support/Wrasse/rules/custom", dataFolder: "~/Library/Application Support/Wrasse" };
+    return { checkUpdates: mockCheckUpdates, updatesAvailable: true, keepDays: mockKeepDays, loginItem: mockLoginItem, rulesFolder: "~/Library/Application Support/Wrasse/rules/custom", dataFolder: "~/Library/Application Support/Wrasse" };
   },
   async setKeepDays(days) {
     mockKeepDays = Math.min(30, Math.max(1, Math.round(days)));
@@ -155,6 +164,7 @@ export const mockApi: WrasseApi = {
     mockLoginItem = on;
     return mockLoginItem;
   },
+  async setResting() {},
   onMenuScan() {
     return () => {};
   },

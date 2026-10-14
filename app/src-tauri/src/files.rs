@@ -15,6 +15,13 @@ use wrasse_core::scan::cache;
 #[derive(Default)]
 pub struct DupesState(Mutex<Option<Arc<dupes::Control>>>);
 
+impl DupesState {
+    /// A duplicate search is running.
+    pub fn busy(&self) -> bool {
+        self.0.lock().map_or(true, |c| c.is_some())
+    }
+}
+
 fn today() -> u32 {
     (std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

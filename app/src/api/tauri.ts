@@ -77,6 +77,7 @@ const appNodes = new WeakMap<Disk, DiskNode[]>();
 
 export const tauriApi: WrasseApi = {
   appInfo: () => invoke<AppInfo>("app_info"),
+  setResting: (resting) => invoke("ui_resting", { resting }),
   onMenuScan(listener) {
     const off = listen("menu-scan", () => listener());
     return () => void off.then((f) => f());
@@ -181,6 +182,12 @@ export const tauriApi: WrasseApi = {
   neverTouchList: () => invoke<string[]>("never_touch_list"),
   settings: () => invoke<SettingsView>("settings_get"),
   setKeepDays: (days) => invoke<number>("set_keep_days", { days }),
+  setCheckUpdates: (on) => invoke<boolean>("set_check_updates", { on }),
+  onUpdateAvailable(listener) {
+    const off = listen<{ version: string; notes: string | null }>("update-available", (e) => listener(e.payload));
+    return () => void off.then((f) => f());
+  },
+  installUpdate: () => invoke("install_update"),
   setLoginItem: (on) => invoke<boolean | null>("set_login_item", { on }),
   reveal: (path) => invoke("reveal", { path }),
   quickLook: (path) => invoke("quick_look", { path }),

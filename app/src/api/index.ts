@@ -21,6 +21,8 @@ export interface WrasseApi {
   fullDiskAccess(): Promise<boolean>;
   /** Opens System Settings at Privacy & Security › Full Disk Access. */
   openFullDiskAccessSettings(): Promise<void>;
+  /** Tells the app whether nothing is open or selected, so it may restart quietly when away. */
+  setResting(resting: boolean): Promise<void>;
   /** Calls `listener` when the menu bar's Scan now is chosen; returns the unsubscribe function. */
   onMenuScan(listener: () => void): () => void;
   /** Subscribes to scan progress; returns the unsubscribe function. */
@@ -56,6 +58,12 @@ export interface WrasseApi {
   settings(): Promise<SettingsView>;
   /** How many days batches stay in the tray (1–30); resolves to the saved value. */
   setKeepDays(days: number): Promise<number>;
+  /** Turns the update check (at launch) on or off; resolves to the saved value. */
+  setCheckUpdates(on: boolean): Promise<boolean>;
+  /** Calls `listener` when an update was found at launch; returns the unsubscribe function. */
+  onUpdateAvailable(listener: (u: { version: string; notes: string | null }) => void): () => void;
+  /** Downloads, verifies and installs the offered update, then restarts Wrasse. */
+  installUpdate(): Promise<void>;
   /** Turns Wrasse's login item on or off; resolves to what macOS now reports. */
   setLoginItem(on: boolean): Promise<boolean | null>;
   /** Shows a file or folder selected in the file manager. Read-only. */
@@ -112,6 +120,8 @@ export interface WrasseApi {
 export const MOCK_KEY = "wrasse.mock";
 export function mockMode(): boolean {
   if (!inTauri) return true;
+  // WRASSE_DEMO=1 (README screenshots): the app shows the sample disk, never this Mac's.
+  if ((window as { __WRASSE_DEMO__?: boolean }).__WRASSE_DEMO__) return true;
   try {
     return localStorage.getItem(MOCK_KEY) === "1";
   } catch {

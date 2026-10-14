@@ -200,6 +200,20 @@ UnloadLaunchAgent
 ```
 <!-- /AUDIT -->
 
+## Network
+
+Wrasse makes two kinds of network request, and no others:
+
+- **The update check**, only when Settings › Check for updates is on (off by default): at launch,
+  one HTTPS request for the channel file on GitHub Releases
+  (`github.com/ShanmukYadav/Wrasse/releases/download/updates/beta.json` or `stable.json`), and,
+  only after a click on Install, the update archive it names. The archive is checked against the
+  update key's public half built into the app (minisign), including the version it was signed for;
+  a bad signature or a mismatched version is refused and nothing is installed.
+- **Ollama on `127.0.0.1:11434`**, the user's own machine, when the AI Models features ask it.
+
+No telemetry, analytics or crash reports.
+
 ## Known limitations
 
 - Hard links inside a folder re-read by an incremental rescan may be counted twice until the next

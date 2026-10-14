@@ -3,9 +3,11 @@
 mod cleanup;
 mod files;
 mod menubar;
+mod restart;
 mod scanning;
 mod settings;
 mod startup;
+mod updater;
 
 use serde::Serialize;
 use tauri::Manager;
@@ -71,6 +73,10 @@ pub fn run() {
     // Menu-bar-only Wrasse: no window and no web view (so no WebKit processes), only the menu.
     let menu_bar_only = std::env::args().any(|a| a == menubar::MENU_BAR_ARG)
         || std::env::var("WRASSE_MENU_BAR_ONLY").is_ok_and(|v| v == "1");
+    // A quiet restart (restart.rs): wait for the previous copy to exit, then reopen its window.
+    let restarted = restart::restarted();
+    let frame = restarted.as_ref().map(|r| r.frame);
+    let restarted_dry_run = restarted.as_ref().is_some_and(|r| r.dry_run);
     let mut builder = tauri::Builder::default();
     if !menu_bar_only {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -78,7 +84,11 @@ pub fn run() {
             menubar::open_window(app);
         }));
     }
+    if let Some(updater) = updater::plugin() {
+        builder = builder.plugin(updater);
+    }
     let result = builder
+        .manage(updater::Pending::default())
         .manage(scanning::ScanState::default())
         .manage(cleanup::CleanupState::default())
         .manage(files::DupesState::default())
@@ -89,12 +99,21 @@ pub fn run() {
                 menubar::start_menu_bar_only(app.handle());
             } else {
                 menubar::stop_menu_bar_copy(app.handle());
-                menubar::open_window(app.handle());
+                if restarted_dry_run {
+                    app.state::<cleanup::CleanupState>().set_dry_run(true);
+                }
+                match frame {
+                    Some(frame) => menubar::reopen_window(app.handle(), frame),
+                    None => menubar::open_window(app.handle()),
+                }
+                restart::watch(app.handle());
+                updater::check_on_launch(app.handle());
             }
             Ok(())
         })
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::CloseRequested { .. } => menubar::closing_to_menu_bar(),
+            tauri::WindowEvent::Focused(focused) => restart::focus_changed(*focused),
             tauri::WindowEvent::Destroyed => menubar::window_closed(window.app_handle()),
             _ => {}
         })
@@ -143,7 +162,10 @@ pub fn run() {
             settings::own_data_preview,
             settings::remove_own_data,
             startup::startup_items,
-            startup::disable_startup_item
+            startup::disable_startup_item,
+            restart::ui_resting,
+            settings::set_check_updates,
+            updater::install_update
         ])
         .build(tauri::generate_context!());
     let app = match result {
