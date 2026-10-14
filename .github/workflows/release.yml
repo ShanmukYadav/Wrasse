@@ -39,6 +39,17 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
+      # The bundler checks each update signature against plugins.updater.pubkey, which is empty in
+      # the repo: the release build gets the public key from the repository variable.
+      - name: Release config
+        env:
+          WRASSE_UPDATER_PUBKEY: ${{ vars.WRASSE_UPDATER_PUBKEY }}
+        run: |
+          key=$(printf %s "$WRASSE_UPDATER_PUBKEY" | tr -d ' \r\n')
+          [ -n "$key" ] || { echo "The WRASSE_UPDATER_PUBKEY variable is empty."; exit 1; }
+          jq -n --arg k "$key" '{bundle: {createUpdaterArtifacts: true}, plugins: {updater: {pubkey: $k}}}' \
+            > app/src-tauri/tauri.release.conf.json
+
       - name: Build and create the draft release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -61,7 +72,7 @@ jobs:
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
           includeUpdaterJson: true
-          args: --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":true}}'
+          args: --target universal-apple-darwin --config src-tauri/tauri.release.conf.json
 
       - name: Bundle size check
         env:
