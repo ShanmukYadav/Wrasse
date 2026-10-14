@@ -57,7 +57,7 @@ jobs:
 
       - name: Build installer
         working-directory: app
-        run: npx tauri build --bundles dmg
+        run: npx tauri build --bundles app,dmg
 
       - name: Bundle size check
         run: scripts/check-bundle-size.sh
