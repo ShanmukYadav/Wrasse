@@ -1,0 +1,51 @@
+name: Wrasse removed something it shouldn't
+description: A file, folder, app or model was removed (or moved to the tray) that Wrasse should have left alone.
+title: "[removed] "
+labels: ["safety", "urgent"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Sorry. First, check the **tray** (bottom right of the window): items moved there can be put back with **Restore** until the tray is emptied.
+        Then tell us what happened, so it can't happen to anyone else.
+  - type: input
+    id: what
+    attributes:
+      label: What was removed
+      description: The item's name and where it was (you can shorten your user name to ~).
+      placeholder: ~/Documents/Project/report.pdf
+    validations:
+      required: true
+  - type: dropdown
+    id: where-now
+    attributes:
+      label: Where is it now?
+      options:
+        - In the tray (restorable)
+        - Restored from the tray
+        - Deleted for good (Delete now, Empty tray, or the tray's automatic emptying)
+        - In the macOS Trash
+        - Removed by a tool (Homebrew, Ollama, Docker, …)
+        - I don't know
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: What you did
+      description: The screen and the button you used (for example Free Up Space, Delete now, Uninstall, a junk rule).
+    validations:
+      required: true
+  - type: textarea
+    id: audit
+    attributes:
+      label: Audit log lines
+      description: Settings › Audit log, or the file ~/Library/Application Support/com.shanmukyadav.wrasse/logs/actions.log. Paste the lines about this item (you can remove personal names).
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Wrasse and macOS versions
+      placeholder: Wrasse 0.1.0-beta.1, macOS 26.1
+    validations:
+      required: true

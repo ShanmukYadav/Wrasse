@@ -1,0 +1,69 @@
+name: Release
+
+# A pushed tag v* (for example v0.1.0-beta.1) runs the checks, builds a universal .dmg (Apple
+# Silicon and Intel) with its signed updater archive, and creates a DRAFT GitHub release with
+# them and latest.json. Publishing the draft (as a pre-release for betas) is a person's job.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Forbidden-API check
+        run: scripts/check-forbidden-apis.sh
+      - name: SECURITY_AUDIT.md sync check
+        run: scripts/check-security-audit.sh
+
+      # Same Rust as the project toolchain and CI (ci.yml).
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Build and create the draft release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The update key's public half (a repository variable, not secret) and the channel the
+          # build checks: pre-release tags (with a "-") are beta.
+          WRASSE_UPDATER_PUBKEY: ${{ vars.WRASSE_UPDATER_PUBKEY }}
+          WRASSE_CHANNEL: ${{ contains(github.ref_name, '-') && 'beta' || 'stable' }}
+          # The updater signing key: repository secrets only, never in the repo.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: app
+          tagName: ${{ github.ref_name }}
+          releaseName: Wrasse ${{ github.ref_name }}
+          releaseBody: |
+            Unsigned beta for macOS (Apple Silicon and Intel). The first time you open it, macOS
+            blocks it: open System Settings › Privacy & Security and choose Open Anyway. See the
+            README for the steps and what's new in CHANGELOG.md.
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          includeUpdaterJson: true
+          args: --target universal-apple-darwin --config '{"bundle":{"createUpdaterArtifacts":true}}'
+
+      - name: Bundle size check
+        env:
+          BUNDLE_DIR: target/universal-apple-darwin/release/bundle
+        run: scripts/check-bundle-size.sh

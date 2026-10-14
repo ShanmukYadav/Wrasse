@@ -4,6 +4,18 @@ These run once per release candidate, **by the owner, clicking in the app**, on 
 targets set up for the test. They are unit-tested only until then. Nothing in this file is run by
 an agent (AGENTS.md, "Live actions on the owner's files").
 
+## Before you start
+
+- Use the Wrasse from the release candidate's `.dmg` (not a development build). In a release
+  build dry run is off: actions really happen. Check Settings › Dry run is off.
+- Open Settings › Audit log once before each test, and once after: the new line is the result.
+- Have Terminal open for the **Check** commands (copy and paste them).
+- Each test lists what must be installed. None of these tools are on your Mac today (checked
+  2026-10-14: no Homebrew, Docker, Xcode, Ollama or Time Machine backup), so install only what a test needs, and remove
+  it afterwards if you don't use it.
+- If anything differs from **Expected**, stop, don't retry, and send me the audit-log line and a
+  screenshot.
+
 For every test:
 - Use a release build. Turn **Dry run** off (the badge reads LIVE).
 - Before and after, record the command output named in **Check**, and the matching audit-log line
@@ -12,6 +24,7 @@ For every test:
 
 ## 1. Homebrew cask uninstall
 
+- **Needs:** Homebrew (brew.sh).
 - **Target:** a small free cask nobody uses on the test Mac (check the size with
   `brew info --cask <token>` first). Install it with `brew install --cask <token>`.
 - **Steps:** Scan. Apps → the app → Uninstall. The sheet says "Removed with Homebrew" and "Not
@@ -22,6 +35,7 @@ For every test:
 
 ## 2. Finder Move to Trash (app installed for all users)
 
+- **Needs:** this repository on your Mac (for `scripts/dummy-app.sh`) and an administrator password.
 - **Target:** a root-owned copy of the dummy app.
   `scripts/dummy-app.sh create`, then
   `sudo cp -R ~/Applications/WrasseDummy.app /Applications/WrasseRootDummy.app` and
@@ -35,6 +49,7 @@ For every test:
 
 ## 3. `docker system prune`
 
+- **Needs:** Docker Desktop, running.
 - **Target:** Docker running. `docker run --name wrasse-test hello-world` (leaves a stopped
   container). `docker volume create wrasse-keep` (a volume that must survive).
 - **Check:** `docker ps -a`, `docker images -f dangling=true`, `docker volume ls`.
@@ -45,6 +60,7 @@ For every test:
 
 ## 4. `brew cleanup -s`
 
+- **Needs:** Homebrew.
 - **Target:** `brew fetch --force <small formula>` to put a download in the Homebrew cache.
 - **Check:** `brew cleanup -n -s` (the dry list), `du -sh "$(brew --cache)"`, `brew list`.
 - **Steps:** Scan. Dev → Homebrew → cleanup. Confirm.
@@ -53,6 +69,7 @@ For every test:
 
 ## 5. Snapshot thinning
 
+- **Needs:** Time Machine set up (any backup disk).
 - **Target:** `tmutil localsnapshot` (one fresh local snapshot), on a Mac with Time Machine set up.
 - **Check:** `tmutil listlocalsnapshots /`, and `df -k /System/Volumes/Data`.
 - **Steps:** Scan. The dashed "held by snapshots" tile shows space. Free now. Confirm.
@@ -62,6 +79,7 @@ For every test:
 
 ## 6. Deleting unavailable simulators
 
+- **Needs:** Xcode with one extra simulator runtime.
 - **Target:** with Xcode, create a simulator on a runtime, then delete that runtime
   (`xcrun simctl runtime delete <id>`) so the simulator becomes unavailable.
 - **Check:** `xcrun simctl list devices unavailable`, `xcrun simctl list devices available`.
@@ -70,6 +88,7 @@ For every test:
 
 ## 7. `ollama rm`
 
+- **Needs:** Ollama (ollama.com), running.
 - **Target:** Ollama running. `ollama pull smollm:135m` (a small model; check its size with
   `ollama list`).
 - **Check:** `ollama list`, and `du -sh ~/.ollama/models`.
@@ -79,6 +98,7 @@ For every test:
 
 ## 8. Ollama and LM Studio discovery
 
+- **Needs:** Ollama and LM Studio.
 - **Target:** the small model from test 7 pulled again in Ollama, and a small GGUF (around
   100 MB) downloaded in LM Studio.
 - **Steps:** Scan. Open AI Models. Load each model once (`ollama run`, LM Studio's chat), then

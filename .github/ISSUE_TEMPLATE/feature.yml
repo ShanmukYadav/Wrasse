@@ -1,0 +1,10 @@
+name: Feature request
+description: An idea for Wrasse.
+labels: ["idea"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Wrasse to do, and why?
+    validations:
+      required: true

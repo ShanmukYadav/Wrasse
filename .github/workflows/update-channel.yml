@@ -1,0 +1,33 @@
+name: Update channel
+
+# When a release is published, its latest.json becomes what installed copies check:
+# a pre-release goes to the beta channel, a release to both. The files live as assets of a fixed
+# release tagged "updates" (a pre-release named "Update channel", not a download).
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  channel:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.event.release.tag_name }}
+      PRERELEASE: ${{ github.event.release.prerelease }}
+    steps:
+      - name: Copy latest.json to the channel files
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern latest.json --dir .
+          gh release view updates --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create updates --repo "$GITHUB_REPOSITORY" --prerelease \
+              --title "Update channel" --notes "Files the app's update check reads. Not a download."
+          cp latest.json beta.json
+          gh release upload updates beta.json --repo "$GITHUB_REPOSITORY" --clobber
+          if [ "$PRERELEASE" != "true" ]; then
+            cp latest.json stable.json
+            gh release upload updates stable.json --repo "$GITHUB_REPOSITORY" --clobber
+          fi

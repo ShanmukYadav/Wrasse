@@ -1,0 +1,21 @@
+name: Bug report
+description: Something doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: input
+    id: version
+    attributes:
+      label: Wrasse and macOS versions
+      placeholder: Wrasse 0.1.0-beta.1, macOS 26.1
+    validations:
+      required: true
