@@ -143,8 +143,17 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
       data-tile-id={node.id}
       className={`tile focus-ring ${selected || checked ? "is-selected" : ""} ${dimmed ? "is-dimmed" : ""} ${deleting ? "is-deleting" : ""} ${tickable ? "has-tick" : ""} ${tickable && (selecting || checked) ? "is-ticking" : ""}`}
       style={style}
-      aria-label={`${node.name}, ${size.value} ${size.unit}`}
+      aria-label={`${node.name}, ${size.value} ${size.unit}${checked ? `, ${t("select.ticked")}` : ""}`}
+      aria-keyshortcuts={tickable ? "X" : undefined}
       onClick={() => onOpen(node)}
+      onKeyDown={(e) => {
+        // X ticks the focused tile for a bulk action (the tick itself is mouse-only).
+        if (tickable && !e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === "x") {
+          e.preventDefault();
+          e.stopPropagation();
+          useApp.getState().toggleCheck(node.id);
+        }
+      }}
     >
       <span className={`tile-head ${short ? "is-short" : ""}`}>
         {/* Narrow tiles drop the badge so the name stays readable. */}
@@ -222,9 +231,7 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
       )}
       {tickable && (
         <span
-          role="checkbox"
-          aria-checked={checked}
-          aria-label={t("select.tick", { name: node.name })}
+          aria-hidden
           className={`tile-tick ${checked ? "is-on" : ""} ${selecting ? "is-visible" : ""}`}
           onClick={(e) => {
             e.stopPropagation();

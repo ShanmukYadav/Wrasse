@@ -108,7 +108,8 @@ function FreeSpace() {
   const scanned = useApp((s) => s.scan === "done");
   const free = Math.max(0, disk.capacity - usedBytes(disk) - trayBytes(tray));
   return (
-    <span className="free" aria-live="polite">
+    // Not a live region: the number counts up, and a screen reader would read every step.
+    <span className="free">
       <Bytes value={scanned ? free : 0} className="free-num" unitClassName="sr-only" />
       <span className="free-unit">{t("home.freeUnit")}</span>
     </span>

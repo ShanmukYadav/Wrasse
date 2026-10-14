@@ -36,6 +36,8 @@ export function App() {
   }, []);
 
   useEffect(() => applyTokens(scheme, platform), [scheme, platform]);
+  // CSS animations follow the same choice as motion's (Settings › Motion, or the system).
+  useEffect(() => void document.documentElement.classList.toggle("reduce-motion", reduced), [reduced]);
 
   // Shortcuts (PLAN.md §6.15). Esc goes up a level when nothing else is open; ⌘Z undoes the last
   // move to the tray; ⌘R or F5 scans; ⌘, opens Settings; ⌘⌫ or Delete puts the ticked (or the

@@ -64,3 +64,19 @@ button {
 .link:hover {
   color: var(--c-accent-hover);
 }
+
+/* Reduce motion (Settings › Motion, or the system setting): only fades remain. Movement,
+   pulses and glows are switched off; state changes are immediate. */
+html.reduce-motion .tile-pulse,
+html.reduce-motion .lens-glow {
+  display: none;
+}
+html.reduce-motion .lens-filter-pop,
+html.reduce-motion .sonar-mark {
+  animation: none;
+}
+html.reduce-motion .tray-chevron,
+html.reduce-motion .plan-seg,
+html.reduce-motion .tile {
+  transition: none;
+}

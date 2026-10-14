@@ -380,6 +380,7 @@ export const en = {
   "home.scan": "Scan",
   "home.stop": "Stop",
   "select.label": "Selected items",
+  "select.ticked": "ticked",
   "select.tick": "Select {name}",
   "select.count": "{count} selected|{count} selected",
   "select.delete": "Delete",
