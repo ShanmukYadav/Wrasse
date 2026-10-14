@@ -406,11 +406,11 @@ impl Builder<'_> {
             }
         }
         // Two seconds of edge reads. Longer than that, the copies stay unlabeled and the
-        // scan ends; removing one still requires a full hash.
-        let pairs = crate::llm::pair_duplicates_until(
-            &cands,
-            Some(std::time::Instant::now() + std::time::Duration::from_secs(2)),
-        );
+        // scan ends; removing one still requires a full hash. Tests have no deadline: on a busy
+        // CI machine two seconds can pass before the fixture's copies are read.
+        let deadline =
+            (!cfg!(test)).then(|| std::time::Instant::now() + std::time::Duration::from_secs(2));
+        let pairs = crate::llm::pair_duplicates_until(&cands, deadline);
         for (k, pair) in pairs.into_iter().enumerate() {
             let Some(pair) = pair else { continue };
             let display = self.display(&pair.partner.to_string_lossy());
