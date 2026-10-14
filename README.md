@@ -6,12 +6,12 @@
 
 **See what fills your Mac, and clear it safely.**
 
-A free, open-source disk cleaner for macOS. Offline, no account, no telemetry.
+A free, source-available disk cleaner for macOS. Offline, no account, no telemetry.
 
 [![CI](https://github.com/ShanmukYadav/Wrasse/actions/workflows/ci.yml/badge.svg)](https://github.com/ShanmukYadav/Wrasse/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/ShanmukYadav/Wrasse?include_prereleases&label=release)](https://github.com/ShanmukYadav/Wrasse/releases)
 ![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon%20%7C%20Intel-black?logo=apple)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-lightgrey)](LICENSE)
 
 [Download](https://github.com/ShanmukYadav/Wrasse/releases) ·
 [What it does](#what-it-does) ·
@@ -148,5 +148,9 @@ safety rules, the checks to run, and how to test without touching real files.
 
 ## License
 
-[MIT](LICENSE). The Wrasse name and fish mark are covered separately: see
-[docs/trademark.md](docs/trademark.md). Release notes are in [CHANGELOG.md](CHANGELOG.md).
+Copyright © 2026 Shanmuk kukati. Wrasse is source-available under the
+[PolyForm Noncommercial License 1.0.0](LICENSE): you may use, study and change it for
+noncommercial purposes (personal use, research, education, charities and similar). **Commercial
+use is not allowed** without written permission from the author. The Wrasse name and fish mark are
+not licensed: see [docs/trademark.md](docs/trademark.md). Release notes are in
+[CHANGELOG.md](CHANGELOG.md).

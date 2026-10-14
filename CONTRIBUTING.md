@@ -1,6 +1,10 @@
 # Contributing
 
-Thanks for helping. [docs/architecture.md](docs/architecture.md) shows how the pieces fit; the
+Thanks for helping. Wrasse is source-available under the PolyForm Noncommercial License 1.0.0
+([LICENSE](LICENSE)). By opening a pull request you agree that the author may use, change,
+relicense and distribute your contribution as part of Wrasse, including under other licenses.
+
+[docs/architecture.md](docs/architecture.md) shows how the pieces fit; the
 rules below keep Wrasse safe to run on real disks.
 
 ## Rules
