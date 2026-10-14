@@ -17,6 +17,7 @@ import { isDrillable } from "./nodes";
 import { ScopeEmpty } from "../browse/ScopeEmpty";
 import { filtersOn, scopeBits, visibleRows } from "../browse/scope";
 import { Tile, type TileMetrics } from "./Tile";
+import { AccessNote, HomeEmpty } from "./HomeEmpty";
 
 const MORE_ID = -2;
 
@@ -71,13 +72,19 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   const deleting = useApp((s) => s.deleting);
   const pulse = useApp((s) => s.pulse);
   const units = useApp((s) => s.info?.units ?? "decimal");
+  const scan = useApp((s) => s.scan);
+  const fullDiskAccess = useApp((s) => s.fullDiskAccess);
+  const [accessDismissed, setAccessDismissed] = useState(false);
+  const emptyDisk = disk.nodes[disk.root].children.length === 0;
   const scheme = useScheme();
   const spaceReport = useApp((s) => s.spaceReport);
   const { setFocus, select, freeGhost, setViewMode } = useApp.getState();
 
   // Cell size, so tiles can decide how many rows they fit.
+  const showsGrid = !(root && emptyDisk && scan !== "scanning");
   useLayoutEffect(() => {
-    const el = gridRef.current!;
+    const el = gridRef.current;
+    if (!el) return;
     const measure = () => {
       const style = getComputedStyle(el);
       const w = el.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
@@ -95,7 +102,7 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [showsGrid]);
 
   const focusNode = disk.nodes[focus];
   const kids = focusNode.children.map((k) => disk.nodes[k]).filter((k) => k.size > 0);
@@ -166,9 +173,25 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   // The home level is a plain div. Fading it (or each tile) promotes a backing store the
   // size of the grid, and the launch stays under the memory budget only without that store.
   if (root) {
+    // Nothing scanned yet (or the scan failed): say so instead of an empty map.
+    if (emptyDisk && scan !== "scanning") {
+      return (
+        <div className="level">
+          <HomeEmpty />
+        </div>
+      );
+    }
     return (
       <div className="level">
         {spaceReport && <SpaceReportCard />}
+        {fullDiskAccess === false && !accessDismissed && (
+          <div className="access-banner">
+            <AccessNote />
+            <button type="button" className="icon-btn focus-ring" aria-label={t("home.accessDismiss")} onClick={() => setAccessDismissed(true)}>
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+        )}
         {banner}
         <div ref={gridRef} className="home-grid">
           {tiles}

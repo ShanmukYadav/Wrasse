@@ -1,6 +1,6 @@
 import { t } from "../../i18n";
 import { useApp } from "../../store/app";
-import { emptyMessageKey, scopeWhere } from "./scope";
+import { emptyMessageKey, filtersOn, scopeWhere } from "./scope";
 
 /** Shown when the current folder has no row for the active category and filters. */
 export function ScopeEmpty({ banner = false }: { banner?: boolean }) {
@@ -12,6 +12,7 @@ export function ScopeEmpty({ banner = false }: { banner?: boolean }) {
   return (
     <div className={banner ? "scope-empty scope-banner" : "scope-empty scope-empty-list"}>
       <p>{t(emptyMessageKey(filters), { where, lens: t(`lens.${lens}`) })}</p>
+      {!filtersOn(filters) && lens !== "all" && <p className="text-caption text-muted">{t(`scope.hint.${lens}`)}</p>}
       <button type="button" className="scope-empty-link focus-ring" onClick={() => useApp.getState().showAll()}>
         {t("scope.showAll", { name: t("home.title") })}
       </button>

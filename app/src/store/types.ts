@@ -88,6 +88,8 @@ export type State = {
   commandOpen: boolean;
   scan: "idle" | "scanning" | "done";
   scanKey: number;
+  /** Why the last scan failed, until the next one starts. */
+  scanError: string | null;
   /** Live progress of a real scan (null in between). */
   scanProgress: ScanProgress | null;
   /** Full Disk Access (macOS); null until checked. */

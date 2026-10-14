@@ -411,3 +411,33 @@
   flex-wrap: wrap;
   gap: 4px 16px;
 }
+
+/* Home with nothing to show: before the first scan, or after a failed one. */
+.home-empty {
+  margin: auto;
+  max-width: 420px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+.home-empty-body {
+  overflow-wrap: break-word;
+}
+.access-note {
+  margin: 0;
+}
+.access-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px var(--d1-grid-pad-x) var(--d1-grid-gap);
+  padding: 6px var(--d1-ghost-pad-x);
+  border-radius: var(--d1-ghost-radius);
+  border: var(--d1-ghost-line);
+  background: var(--d1-ghost-surface);
+}

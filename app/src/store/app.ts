@@ -308,6 +308,7 @@ export const useApp = create<State & Actions>((set, get) => {
     overlay: null,
     commandOpen: false,
     scan: "idle",
+    scanError: null,
     scanKey: 0,
     scanProgress: null,
     fullDiskAccess: null,
@@ -589,14 +590,15 @@ export const useApp = create<State & Actions>((set, get) => {
       if (get().scan === "scanning") return;
       clearTimeout(scanTimer);
       // The sonar runs while the scan does, then the tiles settle on the result.
-      set((s) => ({ scan: "scanning", scanProgress: null, focus: s.disk.root, lens: "all", plan: null, selected: null, detailOpen: false, viewMode: "map" }));
+      set((s) => ({ scan: "scanning", scanError: null, scanProgress: null, focus: s.disk.root, lens: "all", plan: null, selected: null, detailOpen: false, viewMode: "map" }));
       const off = api.onScanProgress((p) => set({ scanProgress: p }));
       try {
         const disk = await api.scan();
         // The mock regenerates its tree, so its tray resets; the real tray lives in the core.
         set((s) => ({ disk, focus: disk.root, tray: mockMode() ? [] : s.tray, plan: null, diskVersion: s.diskVersion + 1, scanKey: s.scanKey + 1 }));
         if (disk.summary?.cancelled) get().notify(t("scan.cancelledToast"));
-      } catch {
+      } catch (e) {
+        set({ scanError: e instanceof Error ? e.message : String(e) });
         get().notify(t("scan.failedToast"));
       } finally {
         off();
