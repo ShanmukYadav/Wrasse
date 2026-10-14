@@ -8,6 +8,10 @@
 #                                                scan reads the whole disk; checks the peak during it
 #   scripts/check-idle-memory.sh --menu-bar      one launch with the window closed (menu bar only);
 #                                                checks idle against the 40 MB budget
+#   scripts/check-idle-memory.sh --after-use     idle after use: after the scan the app drills into
+#                                                two tiles, opens the tray and Settings, changes a
+#                                                setting and closes them (WRASSE_SCRIPTED_USE); idle
+#                                                is sampled 60-80 s after that (100 MB budget)
 #
 # Every launch waits until the Mac has had no keyboard or mouse input for 30 s, and a launch
 # that sees input before it ends is thrown away and repeated: typing or clicking changes what
@@ -37,6 +41,7 @@ SCAN_MB=$(lower "${WRASSE_SCAN_LIMIT_MB:-}" 300)
 MENU_MB=$(lower "${WRASSE_MENU_LIMIT_MB:-}" 40)
 FULL_SCAN=0
 MENU_BAR=0
+AFTER_USE=0
 APP="target/release/wrasse-app"
 LAUNCHES=1
 BUILD=1
@@ -46,6 +51,7 @@ while [[ $# -gt 0 ]]; do
     --no-build) BUILD=0; shift ;;
     --full-scan) FULL_SCAN=1; shift ;;
     --menu-bar) MENU_BAR=1; shift ;;
+    --after-use) AFTER_USE=1; shift ;;
     --launches)
       [[ $# -ge 2 ]] || { echo "check-idle-memory: --launches needs a number"; exit 2; }
       LAUNCHES="$2"
@@ -142,6 +148,12 @@ LAUNCH_ENV=(WRASSE_AUTOSCAN=1)
 if [[ "$MENU_BAR" -eq 1 ]]; then
   LAUNCH_ENV=(WRASSE_MENU_BAR_ONLY=1)
   LAUNCHES=1
+fi
+if [[ "$AFTER_USE" -eq 1 ]]; then
+  # The use ends about 40 s after launch (6 s to the scan, the scan, ~20 s of use); sample idle
+  # from 60 s after that.
+  LAUNCH_ENV=(WRASSE_AUTOSCAN=1 WRASSE_SCRIPTED_USE=1)
+  WINDOW=100
 fi
 
 launch=0

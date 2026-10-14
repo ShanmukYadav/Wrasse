@@ -9,16 +9,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        shell: bash
+  macos:
+    name: macOS
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +40,10 @@ jobs:
         working-directory: app
         run: npm run build
 
+      - name: Scope test
+        working-directory: app
+        run: npm test
+
       - name: Rustfmt
         run: cargo fmt --all --check
 
@@ -58,7 +55,26 @@ jobs:
 
       - name: Build installer
         working-directory: app
-        run: npx tauri build --bundles ${{ runner.os == 'macOS' && 'dmg' || 'nsis' }}
+        run: npx tauri build --bundles dmg
 
       - name: Bundle size check
         run: scripts/check-bundle-size.sh
+
+  windows:
+    # Windows parity is deferred (PLAN.md §11): the platform-neutral crates must keep compiling
+    # for Windows. The app itself and the core's tests (Unix file APIs) are macOS-only for now.
+    name: Windows (core compiles)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy (wrasse-core, wrasse-fixtures, wrasse-cli)
+        run: cargo clippy -p wrasse-core -p wrasse-fixtures -p wrasse-cli -- -D warnings

@@ -26,7 +26,7 @@ export function boot() {
     // The launch scan starts once the first paint has settled. WebKit keeps spare buffers for every
     // repaint in the first seconds, and a scan (sweep, then the new map) on top of them was what
     // pushed launch memory over its budget. The saved map is on screen meanwhile; Scan is instant.
-    if (onboarded || info.autoScan) window.setTimeout(() => void scanDisk(), LAUNCH_SCAN_DELAY_MS);
+    if (onboarded || info.autoScan) window.setTimeout(() => void scanDisk().then(() => info.scriptedUse && void scriptedUse()), LAUNCH_SCAN_DELAY_MS);
     else useApp.setState({ overlay: "onboarding" });
     watchRunningApps();
     api.onMenuScan(() => {
@@ -60,4 +60,35 @@ function watchRunningApps() {
   document.addEventListener("visibilitychange", refresh);
   window.setInterval(refresh, RUNNING_POLL_MS);
   refresh();
+}
+
+const pause = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+
+/** "Idle after use" for the memory check (scripts/check-idle-memory.sh --after-use): what a person
+ *  does in the first minute, through the same store actions the clicks call. The motion setting
+ *  it changes is put back before it ends. */
+async function scriptedUse() {
+  const s = () => useApp.getState();
+  await pause(3000);
+  const { disk } = s();
+  const big = disk.nodes[disk.root].children
+    .map((id) => disk.nodes[id])
+    .filter((n) => n.size > 0 && n.children.length > 0)
+    .sort((a, b) => b.size - a.size);
+  for (const n of big.slice(0, 2)) {
+    s().setFocus(n.id);
+    await pause(2000);
+    s().setFocus(disk.root);
+    await pause(1500);
+  }
+  s().setTrayOpen(true);
+  await pause(2000);
+  s().setTrayOpen(false);
+  s().setOverlay("settings");
+  await pause(1500);
+  const motion = s().motion;
+  s().setPrefs({ motion: motion === "reduce" ? "full" : "reduce" });
+  await pause(1500);
+  s().setPrefs({ motion });
+  s().setOverlay(null);
 }

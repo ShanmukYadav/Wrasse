@@ -26,6 +26,9 @@ struct AppInfo {
     read_only: bool,
     /// `WRASSE_AUTOSCAN=1` skips onboarding and scans at launch (test runs and benchmarks).
     auto_scan: bool,
+    /// `WRASSE_SCRIPTED_USE=1` (memory checks only): after the scan, the UI drills into two
+    /// tiles, opens the tray and Settings, changes one setting, and closes everything again.
+    scripted_use: bool,
 }
 
 #[tauri::command]
@@ -41,6 +44,7 @@ fn app_info() -> AppInfo {
         read_only: false,
         // Set only by test runs (dev or release benchmarks); users never see it.
         auto_scan: std::env::var("WRASSE_AUTOSCAN").is_ok_and(|v| v == "1"),
+        scripted_use: std::env::var("WRASSE_SCRIPTED_USE").is_ok_and(|v| v == "1"),
     }
 }
 
