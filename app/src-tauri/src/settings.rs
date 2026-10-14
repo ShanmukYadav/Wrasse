@@ -56,6 +56,12 @@ pub fn reveal(path: PathBuf) -> Result<(), String> {
     platform::reveal(&path).map_err(|e| e.to_string())
 }
 
+/// Quick Look preview of a file (Space). Read-only.
+#[tauri::command]
+pub fn quick_look(path: PathBuf) -> Result<(), String> {
+    platform::quick_look(&path).map_err(|e| e.to_string())
+}
+
 /// Creates the custom rules folder if needed and shows it in Finder.
 #[tauri::command]
 pub fn open_rules_folder(state: State<'_, CleanupState>) -> Result<(), String> {

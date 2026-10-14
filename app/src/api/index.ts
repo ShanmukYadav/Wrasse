@@ -58,6 +58,8 @@ export interface WrasseApi {
   setLoginItem(on: boolean): Promise<boolean | null>;
   /** Shows a file or folder selected in the file manager. Read-only. */
   reveal(path: string): Promise<void>;
+  /** Quick Look preview of a file (Space). Read-only. */
+  quickLook(path: string): Promise<void>;
   /** Creates the custom rules folder if needed and shows it. */
   openRulesFolder(): Promise<void>;
   /** What "Remove all Wrasse data" would remove. Read-only. */

@@ -139,6 +139,7 @@ export const mockApi: WrasseApi = {
     return mockLoginItem;
   },
   async reveal() {},
+  async quickLook() {},
   async openRulesFolder() {},
   async ownDataPreview() {
     return { folder: "~/Library/Application Support/Wrasse", bytes: 9.4e6, trayBytes: 0, trayItems: 0, dryRun: true };

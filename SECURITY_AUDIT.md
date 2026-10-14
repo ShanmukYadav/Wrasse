@@ -121,6 +121,11 @@ function, with arguments passed as argv (never through a shell):
 
 - `tmutil addexclusion <Wrasse data folder>`: keeps Wrasse's own folder out of Time Machine
   (no admin rights; nothing of the user's is affected).
+- `qlmanage -p -- <absolute path>`: a Quick Look preview of a file (Space in the app). It only
+  shows the file; Wrasse doesn't wait for the preview window.
+- `NSWorkspace selectFile:inFileViewerRootedAtPath:`: Reveal in Finder. Read-only.
+- `SMAppService.mainAppService register/unregister`: Wrasse's own login item, only from the
+  Settings switch (off by default).
 - `NSRunningApplication terminate` for a bundle id: asks an app to quit before it's uninstalled,
   like the Dock's Quit (the app may ask to save documents). The call returns once the request is
   sent; if it hasn't returned after 10 seconds, Wrasse reports "couldn't ask it to quit" and

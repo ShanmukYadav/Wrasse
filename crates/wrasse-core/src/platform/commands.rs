@@ -186,3 +186,14 @@ pub fn set_login_item(on: bool) -> io::Result<()> {
         Err(io::Error::from(io::ErrorKind::Unsupported))
     }
 }
+
+/// Shows a Quick Look preview of a file (Space in the app). Read-only.
+pub fn quick_look(path: &Path) -> io::Result<()> {
+    #[cfg(target_os = "macos")]
+    return macos::commands::quick_look(path);
+    #[allow(unreachable_code)]
+    {
+        let _ = path;
+        Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
+}

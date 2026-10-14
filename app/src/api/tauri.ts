@@ -179,6 +179,7 @@ export const tauriApi: WrasseApi = {
   setKeepDays: (days) => invoke<number>("set_keep_days", { days }),
   setLoginItem: (on) => invoke<boolean | null>("set_login_item", { on }),
   reveal: (path) => invoke("reveal", { path }),
+  quickLook: (path) => invoke("quick_look", { path }),
   openRulesFolder: () => invoke("open_rules_folder"),
   ownDataPreview: () => invoke<OwnData>("own_data_preview"),
   removeOwnData: () => invoke<OwnData>("remove_own_data"),

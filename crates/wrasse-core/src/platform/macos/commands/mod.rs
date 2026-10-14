@@ -59,6 +59,26 @@ pub(crate) fn run_readonly(program: &str, args: &[&str]) -> io::Result<Output> {
     Command::new(program).args(args).output()
 }
 
+/// Shows a Quick Look preview of `path` (`qlmanage -p`), like Space in Finder. Read-only. The
+/// preview runs in its own process, which Wrasse doesn't wait for; a thread reaps it.
+pub fn quick_look(path: &Path) -> io::Result<()> {
+    if !path.is_absolute() || !path.exists() {
+        return Err(io::Error::from(io::ErrorKind::NotFound));
+    }
+    let mut child = Command::new("/usr/bin/qlmanage")
+        .arg("-p")
+        .arg("--")
+        .arg(path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
 /// Whether any process has the file open (`lsof -t`). Errors count as "can't tell" = not open.
 pub(crate) fn is_open(path: &Path) -> bool {
     let Some(p) = path.to_str() else { return false };

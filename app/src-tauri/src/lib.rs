@@ -114,6 +114,7 @@ pub fn run() {
             settings::set_keep_days,
             settings::set_login_item,
             settings::reveal,
+            settings::quick_look,
             settings::open_rules_folder,
             settings::own_data_preview,
             settings::remove_own_data

@@ -439,6 +439,7 @@ export const en = {
   "dryRun.unloadToast": "Dry run: {name} would be unloaded. It's still loaded.",
   "settings.dryRun": "Dry run",
   "settings.dryRunNote": "Shows what cleanups would do without moving or deleting anything. Development builds turn it back on at every launch.",
+  "shortcut.quickLookFailed": "Quick Look couldn't show this item.",
   "settings.keepDays": "Keep in the tray",
   "settings.keepDaysNote": "Batches older than this are emptied when Wrasse starts.",
   "settings.days": "{count} day|{count} days",
