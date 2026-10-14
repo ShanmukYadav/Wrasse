@@ -23,7 +23,7 @@ A free, open-source disk cleaner for macOS. Offline, no account, no telemetry.
 
 </div>
 
-> **Beta.** Wrasse 0.1.0-beta is macOS only and isn't signed by Apple yet, so macOS asks you to
+> **Beta.** Wrasse 0.1.0-beta.1 is macOS only and isn't signed by Apple yet, so macOS asks you to
 > confirm the first launch ([see Install](#install)). Windows support comes later.
 
 ## What it does
@@ -58,7 +58,7 @@ A free, open-source disk cleaner for macOS. Offline, no account, no telemetry.
 
 ## Install
 
-1. Download `Wrasse_0.1.0_universal.dmg` from the
+1. Download `Wrasse_0.1.0-beta.1_universal.dmg` from the
    [latest release](https://github.com/ShanmukYadav/Wrasse/releases), open it and drag Wrasse to
    Applications. One download runs on both Apple Silicon and Intel Macs.
 2. Open Wrasse. Because this beta isn't signed by Apple, macOS says it can't verify it. Click

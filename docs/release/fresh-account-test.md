@@ -12,7 +12,7 @@ Wrasse. Write down anything that surprises you; that's the result I need.
 ## In the test account
 
 1. **Download:** open the draft release page in Safari (sign in to GitHub there if the release is
-   still a draft) and download `Wrasse_0.1.0_universal.dmg`.
+   still a draft) and download `Wrasse_0.1.0-beta.1_universal.dmg`.
 2. **Install:** open the `.dmg`, drag Wrasse to Applications, eject the `.dmg`.
 3. **First launch:** open Wrasse from Applications. Expected: macOS says it can't verify Wrasse.
    Click **Done**. Open System Settings › Privacy & Security, click **Open Anyway** next to

@@ -52,7 +52,7 @@ const isWindows = typeof navigator !== "undefined" && navigator.userAgent.includ
 export const mockApi: WrasseApi = {
   async appInfo() {
     return {
-      version: "0.1.0",
+      version: "0.1.0-beta.1",
       platform: isWindows ? "Windows" : "macOS",
       fileManager: isWindows ? "File Explorer" : "Finder",
       units: isWindows ? "binary" : "decimal",
