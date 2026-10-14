@@ -87,4 +87,4 @@ has no network code today. The alternative is a setting now that does nothing un
 ## Not in Phase 5
 
 Windows parity; signing, notarization and the updater (Phase 6); the irreversible live tests
-(Phase 6, [live-tests.md](live-tests.md)).
+(Phase 6, [live-tests.md](../release/live-tests.md)).

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Remove the dev app's data from the user Library (identifier com.shanmukyadav.wrasse).
 #
-#   ./clean.sh         removes caches, scan data and settings, but KEEPS the quarantine tray
+#   scripts/clean.sh         removes caches, scan data and settings, but KEEPS the quarantine tray
 #                      (it may hold files you still want back)
-#   ./clean.sh --all   also deletes the tray for good, after asking
+#   scripts/clean.sh --all   also deletes the tray for good, after asking
 set -euo pipefail
 ID="com.shanmukyadav.wrasse"
 DATA="$HOME/Library/Application Support/$ID"

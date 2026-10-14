@@ -11,10 +11,10 @@ macOS version, and steps to reproduce.
 
 Especially in scope:
 - anything that lets Wrasse remove, move or change a file it shouldn't (see
-  [SECURITY_AUDIT.md](SECURITY_AUDIT.md) for what it may touch);
+  [docs/security-audit.md](docs/security-audit.md) for what it may touch);
 - a way around the protected locations, the Never touch list, the tray or the "Not undoable"
   confirmations;
-- a way to make Wrasse run a program, or run one with arguments, that isn't in SECURITY_AUDIT.md;
+- a way to make Wrasse run a program, or run one with arguments, that isn't in docs/security-audit.md;
 - the update check accepting an update that isn't signed with Wrasse's key.
 
 ## If Wrasse removed something it shouldn't

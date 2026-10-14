@@ -1,4 +1,4 @@
-//! Opt-in updates (docs/phase6-plan.md §3). Off until the owner turns it on in Settings: then,
+//! Opt-in updates (docs/history/phase6-plan.md §3). Off until the owner turns it on in Settings: then,
 //! at launch, Wrasse asks GitHub Releases for the newest version on its channel (beta builds:
 //! pre-releases; stable builds: releases). An update is offered in the window and installs only
 //! after a click; every download is checked against the update key's public half built into the

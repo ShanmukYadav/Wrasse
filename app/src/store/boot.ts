@@ -33,7 +33,7 @@ export function boot() {
         () =>
           void scanDisk().then(() => {
             if (info.scriptedUse) void scriptedUse(info.scriptedUse);
-            if (demo === "plan") window.setTimeout(() => useApp.getState().planFree(30e9), 2000);
+            if (demo) window.setTimeout(() => showDemo(demo), 2000);
           }),
         LAUNCH_SCAN_DELAY_MS,
       );
@@ -109,6 +109,14 @@ function watchRunningApps() {
 }
 
 const pause = (ms: number) => new Promise((r) => window.setTimeout(r, ms));
+
+/** The view a README screenshot shows (WRASSE_DEMO): "1" is the home map. */
+function showDemo(demo: string) {
+  const s = useApp.getState();
+  if (demo === "plan") s.planFree(30e9);
+  else if (demo === "apps" || demo === "aiModels" || demo === "dev" || demo === "junk") s.setLens(demo);
+  else if (demo === "largeOld") s.setOverlay("largeOld");
+}
 
 /** "Idle after use" for the memory check (scripts/check-idle-memory.sh --after-use): what a person
  *  does in the first minute, through the same store actions the clicks call. The motion setting

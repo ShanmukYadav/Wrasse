@@ -1,4 +1,4 @@
-//! Quiet restart (docs/phase6-plan.md, D7). WebKit's page process keeps memory after use (idle
+//! Quiet restart (docs/history/phase6-plan.md, D7). WebKit's page process keeps memory after use (idle
 //! after use measured 114–140 MB against a 100 MB budget) and nothing inside the page gives it
 //! back. So when the window has been in the background for 5 minutes and nothing is going on (no
 //! scan, cleanup, duplicate search, open panel, selection or plan, and the map is on the home

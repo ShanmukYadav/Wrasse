@@ -1,8 +1,8 @@
 # Status
 
 Where Wrasse stands, what is open, and the last measurements. Updated at each phase checkpoint.
-The rules live in [AGENTS.md](../AGENTS.md); how to work is in
-[CONTRIBUTING.md](../CONTRIBUTING.md); the plan is `PLAN.md` (untracked, never committed).
+The rules live in AGENTS.md (local only); how to work is in
+[CONTRIBUTING.md](../../CONTRIBUTING.md); the plan is `PLAN.md` (untracked, never committed).
 Earlier detail is in `git log` and in this file's history (it was `HANDOFF.md` until
 2026-10-13).
 
@@ -14,7 +14,7 @@ Earlier detail is in `git log` and in this file's history (it was `HANDOFF.md` u
   out the same day, except the items under "Open" below.
 - **Phase 5** (polish; [phase5-plan.md](phase5-plan.md)): built 2026-10-14, all budgets met;
   **waiting for the owner's approval** at the checkpoint.
-- **Phase 6** (release, the live tests in [live-tests.md](live-tests.md)) follows.
+- **Phase 6** (release, the live tests in [live-tests.md](../release/live-tests.md)) follows.
 
 ## Fixed on 2026-10-13
 

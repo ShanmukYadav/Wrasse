@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Fails if SECURITY_AUDIT.md's lists differ from the code: protected locations, read-only
+# Fails if docs/security-audit.md's lists differ from the code: protected locations, read-only
 # programs, delegated actions and app-library suffixes. Run by CI and the pre-commit hook.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-doc=SECURITY_AUDIT.md
+doc=docs/security-audit.md
 fail=0
 
 # The lines of a doc block: between "<!-- AUDIT:<name> -->" and "<!-- /AUDIT -->", fences dropped.
@@ -19,7 +19,7 @@ doc_block() {
 compare() {
   local name="$1" from_code="$2"
   if ! diff <(doc_block "$name") <(printf '%s\n' "$from_code") >/dev/null; then
-    echo "SECURITY_AUDIT.md is out of sync with the code ($name):"
+    echo "docs/security-audit.md is out of sync with the code ($name):"
     diff <(doc_block "$name") <(printf '%s\n' "$from_code") | sed 's/^/  /' || true
     echo "  (< in the doc, > in the code)"
     fail=1
@@ -51,4 +51,4 @@ compare library-suffixes "$code_suffixes"
 if [[ $fail -ne 0 ]]; then
   exit 1
 fi
-echo "SECURITY_AUDIT.md sync check passed."
+echo "docs/security-audit.md sync check passed."

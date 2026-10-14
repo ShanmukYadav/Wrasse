@@ -100,7 +100,7 @@ app/
 rules/                junk rule packs per OS (TOML)
 scripts/              checks (forbidden APIs, audit sync, Windows compile, memory, sizes, data)
                       and dev tools (dummy-app, memory tree)
-docs/                 ARCHITECTURE.md, frontend.md, live-tests.md, windows-setup.md, history/
+docs/                 ARCHITECTURE.md, frontend.md, live-tests.md, history/
 design/               locked visual references (D1-home.html)
 ```
 

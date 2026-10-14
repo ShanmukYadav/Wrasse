@@ -18,7 +18,7 @@ jobs:
 
       - name: Forbidden-API check
         run: scripts/check-forbidden-apis.sh
-      - name: SECURITY_AUDIT.md sync check
+      - name: Security audit sync check
         run: scripts/check-security-audit.sh
 
       # Same Rust as the project toolchain and CI (ci.yml).

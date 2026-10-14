@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Disposable files for the fresh-account test (docs/fresh-account-test.md). Only ever touches
+# Disposable files for the fresh-account test (docs/release/fresh-account-test.md). Only ever touches
 # ~/WrasseTrial.
 #   scripts/trial-files.sh create   make ~/WrasseTrial with a few files and a checksum list
 #   scripts/trial-files.sh check    compare the files there now with the checksum list

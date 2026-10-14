@@ -313,10 +313,11 @@ fn quit(app: &AppHandle) {
 fn demo<'a>(
     b: WebviewWindowBuilder<'a, Wry, AppHandle>,
 ) -> WebviewWindowBuilder<'a, Wry, AppHandle> {
-    // "1" is the map; "plan" also opens a Free Up Space plan for 30 GB.
+    // "1" is the map; the others open a view: a Free Up Space plan for 30 GB, a lens, Large & Old.
     match std::env::var("WRASSE_DEMO").as_deref() {
-        Ok("1") => b.initialization_script("window.__WRASSE_DEMO__ = '1';"),
-        Ok("plan") => b.initialization_script("window.__WRASSE_DEMO__ = 'plan';"),
+        Ok(v @ ("1" | "plan" | "apps" | "aiModels" | "dev" | "junk" | "largeOld")) => {
+            b.initialization_script(format!("window.__WRASSE_DEMO__ = '{v}';"))
+        }
         _ => b,
     }
 }

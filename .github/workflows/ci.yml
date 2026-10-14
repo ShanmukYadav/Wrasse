@@ -20,7 +20,7 @@ jobs:
       - name: Forbidden-API check
         run: scripts/check-forbidden-apis.sh
 
-      - name: SECURITY_AUDIT.md sync check
+      - name: Security audit sync check
         run: scripts/check-security-audit.sh
 
       - uses: dtolnay/rust-toolchain@1.99.0
@@ -63,7 +63,7 @@ jobs:
         run: scripts/check-bundle-size.sh
 
   windows:
-    # Windows parity is deferred (PLAN.md §11): the platform-neutral crates must keep compiling
+    # Windows parity is deferred: the platform-neutral crates must keep compiling
     # for Windows. The app itself and the core's tests (Unix file APIs) are macOS-only for now.
     name: Windows (core compiles)
     runs-on: windows-latest

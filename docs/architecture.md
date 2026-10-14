@@ -64,12 +64,12 @@ app/src (React)                      crates/wrasse-cli
 | Rule | Enforced by |
 |---|---|
 | Only `safety/`, `quarantine/` and `platform/` may delete, rename or start programs | `scripts/check-forbidden-apis.sh` (pre-commit hook) |
-| SECURITY_AUDIT.md lists exactly what the code may run and delete | `scripts/check-security-audit.sh` (pre-commit hook) |
+| docs/security-audit.md lists exactly what the code may run and delete | `scripts/check-security-audit.sh` (pre-commit hook) |
 | Tests never run a real delegated action | `#[cfg(test)]` stop in `platform::run_delegated`; removal tests stay inside the crate (`safety/*_tests.rs`) |
 | Tests touch only temp folders | `platform::remove_test_dir` refuses anything else |
 | The core compiles for Windows | `scripts/check-windows-compile.sh` (pre-commit hook) |
 
-## Budgets (PLAN.md §8), and where they are checked
+## Budgets, and where they are checked
 
 | Budget | Check |
 |---|---|

@@ -2,7 +2,7 @@
 
 These run once per release candidate, **by the owner, clicking in the app**, on disposable
 targets set up for the test. They are unit-tested only until then. Nothing in this file is run by
-an agent (AGENTS.md, "Live actions on the owner's files").
+an agent.
 
 ## Before you start
 
