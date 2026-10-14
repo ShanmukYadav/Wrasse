@@ -155,6 +155,9 @@ export const mockApi: WrasseApi = {
     mockLoginItem = on;
     return mockLoginItem;
   },
+  onMenuScan() {
+    return () => {};
+  },
   async reveal() {},
   async quickLook() {},
   async openRulesFolder() {},

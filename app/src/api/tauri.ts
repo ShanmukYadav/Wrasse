@@ -77,6 +77,10 @@ const appNodes = new WeakMap<Disk, DiskNode[]>();
 
 export const tauriApi: WrasseApi = {
   appInfo: () => invoke<AppInfo>("app_info"),
+  onMenuScan(listener) {
+    const off = listen("menu-scan", () => listener());
+    return () => void off.then((f) => f());
+  },
   scan: () => invoke<Disk>("scan"),
   cachedScan: () => invoke<Disk | null>("cached_scan"),
   cancelScan: () => invoke("cancel_scan"),

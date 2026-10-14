@@ -129,6 +129,10 @@ function, with arguments passed as argv (never through a shell):
 - `NSWorkspace selectFile:inFileViewerRootedAtPath:`: Reveal in Finder. Read-only.
 - `SMAppService.mainAppService register/unregister`: Wrasse's own login item, only from the
   Settings switch (off by default).
+- Wrasse's own executable with `--menu-bar` (`platform::start_self`): when the window is closed,
+  the app starts its menu-bar-only copy and exits; that copy starts the full app again from
+  "Open Wrasse". The full app stops a leftover copy with `SIGTERM`, only after checking that the
+  pid in `menubar.pid` runs this same executable (`platform::stop_own_copy`).
 - `NSRunningApplication terminate` for a bundle id: asks an app to quit before it's uninstalled,
   like the Dock's Quit (the app may ask to save documents). The call returns once the request is
   sent; if it hasn't returned after 10 seconds, Wrasse reports "couldn't ask it to quit" and

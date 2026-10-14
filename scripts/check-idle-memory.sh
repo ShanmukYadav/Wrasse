@@ -6,6 +6,12 @@
 #   scripts/check-idle-memory.sh --launches 5    repeat the cold launch this many times
 #   scripts/check-idle-memory.sh --full-scan     one launch with a throwaway data folder, so the
 #                                                scan reads the whole disk; checks the peak during it
+#   scripts/check-idle-memory.sh --menu-bar      one launch with the window closed (menu bar only);
+#                                                checks idle against the 40 MB budget
+#
+# Every launch waits until the Mac has had no keyboard or mouse input for 30 s, and a launch
+# that sees input before it ends is thrown away and repeated: typing or clicking changes what
+# WebKit keeps and makes the numbers meaningless.
 #
 # The tree is the app pid plus WebKit WebContent, GPU and Networking helpers that
 # belong to it (parent chain, responsible pid, or that app's launchd services).
@@ -28,7 +34,9 @@ lower() { # lower <override> <budget>: the override only when it is below the bu
 IDLE_MB=$(lower "${WRASSE_IDLE_LIMIT_MB:-}" 100)
 PEAK_MB=$(lower "${WRASSE_PEAK_LIMIT_MB:-}" 250)
 SCAN_MB=$(lower "${WRASSE_SCAN_LIMIT_MB:-}" 300)
+MENU_MB=$(lower "${WRASSE_MENU_LIMIT_MB:-}" 40)
 FULL_SCAN=0
+MENU_BAR=0
 APP="target/release/wrasse-app"
 LAUNCHES=1
 BUILD=1
@@ -37,6 +45,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --no-build) BUILD=0; shift ;;
     --full-scan) FULL_SCAN=1; shift ;;
+    --menu-bar) MENU_BAR=1; shift ;;
     --launches)
       [[ $# -ge 2 ]] || { echo "check-idle-memory: --launches needs a number"; exit 2; }
       LAUNCHES="$2"
@@ -114,6 +123,9 @@ measure() {
 
 over() { awk -v v="$1" -v l="$2" 'BEGIN { exit !(v > l) }'; }
 
+# Seconds since the last keyboard or mouse input.
+input_idle() { ioreg -c IOHIDSystem | awk '/HIDIdleTime/ { print int($NF / 1000000000); exit }'; }
+
 fail=0
 worst_peak=0
 worst_idle=0
@@ -126,10 +138,18 @@ if [[ "$FULL_SCAN" -eq 1 ]]; then
   LAUNCHES=1
   WINDOW=150
 fi
+LAUNCH_ENV=(WRASSE_AUTOSCAN=1)
+if [[ "$MENU_BAR" -eq 1 ]]; then
+  LAUNCH_ENV=(WRASSE_MENU_BAR_ONLY=1)
+  LAUNCHES=1
+fi
 
-for launch in $(seq 1 "$LAUNCHES"); do
+launch=0
+while [[ "$launch" -lt "$LAUNCHES" ]]; do
+  until [[ "$(input_idle)" -ge 30 ]]; do sleep 5; done
+  launch=$((launch + 1))
   echo "=== launch $launch ==="
-  WRASSE_AUTOSCAN=1 "$APP" >/dev/null 2>&1 &
+  env "${LAUNCH_ENV[@]}" "$APP" >/dev/null 2>&1 &
   app_pid=$!
   trap 'kill "$app_pid" 2>/dev/null || true' EXIT
   echo "app pid $app_pid"
@@ -163,7 +183,7 @@ for launch in $(seq 1 "$LAUNCHES"); do
 
   echo "peak launch $launch: ${launch_peak} MB at t=${peak_at}s (${peak_line})"
   echo "high-water launch $launch: app ${app_peak} web ${web_peak} gpu ${gpu_peak} net ${net_peak}"
-  worst_peak=$(awk -v a="$worst_peak" -v b="$launch_peak" 'BEGIN { print (b > a) ? b : a }')
+  launch_peak_seen=$launch_peak
 
   idle_worst=0
   idle_line=""
@@ -180,8 +200,12 @@ for launch in $(seq 1 "$LAUNCHES"); do
       sleep 10
     fi
   done
-  echo "summary launch $launch: peak ${launch_peak} MB, idle ${idle_line}MB"
-  worst_idle=$(awk -v a="$worst_idle" -v b="$idle_worst" 'BEGIN { print (b > a) ? b : a }')
+  touched=0
+  [[ "$(input_idle)" -lt $((WINDOW + 20)) ]] && touched=1
+  if [[ "$touched" -eq 0 ]]; then
+    echo "summary launch $launch: peak ${launch_peak} MB, idle ${idle_line}MB"
+    worst_idle=$(awk -v a="$worst_idle" -v b="$idle_worst" 'BEGIN { print (b > a) ? b : a }')
+  fi
 
   kill "$app_pid" 2>/dev/null || true
   wait "$app_pid" 2>/dev/null || true
@@ -192,6 +216,12 @@ for launch in $(seq 1 "$LAUNCHES"); do
   if kill -0 "$app_pid" 2>/dev/null; then
     echo "app did not exit"
     exit 1
+  fi
+  if [[ "$touched" -eq 1 ]]; then
+    echo "launch $launch had keyboard or mouse input; not counted, repeating"
+    launch=$((launch - 1))
+  else
+    worst_peak=$(awk -v a="$worst_peak" -v b="$launch_peak_seen" 'BEGIN { print (b > a) ? b : a }')
   fi
   sleep 2
 done
@@ -205,6 +235,15 @@ if [[ "$FULL_SCAN" -eq 1 ]]; then
     exit 1
   fi
   echo "Full-scan memory check passed: ${worst_peak} MB."
+  exit 0
+fi
+if [[ "$MENU_BAR" -eq 1 ]]; then
+  echo "Menu bar only, idle ${worst_idle} MB (budget ${MENU_MB} MB)."
+  if over "$worst_idle" "$MENU_MB"; then
+    echo "Menu-bar-only memory ${worst_idle} MB is over the ${MENU_MB} MB budget."
+    exit 1
+  fi
+  echo "Menu-bar memory check passed: ${worst_idle} MB."
   exit 0
 fi
 echo "Worst simultaneous peak ${worst_peak} MB (budget ${PEAK_MB} MB)."

@@ -190,3 +190,45 @@ pub fn launch_agent_label(plist: &Path) -> Option<String> {
         None
     }
 }
+
+/// Starts another copy of Wrasse itself (this executable) with `args`, detached: the app hands
+/// over to its menu-bar-only mode this way, and back. Only ever Wrasse's own executable.
+pub fn start_self(args: &[&str]) -> io::Result<()> {
+    let exe = std::env::current_exe()?;
+    std::process::Command::new(exe)
+        .args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(|_| ())
+}
+
+/// Stops Wrasse's own menu-bar-only copy (pid from its pid file), after checking that the
+/// process really is this executable. Never signals anything else.
+pub fn stop_own_copy(pid: u32) -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    if pid == std::process::id() {
+        return false;
+    }
+    let mut sys = sysinfo::System::new();
+    let target = sysinfo::Pid::from_u32(pid);
+    sys.refresh_processes_specifics(
+        sysinfo::ProcessesToUpdate::Some(&[target]),
+        true,
+        sysinfo::ProcessRefreshKind::nothing().with_exe(sysinfo::UpdateKind::Always),
+    );
+    let ours = sys
+        .process(target)
+        .and_then(|p| p.exe())
+        .is_some_and(|e| e == exe);
+    #[cfg(unix)]
+    if ours {
+        // SAFETY: a plain kill(2) with SIGTERM on a pid just checked to be our own executable.
+        return unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
+    }
+    let _ = ours;
+    false
+}

@@ -45,6 +45,12 @@ use std::time::UNIX_EPOCH;
 /// One operation at a time (PLAN.md §4.3 rule 9).
 static OPERATION: Mutex<()> = Mutex::new(());
 
+/// Whether a cleanup is running right now (the app waits for it before handing over to the
+/// menu bar).
+pub fn busy() -> bool {
+    OPERATION.try_lock().is_err()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Mode {

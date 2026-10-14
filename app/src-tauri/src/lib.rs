@@ -2,6 +2,7 @@
 
 mod cleanup;
 mod files;
+mod menubar;
 mod scanning;
 mod settings;
 mod startup;
@@ -60,21 +61,35 @@ fn dev_log(message: String) {
 pub fn run() {
     // Every audit-log line from this process says it came from the app (a click).
     wrasse_core::safety::audit::set_origin(wrasse_core::safety::audit::Origin::Ui);
-    let result = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            // A second launch focuses the existing window instead of starting another instance.
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
-        }))
+    // Menu-bar-only Wrasse: no window and no web view (so no WebKit processes), only the menu.
+    let menu_bar_only = std::env::args().any(|a| a == menubar::MENU_BAR_ARG)
+        || std::env::var("WRASSE_MENU_BAR_ONLY").is_ok_and(|v| v == "1");
+    let mut builder = tauri::Builder::default();
+    if !menu_bar_only {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            // A second launch opens the window instead of starting another instance.
+            menubar::open_window(app);
+        }));
+    }
+    let result = builder
         .manage(scanning::ScanState::default())
         .manage(cleanup::CleanupState::default())
         .manage(files::DupesState::default())
-        .setup(|app| {
+        .setup(move |app| {
             cleanup::init(app.handle());
+            menubar::install(app.handle())?;
+            if menu_bar_only {
+                menubar::start_menu_bar_only(app.handle());
+            } else {
+                menubar::stop_menu_bar_copy(app.handle());
+                menubar::open_window(app.handle());
+            }
             Ok(())
+        })
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { .. } => menubar::closing_to_menu_bar(),
+            tauri::WindowEvent::Destroyed => menubar::window_closed(window.app_handle()),
+            _ => {}
         })
         .invoke_handler(tauri::generate_handler![
             app_info,
@@ -122,9 +137,22 @@ pub fn run() {
             startup::startup_items,
             startup::disable_startup_item
         ])
-        .run(tauri::generate_context!());
-    if let Err(e) = result {
-        eprintln!("Wrasse couldn't start: {e}");
-        std::process::exit(1);
-    }
+        .build(tauri::generate_context!());
+    let app = match result {
+        Ok(app) => app,
+        Err(e) => {
+            eprintln!("Wrasse couldn't start: {e}");
+            std::process::exit(1);
+        }
+    };
+    app.run(|app, event| match event {
+        // The last window closing doesn't quit: Wrasse hands over to its menu-bar-only copy
+        // (menubar.rs) and exits itself. Quit (menu or ⌘Q) quits.
+        tauri::RunEvent::ExitRequested {
+            code: None, api, ..
+        } => api.prevent_exit(),
+        #[cfg(target_os = "macos")]
+        tauri::RunEvent::Reopen { .. } => menubar::open_window(app),
+        _ => {}
+    });
 }

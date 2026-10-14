@@ -5,6 +5,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "Wrasse",
         "width": 1280,
         "height": 820,

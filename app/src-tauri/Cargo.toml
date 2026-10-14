@@ -18,7 +18,7 @@ tauri-build = { version = "2", features = [] }
 wrasse-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tauri = { version = "2", features = ["macos-private-api"] }
+tauri = { version = "2", features = ["macos-private-api", "tray-icon", "image-png"] }
 tauri-plugin-single-instance = "2"
 
 [lints]

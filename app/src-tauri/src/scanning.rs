@@ -15,6 +15,13 @@ use wrasse_core::session;
 #[derive(Default)]
 pub struct ScanState(Mutex<Option<Arc<ScanControl>>>);
 
+impl ScanState {
+    /// A scan is running.
+    pub fn busy(&self) -> bool {
+        self.0.lock().map_or(true, |c| c.is_some())
+    }
+}
+
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ProgressEvent {

@@ -29,6 +29,9 @@ export function boot() {
     if (onboarded || info.autoScan) window.setTimeout(() => void scanDisk(), LAUNCH_SCAN_DELAY_MS);
     else useApp.setState({ overlay: "onboarding" });
     watchRunningApps();
+    api.onMenuScan(() => {
+      if (useApp.getState().scan !== "scanning") useApp.getState().startScan();
+    });
   })();
 }
 

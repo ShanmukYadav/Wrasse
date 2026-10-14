@@ -21,6 +21,8 @@ export interface WrasseApi {
   fullDiskAccess(): Promise<boolean>;
   /** Opens System Settings at Privacy & Security › Full Disk Access. */
   openFullDiskAccessSettings(): Promise<void>;
+  /** Calls `listener` when the menu bar's Scan now is chosen; returns the unsubscribe function. */
+  onMenuScan(listener: () => void): () => void;
   /** Subscribes to scan progress; returns the unsubscribe function. */
   onScanProgress(listener: (p: ScanProgress) => void): () => void;
 
