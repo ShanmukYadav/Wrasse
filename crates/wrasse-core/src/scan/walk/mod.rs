@@ -45,6 +45,9 @@ pub struct ScanControl {
     items: AtomicU64,
     bytes: AtomicU64,
     current: Mutex<String>,
+    /// Folders left out of this scan (marked unreadable without being opened). Set once,
+    /// before the scan starts.
+    skip: std::sync::OnceLock<Vec<PathBuf>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +61,19 @@ pub struct Progress {
 impl ScanControl {
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Relaxed);
+    }
+
+    /// Leaves these folders out of the scan: they're marked unreadable without being opened.
+    /// Only the first call counts.
+    pub fn skip_folders(&self, folders: Vec<PathBuf>) {
+        let _ = self.skip.set(folders);
+    }
+
+    fn skips(&self, path: &Path) -> bool {
+        self.skip.get().is_some_and(|s| {
+            let len = path.as_os_str().len();
+            s.iter().any(|f| f.as_os_str().len() == len && f == path)
+        })
     }
     /// Pause or resume by hand. Resuming also overrides power pauses for the rest of the scan.
     pub fn set_paused(&self, paused: bool) {
@@ -392,7 +408,12 @@ fn read_level(
         current.push_str(&path.to_string_lossy());
     }
 
-    let entries = match fs::read_dir(path) {
+    let read = if control.skips(path) {
+        Err(io::Error::from(io::ErrorKind::PermissionDenied))
+    } else {
+        fs::read_dir(path)
+    };
+    let entries = match read {
         Ok(e) => e,
         Err(_) => {
             out.flags |= flag::UNREADABLE;

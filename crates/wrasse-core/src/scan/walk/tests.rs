@@ -73,6 +73,25 @@ fn unreadable_folders_are_marked() {
 }
 
 #[test]
+fn skipped_folders_are_not_opened() {
+    let root = temp_dir("skip");
+    fs::create_dir_all(root.join("guarded/inner")).unwrap();
+    write(&root.join("guarded/inner/big.bin"), 3_000_000);
+    write(&root.join("open.bin"), 2_000_000);
+    let control = ScanControl::default();
+    control.skip_folders(vec![root.join("guarded")]);
+    let tree = scan(&root, &control).unwrap();
+    let guarded = tree.find(&format!("{}/guarded", root.display())).unwrap();
+    assert_ne!(tree.node(guarded).flags & flag::UNREADABLE, 0);
+    assert_eq!(tree.node(guarded).size, 0);
+    assert!(tree
+        .find(&format!("{}/guarded/inner", root.display()))
+        .is_none());
+    assert!(tree.find(&format!("{}/open.bin", root.display())).is_some());
+    crate::platform::remove_test_dir(&root);
+}
+
+#[test]
 fn cancel_stops_early() {
     let root = temp_dir("cancel");
     fs::create_dir_all(root.join("x")).unwrap();

@@ -606,7 +606,13 @@ export const useApp = create<State & Actions>((set, get) => {
       scanTimer = window.setTimeout(() => set({ scan: "done", scanProgress: null }), mapMotion.sonar * 1000);
     },
     cancelScan: () => void api.cancelScan(),
-    checkFullDiskAccess: async () => set({ fullDiskAccess: await api.fullDiskAccess() }),
+    checkFullDiskAccess: async () => {
+      const was = get().fullDiskAccess;
+      const now = await api.fullDiskAccess();
+      set({ fullDiskAccess: now });
+      // Access just turned on: scan again, now including the folders that were left out.
+      if (was === false && now && get().overlay !== "onboarding" && get().scan !== "scanning") void get().scanDisk();
+    },
     finishOnboarding: () => {
       try {
         localStorage.setItem(ONBOARDED_KEY, "1");

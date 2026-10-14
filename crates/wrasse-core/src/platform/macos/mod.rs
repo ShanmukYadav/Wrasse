@@ -9,8 +9,8 @@ mod settings;
 pub mod spotlight;
 
 pub use fs::{
-    clone_shared_bytes, container_space, full_disk_access, is_dataless, lower_thread_priority,
-    volume_space_used,
+    clone_shared_bytes, consent_folders, container_space, full_disk_access, is_dataless,
+    lower_thread_priority, volume_space_used,
 };
 pub use settings::open_full_disk_access_settings;
 

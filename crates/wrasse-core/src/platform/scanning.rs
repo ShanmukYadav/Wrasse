@@ -98,6 +98,14 @@ pub fn full_disk_access() -> bool {
     true
 }
 
+/// Folders the OS guards with a per-folder prompt until Full Disk Access is on (macOS only).
+pub fn consent_folders() -> Vec<PathBuf> {
+    #[cfg(target_os = "macos")]
+    return home_dir().map_or_else(Vec::new, |h| macos::consent_folders(&h));
+    #[allow(unreachable_code)]
+    Vec::new()
+}
+
 /// Opens the OS page where the user grants Full Disk Access.
 pub fn open_full_disk_access_settings() -> io::Result<()> {
     #[cfg(target_os = "macos")]

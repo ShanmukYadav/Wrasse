@@ -109,9 +109,21 @@ fn walk(
     control: &ScanControl,
     cache_dir: Option<&Path>,
 ) -> io::Result<(Tree, Option<usize>)> {
+    // Without Full Disk Access, folders macOS guards with a prompt are left out: one prompt per
+    // folder would stop the scan again and again. Once access is on, a scan that left them out
+    // is redone in full instead of updated.
+    let guarded: Vec<PathBuf> = platform::consent_folders()
+        .into_iter()
+        .map(|p| inside(root, p))
+        .collect();
+    let access = platform::full_disk_access();
+    if !access {
+        control.skip_folders(guarded.clone());
+    }
     let saved = cache_dir
         .and_then(cache::load_tree)
-        .filter(|s| Path::new(&s.tree.root_path) == root);
+        .filter(|s| Path::new(&s.tree.root_path) == root)
+        .filter(|s| !(access && left_out(&s.tree, &guarded)));
     if let Some(saved) = saved {
         if let Some(events) = platform::changes_since(root, saved.event_id, saved.log_id.as_deref())
         {
@@ -128,6 +140,14 @@ fn walk(
         }
     }
     Ok((scan(root, control)?, None))
+}
+
+/// Whether a saved tree couldn't read any of these folders.
+fn left_out(tree: &Tree, folders: &[PathBuf]) -> bool {
+    folders.iter().any(|f| {
+        tree.find(&f.to_string_lossy())
+            .is_some_and(|id| tree.node(id).flags & crate::scan::tree::flag::UNREADABLE != 0)
+    })
 }
 
 /// FSEvents may report firmlinked paths (`/Users/…`) for the data volume; map them under the
@@ -168,7 +188,17 @@ pub fn junk(data_dir: &Path) -> Option<JunkReport> {
 
 fn junk_with(home: &Path, data_dir: &Path, size: &dyn Fn(&Path) -> u64) -> JunkReport {
     let protected = platform::protected_paths(home, data_dir);
-    let (rules, errors) = crate::rules::load_all(home, data_dir, &protected);
+    let (mut rules, errors) = crate::rules::load_all(home, data_dir, &protected);
+    // Without Full Disk Access, rule folders inside guarded places (Downloads, Mail's data) are
+    // left out, as the scan leaves them out: reading them would raise a prompt.
+    if !platform::full_disk_access() {
+        let guarded = platform::consent_folders();
+        for rule in &mut rules {
+            rule.roots
+                .retain(|r| !guarded.iter().any(|g| r.starts_with(g)));
+        }
+        rules.retain(|r| !r.roots.is_empty());
+    }
     let running = platform::running_bundle_ids();
     let (matches, held) = crate::rules::find(&rules, &running, size);
     JunkReport {

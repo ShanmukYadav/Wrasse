@@ -75,6 +75,13 @@ function Level({ focus, root }: { focus: number; root: boolean }) {
   const scan = useApp((s) => s.scan);
   const fullDiskAccess = useApp((s) => s.fullDiskAccess);
   const [accessDismissed, setAccessDismissed] = useState(false);
+  // Coming back from System Settings: check again, so the banner goes as soon as access is on.
+  useEffect(() => {
+    if (fullDiskAccess !== false) return;
+    const onFocus = () => void useApp.getState().checkFullDiskAccess();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fullDiskAccess]);
   const emptyDisk = disk.nodes[disk.root].children.length === 0;
   const scheme = useScheme();
   const spaceReport = useApp((s) => s.spaceReport);

@@ -105,12 +105,13 @@ function FreeSpace() {
   const disk = useApp((s) => s.disk);
   useApp((s) => s.diskVersion);
   const tray = useApp((s) => s.tray);
-  const scanned = useApp((s) => s.scan === "done");
+  // The saved map from the last scan shows while a new scan runs, so its free space does too.
+  const known = useApp((s) => s.scan === "done" || s.disk.nodes[s.disk.root].children.length > 0);
   const free = Math.max(0, disk.capacity - usedBytes(disk) - trayBytes(tray));
   return (
     // Not a live region: the number counts up, and a screen reader would read every step.
     <span className="free">
-      <Bytes value={scanned ? free : 0} className="free-num" unitClassName="sr-only" />
+      <Bytes value={known ? free : 0} className="free-num" unitClassName="sr-only" />
       <span className="free-unit">{t("home.freeUnit")}</span>
     </span>
   );

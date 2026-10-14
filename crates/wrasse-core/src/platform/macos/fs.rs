@@ -137,6 +137,44 @@ pub fn full_disk_access(home: &Path) -> bool {
     !saw_any
 }
 
+/// Home folders macOS guards with a separate "would like to access" prompt for apps without
+/// Full Disk Access (Desktop, Documents, Downloads, iCloud Drive, other apps' data, Contacts,
+/// Calendars, Photos and the like). Reading any of them without access stops the scan on a
+/// prompt, one per folder, so scans leave them out until Full Disk Access is on.
+pub fn consent_folders(home: &Path) -> Vec<std::path::PathBuf> {
+    [
+        "Desktop",
+        "Documents",
+        "Downloads",
+        "Pictures/Photos Library.photoslibrary",
+        "Library/Mobile Documents",
+        "Library/CloudStorage",
+        "Library/Containers",
+        "Library/Group Containers",
+        "Library/Daemon Containers",
+        "Library/Application Support/AddressBook",
+        "Library/Application Support/CallHistoryDB",
+        "Library/Application Support/Knowledge",
+        "Library/Application Support/com.apple.TCC",
+        "Library/Calendars",
+        "Library/Reminders",
+        "Library/Mail",
+        "Library/Messages",
+        "Library/Safari",
+        "Library/Cookies",
+        "Library/HomeKit",
+        "Library/Suggestions",
+        "Library/Biome",
+        "Library/IdentityServices",
+        "Library/Accounts",
+        "Library/Sharing",
+        "Library/Metadata/CoreSpotlight",
+    ]
+    .iter()
+    .map(|p| home.join(p))
+    .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

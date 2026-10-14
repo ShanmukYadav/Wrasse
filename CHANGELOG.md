@@ -17,3 +17,11 @@ The first public beta, macOS only, not signed by Apple (see the README for the "
 - Opt-in update check (off by default), with signed updates.
 - No telemetry. The only network use is the update check when you turn it on, and local calls to
   Ollama.
+
+### Fixed (from beta testing, before release)
+- macOS kept asking for permissions, and Full Disk Access could show as off while switched on:
+  the app now has a fixed code signature, so macOS remembers what you allowed, across updates.
+- Without Full Disk Access, scans no longer stop on a prompt for each protected folder
+  (Documents, Desktop, Downloads, other apps' data): those folders are left out until access is
+  on, and the next scan includes them.
+- The header shows free space while the last map is on screen, instead of 0 GB.
