@@ -11,6 +11,8 @@ import { iconFor } from "../../design/icons/semantic";
 import { LargeOld } from "../large-old/LargeOld";
 import { Segmented, Settings } from "./Settings";
 import { Startup } from "../startup/Startup";
+import { ExportMenu } from "../export/ExportMenu";
+import { history } from "../export/exports";
 import { categories } from "../../design/tokens";
 import { useScheme } from "../../lib/prefs";
 import { MiddleEllipsis } from "../../shared/MiddleEllipsis";
@@ -151,6 +153,7 @@ function History() {
           options={[["all", "history.all"], ["inTray", "history.inTray"], ["deleted", "history.deleted"], ["restored", "history.restored"]]}
         />
         {trayLink}
+        <ExportMenu label={t("export.historyTitle")} build={() => history(entries)} />
       </div>
       <ul className="history-list">
         {shown.map((e) => (

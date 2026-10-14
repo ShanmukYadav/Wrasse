@@ -164,6 +164,9 @@ export const mockApi: WrasseApi = {
   async ownDataPreview() {
     return { folder: "~/Library/Application Support/Wrasse", bytes: 9.4e6, trayBytes: 0, trayItems: 0, dryRun: true };
   },
+  async exportTable(table, format, date) {
+    return `~/Downloads/${table.title} ${date}.${format === "markdown" ? "md" : format}`;
+  },
   async startupItems() {
     return mockStartup;
   },

@@ -448,3 +448,7 @@ export type StartupItem = {
   signed: boolean | null;
   canDisable: boolean;
 };
+
+/** A report to export: column names and rows of already formatted cells. */
+export type ExportTable = { title: string; columns: string[]; rows: string[][] };
+export type ExportFormat = "markdown" | "csv" | "json";

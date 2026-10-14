@@ -3,7 +3,7 @@
 // outside src/api and src/mock may import from src/mock.
 import { inTauri, type AppInfo } from "./env";
 import { tauriApi } from "./tauri";
-import type { OwnData, SettingsView, StartupItem, CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, SpaceReport } from "./types";
+import type { ExportFormat, ExportTable, OwnData, SettingsView, StartupItem, CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, SpaceReport } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -68,6 +68,8 @@ export interface WrasseApi {
   ownDataPreview(): Promise<OwnData>;
   /** Removes Wrasse's own data, the tray included. Not undoable. */
   removeOwnData(): Promise<OwnData>;
+  /** Writes a report to Downloads (a new file) and shows it; resolves to its path. */
+  exportTable(table: ExportTable, format: ExportFormat, date: string): Promise<string>;
   /** What starts at login or with the Mac. Read-only. */
   startupItems(): Promise<StartupItem[]>;
   /** Turns off one of your own startup items: unloads it, then its plist goes to the tray. */

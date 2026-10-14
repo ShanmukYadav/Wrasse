@@ -56,6 +56,27 @@ pub fn reveal(path: PathBuf) -> Result<(), String> {
     platform::reveal(&path).map_err(|e| e.to_string())
 }
 
+/// Writes a report to the Downloads folder (a new file, never over another) and shows it in
+/// Finder. `date` is the app's local date, for the name.
+#[tauri::command]
+pub fn export_table(
+    table: wrasse_core::export::Table,
+    format: wrasse_core::export::Format,
+    date: String,
+) -> Result<PathBuf, String> {
+    let home = platform::home_dir().ok_or("no home folder")?;
+    let dir = home.join("Downloads");
+    let date: String = date
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == '-')
+        .take(10)
+        .collect();
+    let path =
+        wrasse_core::export::write(&dir, &table, format, &date).map_err(|e| e.to_string())?;
+    let _ = platform::reveal(&path);
+    Ok(path)
+}
+
 /// Quick Look preview of a file (Space). Read-only.
 #[tauri::command]
 pub fn quick_look(path: PathBuf) -> Result<(), String> {

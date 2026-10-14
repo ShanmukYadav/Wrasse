@@ -131,6 +131,7 @@ pub fn run() {
             settings::set_login_item,
             settings::reveal,
             settings::quick_look,
+            settings::export_table,
             settings::open_rules_folder,
             settings::own_data_preview,
             settings::remove_own_data,

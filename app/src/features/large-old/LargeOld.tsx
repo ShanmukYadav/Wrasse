@@ -5,6 +5,8 @@ import { Icon } from "../../design/icons/Icon";
 import type { IconName } from "../../design/icons/nodes";
 import { t } from "../../i18n";
 import { useFormatBytes } from "../../shared/useFormatBytes";
+import { ExportMenu } from "../export/ExportMenu";
+import { largeOld } from "../export/exports";
 import { pressable } from "../../motion/variants";
 import { useApp } from "../../store/app";
 import { MiddleEllipsis } from "../../shared/MiddleEllipsis";
@@ -113,6 +115,7 @@ function Large() {
         <label className="largeold-toggle text-caption">
           <input type="checkbox" checked={oldOnly} onChange={(e) => setOldOnly(e.target.checked)} /> {t("largeOld.oldOnly")}
         </label>
+        <ExportMenu label={t("export.largeTitle")} build={() => largeOld(shown)} />
         <span className="largeold-chips">
           {KINDS.filter((k) => present.has(k)).map((k) => (
             <button

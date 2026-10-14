@@ -20,6 +20,6 @@ pub mod settings;
 
 #[cfg(target_os = "macos")]
 pub use features::startup;
-pub use features::{apps, devjunk, diagnostics, files, llm, rank};
+pub use features::{apps, devjunk, diagnostics, export, files, llm, rank};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

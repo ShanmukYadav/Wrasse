@@ -187,6 +187,7 @@ export const tauriApi: WrasseApi = {
   openRulesFolder: () => invoke("open_rules_folder"),
   ownDataPreview: () => invoke<OwnData>("own_data_preview"),
   removeOwnData: () => invoke<OwnData>("remove_own_data"),
+  exportTable: (table, format, date) => invoke<string>("export_table", { table, format, date }),
   startupItems: () => invoke<StartupItem[]>("startup_items"),
   async disableStartupItem(plist) {
     return pathRemoval(await invoke<CoreReport>("disable_startup_item", { plist }));

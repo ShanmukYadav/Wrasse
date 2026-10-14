@@ -5,7 +5,8 @@ import type { CategoryId, FilterId, Tone } from "../../design/tokens";
 import { LENSES } from "../browse/lenses";
 import { t } from "../../i18n";
 import { formatBytes } from "../../lib/format";
-import { api, MOCK_KEY, mockMode } from "../../api";
+import { api, MOCK_KEY, mockMode, type ExportTable } from "../../api";
+import { exportTable, FORMATS, freePlan, history, scanSummary } from "../export/exports";
 import { GB } from "../../api/types";
 import { inTauri } from "../../api/env";
 import { useApp, type Overlay } from "../../store/app";
@@ -131,6 +132,18 @@ export function suggest(raw: string): Suggestion[] {
     ["design", ["design system", "design"], () => app.setOverlay("design")],
     ["permissions", ["permissions", "full disk access", "welcome", "onboarding"], () => app.setOverlay("onboarding")],
   ];
+  // Exports (PLAN.md §6.14): one command per report and format.
+  const reports: [string, string[], () => ExportTable | null][] = [
+    ["summary", ["export scan", "export summary", "export report", "export"], scanSummary],
+    ["history", ["export history"], () => history(app.deleted)],
+  ];
+  if (app.plan) reports.push(["plan", ["export plan", "export free up space"], freePlan]);
+  for (const [report, words, build] of reports) {
+    for (const f of FORMATS) {
+      const score = text ? Math.max(...words.map((w) => fuzzy(lower, `${w} ${f.label.toLowerCase()}`))) : -1;
+      push({ key: `export-${report}-${f.id}`, icon: "audit", label: t(`export.cmd.${report}`, { format: f.label }), hint: t("export.hint"), run: () => { const table = build(); if (table) exportTable(table, f.id); } }, score);
+    }
+  }
   if (app.scan === "scanning") {
     actions.push(["stop", ["stop scan", "cancel scan", "stop"], () => app.cancelScan()]);
     actions.push(["pause", ["pause scan", "pause"], () => void api.pauseScan(true)]);
