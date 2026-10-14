@@ -8,6 +8,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Rust is pinned to the version in the project toolchain (./dev.sh rustc --version), so rustfmt and
+# clippy agree between CI and local checks. Bump both together.
 jobs:
   macos:
     name: macOS
@@ -21,7 +23,7 @@ jobs:
       - name: SECURITY_AUDIT.md sync check
         run: scripts/check-security-audit.sh
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
@@ -71,7 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.0
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
