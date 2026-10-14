@@ -45,7 +45,9 @@ fn app_info() -> AppInfo {
         read_only: false,
         // Set only by test runs (dev or release benchmarks); users never see it.
         auto_scan: std::env::var("WRASSE_AUTOSCAN").is_ok_and(|v| v == "1"),
-        scripted_use: std::env::var("WRASSE_SCRIPTED_USE").ok().filter(|v| !v.is_empty()),
+        scripted_use: std::env::var("WRASSE_SCRIPTED_USE")
+            .ok()
+            .filter(|v| !v.is_empty()),
     }
 }
 
