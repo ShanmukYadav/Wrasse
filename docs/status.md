@@ -35,12 +35,15 @@ Earlier detail is in `git log` and in this file's history (it was `HANDOFF.md` u
   conditions, the build before export/states/accessibility idled at 99–102 MB and the one after
   at 94–97 MB; which change saved it isn't measured separately (likely the free-space live region
   that VoiceOver tracked; inferred).
-- **Idle after use is over budget** (2026-10-14, `check-idle-memory.sh --after-use`, 3 untouched
-  launches: 140, 115, 114 MB; peaks 273, 254, 240 MB). Each step alone leaves memory in WebKit's
-  page process (drill-ins +15–18 MB, tray and Settings a few MB). Tried: a forced JavaScript
-  garbage collection (117–118 MB), a page reload (119–140 MB: WebKit keeps the memory in the same
-  process), no drill-in crossfade (114–140 MB; peaks 232–239 MB). None reaches 100 MB. To fix
-  before release; options are in the Phase 6 plan (decision D7).
+- **Memory is over budget again (2026-10-14 evening), for every build.** Plain launches, untouched:
+  104–108 MB idle, for today's build and for the Phase 5 build alike (side by side), while the
+  same Phase 5 build measured 94–97 MB in the morning. What moves it is the Mac's state, not the
+  code (inferred from the side-by-side runs; not pinned down further). WebKit's smaller "document
+  viewer" cache setting made no difference (104–108 vs 107 MB) and was taken out.
+- **Idle after use**: 114–140 MB before Phase 6. With the quiet restart (D7) the app returns to
+  a fresh copy after 5 minutes in the background: measured after the restart (20 s in the test),
+  105–108 MB, the same as a fresh launch today. Peaks while the scripted use overlaps the launch
+  scan: 257–265 MB (budget 250).
 - **Error type (plan step R5):** dropped by the owner (2026-10-13). Instead, `unwrap` and
   `expect` are denied outside tests in every crate (clippy).
 - **Store slices (plan step F8):** types, boot and helpers are split out; the actions are still in
