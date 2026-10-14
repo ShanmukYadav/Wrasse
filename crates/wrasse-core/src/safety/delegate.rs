@@ -29,6 +29,11 @@ pub enum Delegated {
     DockerPrune,
     /// `xcrun simctl delete unavailable`. Not undoable.
     SimctlDeleteUnavailable,
+    /// `launchctl bootout gui/<uid> <plist>` for one of your own agents in
+    /// `~/Library/LaunchAgents` (never Apple's). Its plist then goes to the tray; restoring it
+    /// turns the agent back on at the next login.
+    #[serde(rename_all = "camelCase")]
+    UnloadLaunchAgent { plist: PathBuf },
 }
 
 impl Delegated {
@@ -44,6 +49,7 @@ impl Delegated {
             Self::BrewCleanup => "brewCleanup",
             Self::DockerPrune => "dockerPrune",
             Self::SimctlDeleteUnavailable => "deleteUnavailableSimulators",
+            Self::UnloadLaunchAgent { .. } => "unloadLaunchAgent",
         }
     }
 }
@@ -94,6 +100,39 @@ pub(super) fn check_app_target(ctx: &Context, app: &Path) -> io::Result<u64> {
         return Err(io::Error::other("the app is open; quit it first"));
     }
     Ok(crate::quarantine::size_on_disk(app))
+}
+
+/// Checks a launch agent Wrasse would unload: a `.plist` file (not a link) directly in your
+/// `~/Library/LaunchAgents`, owned by you, not on the never-touch list, with a label that isn't
+/// Apple's. Returns the label.
+pub(super) fn check_launch_agent(ctx: &Context, plist: &Path) -> io::Result<String> {
+    let md = fs::symlink_metadata(plist).map_err(|_| refuse("the startup item isn't there"))?;
+    if md.file_type().is_symlink()
+        || !md.is_file()
+        || !plist.extension().is_some_and(|x| x == "plist")
+    {
+        return Err(refuse("not a launch agent's property list"));
+    }
+    let path = resolve(plist).ok_or_else(|| refuse("the startup item isn't there"))?;
+    let agents = resolve_dir(&ctx.home.join("Library/LaunchAgents"))
+        .map_err(|_| refuse("only your own startup items"))?;
+    if path.parent() != Some(agents.as_path()) {
+        return Err(refuse("only your own startup items"));
+    }
+    if ctx.uid.is_some() && platform::owner_uid(&md) != ctx.uid {
+        return Err(refuse("it isn't yours"));
+    }
+    if ctx.exclusions.contains(&path) || ctx.exclusions.contains(plist) {
+        return Err(refuse(format!(
+            "{} is on your never-touch list",
+            plist.display()
+        )));
+    }
+    let label = platform::launch_agent_label(&path).ok_or_else(|| refuse("it has no label"))?;
+    if label.starts_with("com.apple.") || !platform::valid_launch_label(&label) {
+        return Err(refuse("Apple's startup items are never touched"));
+    }
+    Ok(label)
 }
 
 /// The Homebrew binary to run: one of the fixed places, a file owned by the current user.
@@ -228,6 +267,8 @@ pub(crate) fn delegate_with(
         Delegated::SimctlDeleteUnavailable => {
             Ok(("xcrun simctl delete unavailable".to_string(), 0, None))
         }
+        Delegated::UnloadLaunchAgent { plist } => check_launch_agent(ctx, plist)
+            .map(|label| (format!("launchctl bootout {label}"), 0, None)),
     };
     let (target, bytes, brew) = match checked {
         Ok(c) => c,

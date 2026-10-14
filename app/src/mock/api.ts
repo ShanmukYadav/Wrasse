@@ -1,6 +1,6 @@
 import type { WrasseApi } from "../api";
 import { insights } from "../api/insights";
-import type { Disk, RemoveOptions, ScanProgress, SkipReason } from "../api/types";
+import type { Disk, RemoveOptions, ScanProgress, SkipReason, StartupItem } from "../api/types";
 import { deletable, handPickOnly } from "../api/caution";
 import { generateDisk } from "./disk";
 import { planFree } from "./rank";
@@ -11,6 +11,23 @@ const progressListeners = new Set<(p: ScanProgress) => void>();
 const emit = (p: ScanProgress) => progressListeners.forEach((l) => l(p));
 
 let mockKeepDays = 7;
+const agent = (label: string, scope: StartupItem["scope"], app: string | null, enabled: boolean, signed: boolean | null): StartupItem => ({
+  label,
+  plist: `${scope === "user" ? "~/Library" : "/Library"}/${scope === "system" ? "LaunchDaemons" : "LaunchAgents"}/${label}.plist`,
+  scope,
+  program: app ? `/Applications/${app}.app/Contents/MacOS/helper` : "/usr/local/bin/helper",
+  app,
+  enabled,
+  signed,
+  canDisable: scope === "user",
+});
+let mockStartup: StartupItem[] = [
+  agent("com.spotify.client.startuphelper", "user", "Spotify", true, true),
+  agent("us.zoom.updater.login.check", "user", "zoom.us", true, true),
+  agent("com.example.helper", "user", null, false, false),
+  agent("com.google.keystone.agent", "allUsers", "Google Updater", true, true),
+  agent("com.docker.vmnetd", "system", "Docker", true, true),
+];
 let mockLoginItem: boolean | null = false;
 let mockNeverTouch: string[] = [];
 
@@ -143,6 +160,15 @@ export const mockApi: WrasseApi = {
   async openRulesFolder() {},
   async ownDataPreview() {
     return { folder: "~/Library/Application Support/Wrasse", bytes: 9.4e6, trayBytes: 0, trayItems: 0, dryRun: true };
+  },
+  async startupItems() {
+    return mockStartup;
+  },
+  async disableStartupItem(plist) {
+    const item = mockStartup.find((i) => i.plist === plist);
+    if (!item?.canDisable) throw new Error("only your own startup items can be turned off");
+    mockStartup = mockStartup.filter((i) => i.plist !== plist);
+    return { done: [{ path: plist, bytes: 1200, entry: `mock-${Date.now()}` }], skipped: [], bytes: 1200, dryRun: false };
   },
   async removeOwnData() {
     return { folder: "~/Library/Application Support/Wrasse", bytes: 9.4e6, trayBytes: 0, trayItems: 0, dryRun: false };

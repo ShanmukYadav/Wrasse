@@ -38,18 +38,30 @@ const FINDER_PARTLY_DONE: &str =
     "Moving it to the Trash stopped after 2 minutes and may be partly done.";
 
 /// Programs that only read state.
-const READ_ONLY: [&str; 3] = ["/usr/bin/pmset", "/usr/sbin/lsof", "/usr/bin/tmutil"];
+const READ_ONLY: [&str; 5] = [
+    "/usr/bin/pmset",
+    "/usr/sbin/lsof",
+    "/usr/bin/tmutil",
+    "/bin/launchctl",
+    "/usr/bin/codesign",
+];
 
-/// Runs an allowlisted, read-only program. `tmutil` is allowed only for `isexcluded`
-/// and for `listlocalsnapshots` of `/` or `/System/Volumes/Data`.
+/// Runs an allowlisted, read-only program. `tmutil` is allowed only for `isexcluded` and for
+/// `listlocalsnapshots` of `/` or `/System/Volumes/Data`; `launchctl` only for `list <label>`;
+/// `codesign` only for `--verify -- <path>`.
 pub(crate) fn run_readonly(program: &str, args: &[&str]) -> io::Result<Output> {
-    let tmutil_ok = matches!(
-        args,
-        ["isexcluded", _]
-            | ["listlocalsnapshots", "/"]
-            | ["listlocalsnapshots", "/System/Volumes/Data"]
-    );
-    let allowed = READ_ONLY.contains(&program) && (program != "/usr/bin/tmutil" || tmutil_ok);
+    let args_ok = match program {
+        "/usr/bin/tmutil" => matches!(
+            args,
+            ["isexcluded", _]
+                | ["listlocalsnapshots", "/"]
+                | ["listlocalsnapshots", "/System/Volumes/Data"]
+        ),
+        "/bin/launchctl" => matches!(args, ["list", label] if valid_label(label)),
+        "/usr/bin/codesign" => matches!(args, ["--verify", "--", _]),
+        _ => true,
+    };
+    let allowed = READ_ONLY.contains(&program) && args_ok;
     if !allowed {
         return Err(io::Error::new(
             io::ErrorKind::PermissionDenied,
@@ -77,6 +89,51 @@ pub fn quick_look(path: &Path) -> io::Result<()> {
         let _ = child.wait();
     });
     Ok(())
+}
+
+/// A launchd label: letters, digits and `.-_`, not starting with `-`.
+pub(crate) fn valid_label(label: &str) -> bool {
+    !label.is_empty()
+        && !label.starts_with('-')
+        && label.len() <= 255
+        && label
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+}
+
+/// Whether launchd has a job with this label loaded in your session (`launchctl list <label>`).
+pub(crate) fn launch_job_loaded(label: &str) -> bool {
+    run_readonly("/bin/launchctl", &["list", label]).is_ok_and(|o| o.status.success())
+}
+
+/// Whether a program has a valid code signature (`codesign --verify`). `None` if it's missing.
+pub(crate) fn code_signed(program: &Path) -> Option<bool> {
+    if !program.is_file() {
+        return None;
+    }
+    let p = program.to_str()?;
+    run_readonly("/usr/bin/codesign", &["--verify", "--", p])
+        .ok()
+        .map(|o| o.status.success())
+}
+
+/// `launchctl bootout gui/<uid> <plist>`: unloads one of your own agents (delegated; validated in
+/// `safety::delegate`). It stays installed until its plist goes to the tray.
+pub(crate) fn launchctl_bootout(uid: u32, plist: &Path) -> io::Result<()> {
+    let out = Command::new("/bin/launchctl")
+        .arg("bootout")
+        .arg(format!("gui/{uid}"))
+        .arg(plist)
+        .stdin(Stdio::null())
+        .output()?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format!(
+            "launchctl couldn't unload it: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        )))
+    }
 }
 
 /// Whether any process has the file open (`lsof -t`). Errors count as "can't tell" = not open.

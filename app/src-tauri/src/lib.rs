@@ -4,6 +4,7 @@ mod cleanup;
 mod files;
 mod scanning;
 mod settings;
+mod startup;
 
 use serde::Serialize;
 use tauri::Manager;
@@ -117,7 +118,9 @@ pub fn run() {
             settings::quick_look,
             settings::open_rules_folder,
             settings::own_data_preview,
-            settings::remove_own_data
+            settings::remove_own_data,
+            startup::startup_items,
+            startup::disable_startup_item
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

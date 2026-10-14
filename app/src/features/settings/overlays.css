@@ -342,3 +342,6 @@
   opacity: var(--d1-dimmed);
   cursor: default;
 }
+.startup-name {
+  overflow-wrap: anywhere;
+}

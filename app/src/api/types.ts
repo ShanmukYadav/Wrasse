@@ -436,3 +436,15 @@ export type SettingsView = {
 
 /** What "Remove all Wrasse data" removes, or removed. */
 export type OwnData = { folder: string; bytes: number; trayBytes: number; trayItems: number; dryRun: boolean };
+
+/** Something that starts at login or with the Mac (Startup Items). */
+export type StartupItem = {
+  label: string;
+  plist: string;
+  scope: "user" | "allUsers" | "system";
+  program: string | null;
+  app: string | null;
+  enabled: boolean;
+  signed: boolean | null;
+  canDisable: boolean;
+};

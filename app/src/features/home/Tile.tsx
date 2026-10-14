@@ -29,6 +29,9 @@ type Props = {
   onOpen: (node: DiskNode) => void;
 };
 
+/** The smallest a tile's name may shrink to fit a long word, as a share of its size. */
+const NAME_MIN_SCALE = 0.65;
+
 const UNIT: Partial<Record<DiskNode["category"], string>> = { files: "unit.folders", aiModels: "unit.models", apps: "unit.apps" };
 
 // One D1 tile: badge + name + meta, big size, top items as rows, insight chips.
@@ -105,7 +108,17 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
   // The fill and corner glow as images (see design/tilePaint.ts).
   const paintRef = useRef<HTMLButtonElement>(null);
   useTilePaint(paintRef, c.from, c.to, { color: c.glow, size: d1.tile.glowSize });
+  // A word too long for a narrow tile ("Developer") shrinks the name instead of breaking it;
+  // only below 65% of the size may it break.
+  const nameRef = useRef<HTMLSpanElement>(null);
+  const nameKey = `${fitKey}:${node.name}`;
+  const [nameFit, setNameFit] = useState({ key: nameKey, scale: 1 });
+  const nameScale = nameFit.key === nameKey ? nameFit.scale : 1;
   useLayoutEffect(() => {
+    const name = nameRef.current;
+    if (name && name.scrollWidth > name.clientWidth + 1 && nameScale > NAME_MIN_SCALE) {
+      return setNameFit({ key: nameKey, scale: Math.max(NAME_MIN_SCALE, (nameScale * name.clientWidth) / name.scrollWidth) });
+    }
     const el = paintRef.current;
     if (el && el.scrollHeight > el.clientHeight + 1 && drop <= fitRows) setFit({ key: fitKey, drop: drop + 1 });
   });
@@ -142,7 +155,13 @@ export function Tile({ disk, node, cell, metrics, parentSize, scheme, units, sco
         )}
         {/* Name and meta share a line when they fit; otherwise the meta moves under the name. */}
         <span className="tile-title">
-          <span className="tile-name">{node.name}</span>
+          <span
+            ref={nameRef}
+            className={`tile-name ${nameScale <= NAME_MIN_SCALE ? "may-break" : ""}`}
+            style={nameScale < 1 ? { fontSize: `calc(var(--d1-tile-name-size) * ${nameScale.toFixed(3)})` } : undefined}
+          >
+            {node.name}
+          </span>
           {short
             ? node.depth === 1 && <span className="tile-meta">{t("home.metaShare", { share: shareText })}</span>
             : meta && <span className="tile-meta">{meta}</span>}

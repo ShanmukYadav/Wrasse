@@ -55,6 +55,10 @@ pub(crate) fn run_delegated(
             },
             Delegated::DockerPrune => macos::commands::docker_prune(),
             Delegated::SimctlDeleteUnavailable => macos::commands::simctl_delete_unavailable(),
+            Delegated::UnloadLaunchAgent { plist } => match current_uid() {
+                Some(uid) => macos::commands::launchctl_bootout(uid, plist),
+                None => Err(io::Error::other("couldn't tell who you are")),
+            },
         };
         #[allow(unreachable_code)]
         {
@@ -195,5 +199,16 @@ pub fn quick_look(path: &Path) -> io::Result<()> {
     {
         let _ = path;
         Err(io::Error::from(io::ErrorKind::Unsupported))
+    }
+}
+
+/// A well-formed launchd label (letters, digits, `.-_`).
+pub fn valid_launch_label(label: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::commands::valid_label(label);
+    #[allow(unreachable_code)]
+    {
+        let _ = label;
+        false
     }
 }

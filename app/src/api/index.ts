@@ -3,7 +3,7 @@
 // outside src/api and src/mock may import from src/mock.
 import { inTauri, type AppInfo } from "./env";
 import { tauriApi } from "./tauri";
-import type { OwnData, SettingsView, CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, SpaceReport } from "./types";
+import type { OwnData, SettingsView, StartupItem, CleanupStatus, Disk, Insight, JunkMatch, JunkReport, RemoveOptions, RemoveOutcome, RemovePreview, ScanProgress, TrayItem, UninstallOutcome, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, SpaceReport } from "./types";
 
 export interface WrasseApi {
   /** Version, platform, file manager name and byte units for this machine. */
@@ -66,6 +66,10 @@ export interface WrasseApi {
   ownDataPreview(): Promise<OwnData>;
   /** Removes Wrasse's own data, the tray included. Not undoable. */
   removeOwnData(): Promise<OwnData>;
+  /** What starts at login or with the Mac. Read-only. */
+  startupItems(): Promise<StartupItem[]>;
+  /** Turns off one of your own startup items: unloads it, then its plist goes to the tray. */
+  disableStartupItem(plist: string): Promise<PathRemoval>;
   /** Thins local Time Machine snapshots, freeing the "held by snapshots" space. */
   thinSnapshots(disk: Disk): Promise<Disk>;
   /** Free space, purgeable space, snapshots, Trash and the tray. Read-only. */

@@ -111,12 +111,15 @@ Read-only, through `platform::macos::commands::run_readonly`, which refuses anyt
 /usr/bin/pmset
 /usr/sbin/lsof
 /usr/bin/tmutil
+/bin/launchctl
+/usr/bin/codesign
 ```
 <!-- /AUDIT -->
 
 `tmutil` is allowed only as `tmutil isexcluded <absolute path>` and as
 `tmutil listlocalsnapshots` of `/` or `/System/Volumes/Data` (listing local snapshots;
-it does not thin them). The others each have their own narrowly named
+it does not thin them). `launchctl` is allowed only as `launchctl list <label>` (is a startup
+item loaded?) and `codesign` only as `codesign --verify -- <path>` (is its program signed?). The others each have their own narrowly named
 function, with arguments passed as argv (never through a shell):
 
 - `tmutil addexclusion <Wrasse data folder>`: keeps Wrasse's own folder out of Time Machine
@@ -168,6 +171,12 @@ and logs it (dry run reports them without running):
 - `SimctlDeleteUnavailable`: `/usr/bin/xcrun simctl delete unavailable`. Not undoable.
   Listing unavailable devices is a separate read-only command.
 
+- `UnloadLaunchAgent`: `launchctl bootout gui/<uid> <plist>`, Startup Items' "Turn off", only
+  for a `.plist` directly in the user's `~/Library/LaunchAgents`, owned by them, not on the Never
+  touch list, with a label that isn't `com.apple.*`. Its plist then goes to the tray through
+  `safety::remove`; restoring it turns the agent back on at the next login. Agents and daemons in
+  `/Library` are display-only.
+
 For both app actions the app must be an `.app` directly in (or one folder inside)
 `/Applications` or `~/Applications`, on the startup disk, not protected, not on the Never touch
 list, not part of macOS (`com.apple.*` without an App Store receipt), and not running.
@@ -183,6 +192,7 @@ ThinLocalSnapshots
 BrewCleanup
 DockerPrune
 SimctlDeleteUnavailable
+UnloadLaunchAgent
 ```
 <!-- /AUDIT -->
 

@@ -34,8 +34,10 @@ code_protected=$(awk '/AUDIT-BEGIN macos-protected/{on=1;next} /AUDIT-END macos-
          if (path !~ /^\//) path = "~/" path; print kind " " path }')
 compare macos-protected "$code_protected"
 
-code_programs=$(sed -nE 's/^const READ_ONLY: \[&str; [0-9]+\] = \[(.*)\];$/\1/p' crates/wrasse-core/src/platform/macos/commands/mod.rs |
-  tr ',' '\n' | sed -E 's/[[:space:]"]//g' | grep -v '^$')
+# READ_ONLY may span several lines (rustfmt wraps it): everything from its line to the "];".
+code_programs=$(awk '/^const READ_ONLY:/{on=1} on{print} on && /\];/{on=0}' crates/wrasse-core/src/platform/macos/commands/mod.rs |
+  sed -E 's/^const READ_ONLY: \[&str; [0-9]+\] = \[//; s/\];.*$//' |
+  tr ',' '\n' | sed -E 's/[[:space:]"]//g' | { grep -v '^$' || true; })
 compare read-only-programs "$code_programs"
 
 code_delegated=$(awk '/pub enum Delegated/{on=1;next} on && /^}/{on=0} on' crates/wrasse-core/src/safety/delegate.rs |

@@ -9,7 +9,8 @@ import { api, type DiskNode, type JunkMatch, type JunkReport } from "../../api";
 import { useApp, type DeletedEntry, type Overlay } from "../../store/app";
 import { iconFor } from "../../design/icons/semantic";
 import { LargeOld } from "../large-old/LargeOld";
-import { Segmented, Settings, Switch } from "./Settings";
+import { Segmented, Settings } from "./Settings";
+import { Startup } from "../startup/Startup";
 import { categories } from "../../design/tokens";
 import { useScheme } from "../../lib/prefs";
 import { MiddleEllipsis } from "../../shared/MiddleEllipsis";
@@ -84,36 +85,6 @@ function Panel({ overlay }: { overlay: Exclude<Overlay, null | "design" | "onboa
         {overlay === "largeOld" && <LargeOld />}
       </div>
     </div>
-  );
-}
-
-const STARTUP = [
-  ["Docker Desktop", "com.docker.helper", true, true],
-  ["Spotify", "com.spotify.client.startuphelper", true, true],
-  ["Google Updater", "com.google.GoogleUpdater.wake", true, true],
-  ["Zoom", "us.zoom.updater.login.check", true, false],
-  ["Ollama", "com.ollama.ollama", true, true],
-  ["Raycast", "com.raycast.macos.launcher", true, true],
-  ["Unknown helper", "com.example.helper", false, true],
-] as const;
-
-function Startup() {
-  const [enabled, setEnabled] = useState<boolean[]>(STARTUP.map((s) => s[3]));
-  return (
-    <ul className="flex flex-col gap-1">
-      {STARTUP.map(([name, id, signed], i) => (
-        <li key={id} className="row">
-          <div className="flex flex-col">
-            <span className="text-label text-strong">{name}</span>
-            <span className="text-caption text-muted">
-              {id} · {signed ? t("startup.signed") : t("startup.unsigned")}
-            </span>
-          </div>
-          <Switch checked={enabled[i]} label={name} onChange={(v) => setEnabled(enabled.map((e, j) => (j === i ? v : e)))} />
-        </li>
-      ))}
-      <p className="text-caption text-muted">{t("startup.mock")}</p>
-    </ul>
   );
 }
 

@@ -6,7 +6,7 @@ import type { WrasseApi } from ".";
 import type { AppInfo } from "./env";
 import { insights } from "./insights";
 import { detach, detachedRoots, reattach } from "./tree";
-import type { OwnData, SettingsView, Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, ModelMeta } from "./types";
+import type { OwnData, SettingsView, StartupItem, Disk, DiskNode, JunkMatch, JunkReport, RemoveOptions, ScanProgress, SkipReason, TrayItem, UninstallOutcome, UninstallRoute, FreePlan, BigFile, DuplicateGroup, PathPreview, PathRemoval, ScannedFile, LoadedModel, ModelMeta } from "./types";
 
 type ItemRequest = { path: string; safety: "safe" | "yourCall"; ruleId?: string; ruleRoot?: string; handPicked: boolean; scanned?: { bytes: number; mtime: number } };
 type CoreReport = { done: { path: string; bytes: number; entry: string | null }[]; skipped: { path: string; reason: SkipReason }[]; bytes: number; dryRun: boolean };
@@ -183,6 +183,10 @@ export const tauriApi: WrasseApi = {
   openRulesFolder: () => invoke("open_rules_folder"),
   ownDataPreview: () => invoke<OwnData>("own_data_preview"),
   removeOwnData: () => invoke<OwnData>("remove_own_data"),
+  startupItems: () => invoke<StartupItem[]>("startup_items"),
+  async disableStartupItem(plist) {
+    return pathRemoval(await invoke<CoreReport>("disable_startup_item", { plist }));
+  },
 
   async thinSnapshots(disk) {
     const status = await invoke<{ dryRun: boolean }>("cleanup_status");

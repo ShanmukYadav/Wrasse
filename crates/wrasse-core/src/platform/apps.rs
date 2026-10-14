@@ -152,3 +152,41 @@ pub(crate) fn running_bundle_ids() -> Vec<String> {
     ids.dedup();
     ids
 }
+
+/// Whether launchd has this job loaded in your session. Read-only.
+pub fn launch_job_loaded(label: &str) -> bool {
+    #[cfg(target_os = "macos")]
+    return macos::commands::launch_job_loaded(label);
+    #[allow(unreachable_code)]
+    {
+        let _ = label;
+        false
+    }
+}
+
+/// Whether a program has a valid code signature; `None` if it's missing or can't be checked.
+pub fn code_signed(program: &Path) -> Option<bool> {
+    #[cfg(target_os = "macos")]
+    return macos::commands::code_signed(program);
+    #[allow(unreachable_code)]
+    {
+        let _ = program;
+        None
+    }
+}
+
+/// The `Label` of a launchd property list.
+pub fn launch_agent_label(plist: &Path) -> Option<String> {
+    #[cfg(target_os = "macos")]
+    return plist::Value::from_file(plist)
+        .ok()?
+        .as_dictionary()?
+        .get("Label")?
+        .as_string()
+        .map(str::to_string);
+    #[allow(unreachable_code)]
+    {
+        let _ = plist;
+        None
+    }
+}
